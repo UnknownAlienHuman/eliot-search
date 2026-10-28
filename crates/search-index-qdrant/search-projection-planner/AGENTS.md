@@ -1,34 +1,14 @@
-# Working on search-projection-planner
+# Working on projection
 
-Read the [architecture](../../../docs/architecture/README.md),
-[implementation guide](../../../docs/implementation/README.md), [source/caller audit](FUNCTIONS.md) and
-[publication map](../search-publication/FUNCTIONS.md).
+Read [FUNCTIONS.md](FUNCTIONS.md) and the affected [publication recipe](../search-publication/FUNCTIONS.md).
 
-The established audit found the whole `ProjectionPlan`, canonical manifest, vector-digest proof,
-revision-bound scoring identity and `PublicationAdmissionOwners` production path disconnected at the inspected
-revision. Treat that as revision-specific evidence. Before deletion or inlining, search current manifests,
-Rust/non-Rust callers, constructors, module inclusion, features, targets, tests and workflows. Move every
-surviving preparation/identity/publication/query consumer in the same cut.
+Stage 2/3A builds complete bounded pages with actual retrieval text, evidence bindings and generation-bound IDs.
+Do not require old/new matching, stable cross-generation IDs, sequence or closure. Query-time k/b never changes
+projection identity or causes a rebuild; the lexical owner separates physical and query profiles.
 
-Do not repair or version the proof protocol. Connect actual data instead:
+Trace current callers before deleting the old proof/whole-plan APIs and move surviving consumers together.
+The planner owns no effect or durable state. Inline a small assembler rather than preserve a forwarding crate.
+Only measured Stage 3B work introduces source-local diff/occurrence matching.
 
-```text
-current prepared unit stream
-→ stable point identity
-→ actual native BM25 text/options or selected vectors
-→ exact versioned evidence binding
-→ bounded ordered operation pages
-→ real publication apply/readback
-```
-
-Keep scope constants once in an operation header. Diff stable point state separately from view evidence by
-merge-walking sorted page iterators. Enforce page point/byte limits before allocation growth and reuse the same
-absolute deadline/cancellation between pages. Do not allocate complete old/new manifests, construct generic
-canonical trees or hash values as a substitute for uploadable input.
-
-The planner owns no redb/Qdrant effect, current view, receipt or recovery state. Remove fixture-only owner traits,
-full reconstruction checks and pre-release codec goldens with their last callers. If the surviving page builder
-and merge are small, move them into preparation/publication and delete the package.
-
-After code, run minimal Rust 1.98 check/Clippy for changed preparation/identity/publication/bridge/query consumers.
-Measure peak page memory and actual Qdrant writes/readback; digest equality alone is not delivery.
+After production changes run minimal locked Rust 1.98 check/Clippy for actual changed consumers. Digest equality
+and package fixtures do not prove uploadable data or a connected publisher.

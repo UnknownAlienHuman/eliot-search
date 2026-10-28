@@ -1,58 +1,67 @@
-# ELIOT Search — implementation spine
+# Implementation sequence
 
-Read [architecture](../architecture/README.md) first. This document selects the shortest safe route to a working
-application. Nearest `FUNCTIONS.md` files own local seams; the
-[analysis registry](../audit/ANALYSIS_REGISTRY.md) owns evidence/status.
+[Architecture](../architecture/README.md) defines the product. This page owns delivery order and cross-owner
+boundaries. Read only the current stage and affected owner recipes. The
+[registry](../audit/ANALYSIS_REGISTRY.md#resume) owns branch/status/evidence.
 
-The product is pre-release. Internal APIs/formats need no compatibility facade. Preserve user files and sole
-retained copies; remove obsolete receipt/proof/process machinery with actual callers.
+The product is pre-release: internal APIs/formats need no compatibility facade. Preserve original user files and
+sole retained copies; remove obsolete machinery with its actual callers.
 
-## Final connected path
-
-```text
-selected source
-→ stable acquired bytes
-→ immutable ObjectRef
-→ current SourceRecord
-→ PreparedRef or explicit gap
-→ physical Qdrant generation + atomic PublishedView
-→ scoped Search or retained-source Exact
-→ pinned EvidenceRef + verified excerpt
-→ CLI/local-client result
-```
-
-Every arrow has one concrete owner. A package boundary may disappear; the responsibility may not.
-
-## Minimal cross-owner values
+## Connected path
 
 ```text
-DataRootGuard            = retained root/directory handles + exclusive lock + root metadata
-ObjectRef                = format/profile/kind + content address + exact length
-SourceRecord             = SourceId + non-reset row revision + current ObjectRef + selection facts
-PreparedRef              = input ObjectRef + transform identity + prepared ObjectRef/outcome
-PhysicalTextIndexProfile = field/filter schema + tokenizer/index/resource settings + text composition
-QueryScoringProfile      = request-time BM25 k/b + semantic version
-PublishedView            = physical collection + physical profile + owned redb read snapshot
-EvidenceRef              = point/source/prepared identity + representation/range
-RequestContext           = view + query profile + scope + absolute deadline/cancellation/counters
+selected source → stable acquired bytes → immutable ObjectRef → current SourceRecord
+→ PreparedRef or explicit gap → Qdrant generation + matching published evidence
+→ scoped Search or retained-source Exact → verified excerpt → CLI/local client
 ```
 
-Stage 2/3A has no sequence. Query-time k/b is not physical schema and does not trigger a collection rebuild.
+Every step has a concrete owner, not necessarily a separate crate. One manager integrates one connected change
+in one worktree. Configuration arrives with consumers; optional #598 encryption does not block plain storage.
 
-## Rules preventing implementation deadlock
+<a id="minimal-cross-owner-values"></a>
+## Cross-owner values
 
-1. Configuration is incremental; fields arrive with real consumers.
-2. Plain storage is baseline; #598 encryption is optional.
-3. Issues track ownership, not dependency order.
-4. The one-file path uses final owners and persisted values.
-5. Add traits/packages/registries/workers/donors only for concrete consumers.
-6. One manager owns interfaces/integration; parallel writes are disjoint.
-7. Complete immutable generations establish correctness before point mutation.
-8. Stage 3A ships only for corpus classes meeting predeclared budgets; Stage 3B is required where it fails.
-9. Physical schema/resource defaults are explicit; hidden Qdrant defaults are not a profile.
-10. Platform publication uses one documented, tested owner-private primitive; private NT calls and legacy wrappers
-    are not baseline donors.
-11. Minimal compiler/Clippy follows each production cut; broad evidence follows connected behavior.
+```text
+DataRootGuard       = retained handles + exclusive process lock + root metadata
+ObjectRef           = format/profile/kind + content address + exact length
+SourceRecord        = SourceId + non-reset row revision + ObjectRef + selection facts
+PreparedRef         = input ObjectRef + transform identity + prepared artifact/outcome
+PhysicalTextIndexProfile = physical schema/resource settings + retrieval-text composition
+QueryScoringProfile = request-time BM25 settings; separate from physical schema
+PublishedView       = exact physical collection + physical profile + owned redb read snapshot
+EvidenceRef         = point/source/prepared binding + representation/range
+ExecutionContext    = absolute deadline + cancellation + counters needed by this operation
+RequestContext      = query execution context + pinned view + resolved scope + scoring profile
+```
+
+`ExecutionContext` is a small private value or borrowed parameters, not a generic context service. Root creation,
+object writes, preparation and publication need no query view, scope or scoring profile. A query passes its same
+execution budget to lower-level I/O; nested calls cannot renew the deadline or reset counters. Never fabricate a
+view or add optional query fields to every background operation. These names describe responsibilities, not a
+requirement to create one public type per row.
+
+Stage 2/3A has no intra-generation sequence. Changing query-time k/b does not rebuild a collection; changing
+physical schema/retrieval meaning does. The [lexical owner](../../crates/search-lexical/FUNCTIONS.md) defines both
+profiles; the [bridge](../../crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md) maps them to Qdrant.
+
+<a id="owners"></a>
+## Owners
+
+| Responsibility | Read when affected |
+|---|---|
+| Invocation/config | [Typed settings](../../crates/search-config/FUNCTIONS.md) |
+| Root, initialization, shared platform finalizer | [Root owner](../../crates/search-runtime/search-runtime-owner/FUNCTIONS.md) |
+| Immutable source/prepared objects | [Object store](../../crates/search-source/search-revision-store/FUNCTIONS.md) |
+| Stable acquisition/current source/inventory | [Source family](../../crates/search-source/README.md) |
+| Transformation/unit ranges | [Materializer](../../crates/search-prep/search-materializer/FUNCTIONS.md), [unitizer](../../crates/search-prep/search-unitizer/FUNCTIONS.md) |
+| Lexical profile | [Lexical owner](../../crates/search-lexical/FUNCTIONS.md) |
+| Qdrant SDK and readback | [Bridge](../../crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md) |
+| Publication/recovery/whole-generation cleanup | [Publisher](../../crates/search-index-qdrant/search-publication/FUNCTIONS.md) |
+| Durable metadata/snapshots | [Control](../../crates/search-control-redb/FUNCTIONS.md) |
+| Query/evidence/scope | [Query family](../../crates/search-query/README.md) |
+| Framing / serviced connection / CLI | [Protocol](../../crates/search-provider-protocol/FUNCTIONS.md), [client](../../crates/search-provider-client/FUNCTIONS.md), [CLI](../../bins/eliot-search/FUNCTIONS.md) |
+| Composition | [Daemon](../../bins/eliot-searchd/FUNCTIONS.md) |
+| Stopped-root maintenance | [Maintenance](../../crates/search-runtime/search-retention/FUNCTIONS.md) |
 
 <a id="delivery-sequence"></a>
 ## Delivery sequence
@@ -60,218 +69,104 @@ Stage 2/3A has no sequence. Query-time k/b is not physical schema and does not t
 <a id="1-foundation--invocation-settings-and-root"></a>
 ### 1. Foundation — invocation, settings and root
 
-Issues: #333, #266, #360.
+Owners: #333/#266/#360.
 
 ```text
-help/version without owner effects
-→ parse args_os once
-→ merge/validate bounded root/plain settings
-→ inspect | initialize | open one current-format root
-→ retain one DataRootGuard
-→ factual status
+help/version without effects → capture args_os/settings once
+→ bounded root/plain settings → inspect | initialize | open → DataRootGuard → factual status
 ```
 
-Only config locator/bounds, `data_root` and `storage.profile=plain` ship here.
+Implement only config locator/bounds, data root and plain profile. Initialization publishes the final root manifest
+last and no-clobber; before that, only a recognized empty incomplete layout may be explicitly discarded and retried.
+No resume/replay journal, automatic repair or migration. Unknown entries and unsupported roots remain untouched.
 
-Initialization creates no user source state:
+The root recipe owns the [Windows finalization candidate](../../crates/search-runtime/search-runtime-owner/FUNCTIONS.md#windows-finalization)
+and Unix operation. Implement the smallest platform canary there; source inspection is not platform support.
 
-```text
-validate empty/recognized target
-→ acquire exclusion
-→ retain/verify every directory handle from data root to manifest parent
-→ create exact incomplete marker
-→ create/flush/close/verify minimal redb + object layout
-→ create/write/flush one manifest stage in final parent
-→ publish final manifest no-clobber last through the tested platform owner
-→ reopen final relative to retained parent and verify current root
-→ remove marker/stage debris where safe
-```
-
-Before the final manifest, classification is `IncompleteInitialization`; ordinary open writes nothing. Explicit
-`discard-incomplete` removes only an exact recognized empty layout. Unknown/conflicting/replaced entries refuse.
-
-#### Windows finalization — R054
-
-Do not use:
-
-- path-based `tempfile::persist_noclobber` / `MoveFileExW`;
-- the reachable legacy relative-`RootDirectory` `SetFileInformationByHandle` wrapper;
-- private user-mode `NtSetInformationFile` or equivalent direct NT calls selected prematurely by R053.
-
-Use one documented owner-private operation:
-
-```text
-retain every root→final-parent directory handle
-  with FILE_SHARE_READ | FILE_SHARE_WRITE and without FILE_SHARE_DELETE
-retain opened stage handle with DELETE access
-derive one canonical absolute destination path from the retained final-parent handle
-→ SetFileInformationByHandle(FileRenameInfo)
-   RootDirectory=NULL
-   ReplaceIfExists=FALSE
-→ reopen final relative to retained parent
-→ compare stable file identity and verify kind/length/bytes
-```
-
-The retained no-delete-share chain prevents rename/delete replacement of every path component while the absolute
-path is used. The implementation canary must establish the accepted extended path form, required access/share
-flags, destination-present refusal, ancestor/parent replacement resistance, same-volume/local-filesystem behavior,
-failure debris and exact readback. If the documented operation cannot be demonstrated, refuse the profile.
-
-Official `FILE_RENAME_INFO` documentation describes relative `RootDirectory`, but a current supported-build report
-shows the Win32 wrapper may convert the name to absolute while retaining the root handle. That relative form is not
-selected. Private NT APIs are not used to work around the wrapper.
-
-Unix uses an owner-private directory-relative no-replace operation or a verified same-filesystem link/unlink
-fallback. File-data flush, namespace publication, readback and sudden-power-loss durability are separate claims.
-
-**Completion:** real entrypoint reaches root owner; unsupported roots fail before writes; one guard surrounds store
-lifetime; documented platform canaries pass for every advertised profile; status is factual; displaced config/root
-and legacy source-root publication routes are removed or immediately bounded.
+Complete when the real entrypoint reaches the root owner, one guard surrounds store lifetime, status is factual,
+unsupported roots fail before writes, and the displaced config/root routes are removed or assigned the next bounded
+removal. Do not build a configuration or filesystem framework first.
 
 <a id="2-walking-skeleton--one-file-to-one-cli-result"></a>
 ### 2. Walking skeleton — one file to one CLI result
 
-Coordinator #264; vertical owners include #267/#270/#330/#331/#263/#261/#272/#279/#291/#293/#280/#332.
-
-Upgrade Qdrant Server/Rust client/schema/consumers together from current client 1.19 to one exact **1.20.x** patch.
-Use one vectorless one-shard collection and one scoring payload field.
+Coordinator #264; use the affected owners above, not a prerequisite graph of every issue.
 
 ```text
-one explicit supported file
-→ one stable read
-→ plain ObjectRef + current SourceRecord
-→ one materialization/unitization result
-→ one bounded retrieval_text per unit
-→ fresh vectorless collection
-→ explicit physical Text index V1
-→ InsertOnly point batches + exact readback
-→ deterministic TextQuery readiness canary
-→ commit matching evidence/current state
-→ install PublishedView
-→ one TextQuery with QueryScoringProfileV1
-→ verify pinned evidence/object/range
-→ typed CLI output
+one explicit supported file → stable read → plain ObjectRef/current SourceRecord
+→ materialize/unitize → bounded retrieval_text → fresh vectorless Qdrant collection
+→ explicit scoring text index → InsertOnly build + exact readback + TextQuery canary
+→ matching evidence/current commit → PublishedView → TextQuery → retained excerpt → CLI
 ```
 
-Physical Text index V1:
+Upgrade the locked Qdrant client 1.19, server, schema and real consumers together to one exact 1.20.x patch.
+Use the lexical owner's physical/query profiles; do not copy their defaults here. The first smoke is one local
+account, plain root, file, physical collection and one-shot request. Persist the final owners' exact references
+so restart can extend this path rather than replace a throwaway demo.
 
-```text
-field=retrieval_text
-tokenizer=Code
-lowercase=true
-ascii_folding=false
-phrase_matching=false
-stemmer=Disabled
-stopwords=None
-min/max token length=None
-nested=None
-scoring=BM25
-enable_hnsw=false
-memory=Pinned
-```
+No watcher, broad inventory, encryption, paging, filter indexes, stable cross-generation occurrence identity,
+point mutation, cleanup platform or second backend is a prerequisite.
 
-Stage 2 has no candidate filter and creates no source/access indexes. It requests no vectors and only routing
-payload needed for evidence lookup. `retrieval_text` and excerpts do not return from Qdrant.
-
-QueryScoringProfileV1 fixes `k=1.2`, `b=0.75`; validate finite upstream ranges. Changing only k/b does not rebuild
-the collection. No baseline score threshold.
-
-Code tokenizer emits subwords and joined camel/snake identifier tokens for ranking. Do not append local aliases.
-Free text is any-token nomination. Full-text filters, if later exposed, require all subwords in any order and are
-neither exact identifier nor phrase predicates. Exact punctuation/location remains retained-source Exact.
-
-Temporary limits: owning local account, plain storage, one file, one collection, one one-shot request. No watcher,
-broad inventory, encryption, paging, aliases, custom sharding, Edge, filter indexes, point mutation or cleanup.
-
-**Completion:** default binaries execute against real Qdrant 1.20 and return the correct retained excerpt. Schema,
-resource settings and TextQuery canary read back exactly; missing/corrupt evidence cannot produce a card; no legacy
-oracle/proof/local-BM25/duplicate-store path serves as an intermediate.
+Complete when default binaries return the correct retained excerpt through real Qdrant; missing/corrupt evidence
+cannot produce a card. A legacy oracle, proof harness or local BM25 implementation is not an intermediate product.
 
 <a id="3a-fresh-generation-convergence"></a>
-### 3A. Fresh-generation convergence — correctness/reference profile
+### 3A. Fresh-generation convergence
 
-Issues: #270/#271/#331/#261/#300/#303 and affected owners.
+Owners: #270/#271/#331/#261/#300/#303 and affected consumers.
 
-Add restart/reopen, authoritative inventory, ABA-safe source/preparation installation, lost-wakeup rediscovery,
-complete desired-versus-published comparison, full fresh collection build, matching evidence/current commit,
-explicit view install, old-view lifetime and whole-collection cleanup.
+Add restart, authoritative inventory, ABA-safe source/preparation installation, lost-wakeup repair and complete
+desired-versus-published comparison. Capture fixed generation input, build a fresh complete physical collection,
+commit matching evidence/current, install its view, and retain old views until whole-generation cleanup is safe.
+Visible collections are immutable; no validity interval or cross-generation point continuity is required.
 
-Create only filter indexes used by real multi-source/access/path-kind clauses. Exact keyword/filter indexes set
-`enable_hnsw=false` and explicit `Pinned|Cached|Cold` memory. Prefix/tenant optimization appears only for an actual
-query pattern. Text-index residency is explicit per corpus class; physical-profile change builds a fresh generation.
+Add only filter indexes used by real scope clauses and choose explicit measured index residency. Scope resolution
+keeps candidate filtering distinct from IDF population; even whole-population queries retain request-only filters.
 
-Visible collections are immutable. Any selected-state difference builds another never-reused collection. No
-intra-generation mutation or stable cross-generation identity. Capture complete desired input durably before
-Qdrant effects.
-
-```text
-base population = selected sources ∩ actual access/session restriction
-candidate filter = base population + request-only narrowing
-idf.corpus       = base population
-```
-
-Whole-collection base omits `idf`; explicit empty avoids RPC; unknown/incomplete never widens.
-
-Measure predeclared corpus classes/workloads: build/edit latency, points/payload/writes, CPU/RAM/handles, text/filter
-index residency/cache behavior, current+building+reader-retained collection disk, redb retained pages, update rate
-versus rebuild throughput, cleanup backlog and maximum reader/window lifetime.
-
-Stage 3A ships for a class only if correctness plus every declared budget passes and coalescing converges without
-unbounded backlog.
+Before measuring, declare corpus classes and numeric build/edit latency, throughput, memory/CPU/handles,
+current+building+reader-retained disk, redb retained-page and cleanup-backlog budgets under #215. Coalesce updates
+without unbounded backlog. This correctness/reference profile ships only for classes meeting those budgets.
 
 <a id="3b-measured-incremental-publication"></a>
-### 3B. Source-local incrementality — only where 3A budgets fail
+### 3B. Source-local incrementality — only when 3A budgets fail
 
-Issues: #259/#329/#261/#263 plus unitizer/evidence owners.
+Owners: #259/#329/#261/#263 and actual unitizer/evidence consumers.
 
-Only then add source-local old/new merge, unambiguous occurrence reuse, operation-fixed births, explicit InsertOnly
-additions, one verified non-creating closure, exact readback and one complete-source metadata commit. Individual
-points are never deleted; profile/schema change or closed-point growth builds a fresh generation.
+Only then add a bounded source-local delta, conservative occurrence reuse, operation-fixed births, InsertOnly
+additions and fixed non-creating closures. The publisher owns atomic source metadata and old-view semantics.
+Individual points are not physically deleted; compaction replaces the whole generation. Qualify scoring/optimizer
+convergence as well as mutation readback. An oversized delta uses a fresh generation or explicit gap.
 
-Because Qdrant text statistics may remain stale after point updates/deletes until optimization, qualify scoring and
-optimizer convergence, not just mutation readback. Oversize source delta falls back to a fresh generation or gap.
-If all target classes pass Stage 3A, close Stage 3B issues `not_planned` with measurements.
+If every target class meets Stage 3A budgets, leave Stage 3B absent and close its issues with the measurements.
+Do not weaken a declared corpus requirement merely to avoid necessary optimization.
 
 ### 4. Exact and live session
 
-Issues: #249/#275/#280/#332.
+Owners: #249/#275/#280/#332. Add literal Exact over the pinned inventory, then one serviced framed session.
+A bounded QueryWindow retains final ordered references and the same view. Continue does not requery; Expand uses
+an emitted item's bounded neighborhood. Partial output advances no cursor.
 
-Add literal Exact over pinned retained inventory, then one serviced framed session with Continue/Expand. One bounded
-`QueryWindow` holds final ordered references, original query profile and same view guard. Continue never requeries;
-partial output advances no cursor.
+### 5. Maintenance and selected product depth
 
-### 5. Maintenance and product depth
-
-Issues: #302/#244/#281/#227/#335; optional #219/#239/#248/#334/#336.
-
-Add stopped-root collection/archive/import, then selected source-backed orientation/comparison/document/Git
-behavior. Optional donors follow measured consumers. Qdrant Edge remains an isolated replacement experiment,
-never fallback.
+Owners: #302/#244/#281/#227/#335; optional #219/#239/#248/#334/#336. Add stopped-root collection/archive/import,
+then selected source-backed orientation/comparison/document/Git behavior. Optional donors join an existing consumer.
+Qdrant Edge, if evaluated, is an isolated replacement experiment, never a permanent fallback.
 
 <a id="lifetime-and-lock-order"></a>
 ## Lifetime and lock order
 
-1. `DataRootGuard` is acquired before stores and dropped after stores close; it is not per-request locking.
-2. One publisher selects work but holds no redb writer or view-manager mutex during object/Qdrant I/O.
-3. Query clones current `PublishedView` under a short manager lock and releases it before backend/object work.
-4. Object/Qdrant/process/model/filesystem publication I/O occurs without a redb writer or QueryWindow mutation
-   borrow.
-5. Redb writer performs bounded compare/commit only.
-6. After commit, open/verify matching read snapshot, then install the view under a short lock.
-7. Prepare evidence outside the window lock; mutate cursor/window only after complete bounded output.
-8. Last guard drop wakes cleanup; generation deletion performs no query/view-manager I/O inline.
+DataRootGuard precedes stores and outlives them; it is not a per-request mutex. A publisher serializes selection,
+performs object/Qdrant I/O outside a redb writer, commits bounded metadata, opens/verifies the matching snapshot,
+then installs the view under a short lock. Do not begin another publication before installation/recovery completes.
 
-No global lock nests another global lock. Remove or adapt an old API requiring reverse acquisition.
+Query clones current under the short view lock, releases it, resolves scope and performs backend/evidence work.
+Prepare output outside a window mutation lock; commit cursor progress only after complete bounded output. No redb
+writer, view-manager mutex or window mutation borrow spans filesystem, Qdrant, process or model I/O. Last guard
+drop wakes cleanup and performs no deletion. Remove old APIs that require the reverse order.
 
-## Slice completion contract
+## Slice completion
 
-A slice is complete only when:
-
-- its real entrypoint reaches its real consumer;
-- state/effect ownership is direct and factual;
-- optional/private work is not an undeclared prerequisite;
-- displaced route and exclusive fixtures are removed or named as the next bounded deletion;
-- unsupported/incomplete states fail without writes, fallback or silent widening;
-- smallest locked Rust 1.98 check/Clippy closure passes after code;
-- focused runtime evidence is recorded when the implementation exists;
-- canonical docs, registry and conflicting issues are synchronized.
+The entrypoint reaches the real consumer; state/effect ownership is concrete; displaced routes and exclusive
+fixtures are removed or named for immediate bounded removal; failures do not widen scope or silently fall back.
+Run the smallest locked compiler/Clippy closure after code. Record focused execution when behavior exists and
+leave unrun behavior explicit. Update the owning rule and conflicting references, not another specification.

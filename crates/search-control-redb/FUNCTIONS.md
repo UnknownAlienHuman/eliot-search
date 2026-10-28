@@ -1,140 +1,84 @@
 # Control state and evidence lookup
 
-Use redb for compact current/published metadata and real read snapshots. Immutable objects hold source/prepared
-bodies; Qdrant holds rebuildable retrieval projections. Remove generic journals, copied snapshots, receipts and
-in-memory publication floors rather than recreating them.
+Redb stores compact current/published metadata and supplies real read snapshots. Immutable objects hold bodies;
+Qdrant holds derived retrieval projections. This owner creates no generic journal, receipt history or second corpus.
 
-## Required typed state
+## Typed state
 
 ```text
-root/settings/current source rows
+root/settings/current sources
 current preparation outcomes
 PendingGenerationBuild
-published_sources[g]
-published_evidence[g]
+published_sources[g]: source_id -> exact source/prepared refs + selected outcome/gap
+published_evidence[g]: (source_id, point_id) -> complete identity + ObjectRef/representation/range
 CurrentPublishedGeneration
 RetiredCleanup
 ```
 
-For one physical generation:
+Rows are metadata, not source bodies, retrieval text or vectors. Qdrant routing payload nominates the key; the
+pinned evidence row and actual retained reader establish evidence. Source-prefix diff reads are conditional Stage 3B.
 
-```text
-published_sources[g]: source_id
-  -> retained/prepared refs + selected outcome/gap
+## Durable binding versus process view
 
-published_evidence[g]: (source_id, point_id)
-  -> complete generation-bound point identity + ObjectRef/representation/range
-```
+Durable current stores physical collection/profile and the completed generation's metadata binding. An owned redb
+ReadTransaction is process-local; it is opened/verified after commit and retained by PublishedView, not serialized
+as durable current. Old queries use that same transaction, never fresh latest metadata under an old view label.
 
-These are compact metadata, not bodies, retrieval text, vectors or another search index. Exact key lookup resolves a
-nomination. Source-prefix range exists only for Stage 3B if activated. Qdrant payload routes to the pinned row and
-never replaces it.
+Physical profile excludes request-time k/b. Query captures its separate scoring profile; changing only k/b does
+not mutate current or rebuild. Stage 2/3A has no sequence or arbitrary historical-view lookup service.
 
-## Physical view versus query scoring
+Long read transactions retain pages. Bound request/window lifetime and publication backlog and measure actual
+retained pages/collections; Arc count is not a byte bound. Last guard drop only wakes cleanup.
 
-Stage 2/3A durable/current view state contains only physical facts:
-
-```text
-PublishedViewState {
-  physical_collection
-  PhysicalTextIndexProfileId
-  owned redb ReadTransaction
-}
-```
-
-The physical profile identifies field/filter schema, tokenizer/normalization/scoring-index settings, text
-composition, shard layout and explicit index residency. It does **not** contain query-time BM25 `k`/`b`.
-
-Each admitted request separately captures:
-
-```text
-QueryScoringProfileV1 { k=1.2, b=0.75 }
-```
-
-Changing only k/b does not create a generation or mutate durable current state. A live `QueryWindow` stores final
-ordered references and the original scoring profile for diagnostics; Continue never reruns the corpus.
-
-Stage 2/3A has no mandatory sequence, route epoch or historical-view lookup. Query clones current under a short lock
-and opens tables through that same read transaction. It never opens fresh latest metadata for a page of an old view.
-
-Long read transactions retain pages. Bound request/window lifetime and publication backlog; measure retained redb
-pages plus old physical collections, not Arc counts. Last guard drop only wakes cleanup.
-
+<a id="restartable-generation-input-capture"></a>
 ## Complete generation capture
 
-A process-held read transaction is not a durable build manifest. Capture one complete desired input before Qdrant
-effects:
+1. Open one consistent read of selected source/preparation outcomes and physical profile.
+2. Copy compact fixed refs/outcomes into target-generation source rows in bounded transactions.
+3. Mark capture complete only after enumeration and validation; interruption beforehand discards that unserved
+   metadata-only target and restarts capture without backend effects.
+4. Derive all later pages and evidence from the complete captured input. Missing/corrupt refs fail, not substitute
+   newer live state. Large uploadable pages use immutable objects, not oversized metadata rows.
+5. Populate unserved target evidence rows in bounded transactions. Do not collect/copy the corpus in the final writer.
 
-1. open one consistent read over selected source/preparation outcomes and physical profile;
-2. copy compact exact refs/outcomes into target-generation source rows in bounded transactions;
-3. mark capture complete only after enumeration/validation finish;
-4. before completion, interruption discards the metadata-only target and restarts capture;
-5. after completion, all pages/evidence derive from those fixed refs;
-6. missing/corrupt input fails rather than substituting newer live state.
+An in-memory read transaction alone cannot recover desired input after process death. Stage 2/3A pages use actual
+retrieval_text and deterministic generation-bound IDs; no occurrence matching or validity interval.
 
-Stage 2/3A pages contain actual bounded `retrieval_text` and routing/filter payload required by Qdrant 1.20. A
-digest-only page cannot be dispatched. Point IDs are deterministic and generation-bound; no old/new occurrence
-matching or validity interval.
+## Publication commit
 
-After complete backend readiness—including exact schema/point/count readback and deterministic TextQuery canary:
+After complete backend readiness, including exact schema/point/count and TextQuery canary, and completed staging
+metadata, one bounded transaction compares pending/current guards, switches CurrentPublishedGeneration, adds the
+predecessor cleanup row and clears pending. It does not rewrite every evidence row.
 
-```text
-bounded transaction:
-  compare expected pending/current guards
-  finalize published source/evidence tables
-  set CurrentPublishedGeneration
-  add predecessor RetiredCleanup
-  clear pending
-commit
-→ open/verify matching read snapshot
-→ install PublishedView under short manager lock
-```
+Then open/verify the matching read snapshot and install PublishedView under a short manager lock. Another
+publication waits until installation or recovery completes. No object/backend I/O occurs inside a redb writer.
+[Publication](../search-index-qdrant/search-publication/FUNCTIONS.md) owns effect uncertainty and recovery.
 
-No object/RPC I/O occurs inside the writer. Do not begin another publication until installation succeeds or restart
-recovery installs/refuses the durable current state.
+## Query lookup
 
-## Query lookup and response routing
+Resolve returned source_id/point_id in the pinned evidence table; validate identity/profile and read the exact
+object/range. Missing, foreign or conflicting evidence fails closed. Resolve source scope against the same
+published_sources snapshot.
 
-Qdrant query returns point ID plus only required routing payload, normally `source_id`; it returns no vectors and no
-`retrieval_text`. Resolve `(source_id, point_id)` in the pinned evidence table, validate physical profile/identity,
-then open the exact immutable object/range. Missing/foreign mismatch fails closed.
+Base source/access population controls candidates and IDF; request-only narrowing is candidate-only. Entire-base
+selection omits redundant base/IDF clauses but preserves request-only filters. Stage 2 needs no filter indexes;
+Stage 3A creates only fields used by real scope clauses. Scope semantics live with the query owner.
 
-`ResolvedScope` selects source IDs from pinned `published_sources[g]`:
+## Conditional Stage 3B and cleanup
 
-```text
-base population = selected sources ∩ actual access/session restriction
-candidate filter = base population + request-only narrowing
-idf.corpus       = base population
-```
+Only failed Stage 3A budgets justify bounded source-prefix old/new merging and complete-source pending deltas.
+The publisher owns fixed births/closures and exact effect/scoring convergence. Do not add another history store or
+manifest cache. Oversize delta uses a fresh generation or explicit gap.
 
-Stage 2 one-file selection omits filters/IDF and requires no filter index. Stage 3A creates and records only indexes
-used by actual scope fields.
+RetiredCleanup names a whole collection, not point pages/cursors. Remove cleanup/obsolete metadata only after the
+publisher establishes eligibility and exact logical absence with no targetable unresolved attempt. Local immutable
+objects remain stopped-root maintenance's responsibility.
 
-## Stage 3B conditional delta
+## Removal and verification
 
-Only if predeclared Stage 3A budgets fail, add one complete-source pending delta and source-prefix merge:
+Remove generic operation journals, copied ControlSnapshot, input replay, receipt scans, obsolete migration/grant/
+key state and supplied in-memory floors with consumers. Keep direct typed transactions, exact reads and snapshots.
 
-```text
-fixed old/new descriptors + operation-fixed births
-→ InsertOnly new points
-→ fixed non-creating closures
-→ exact mutation and scoring/optimizer convergence checks
-→ one bounded complete-source metadata/current commit
-```
-
-Do not add a second publisher, permanent operation history or whole-manifest cache. Oversize source delta falls back
-to a fresh generation or explicit gap.
-
-## Cleanup/removal/verification
-
-`RetiredCleanup` names one exact whole physical collection. Publication/bridge owns terminal delete and exact logical
-absence. No point-ID cleanup pages, watermarks or reclaimer journal in Stage 2/3A.
-
-Remove generic operation journal, copied ControlSnapshot, input replay, receipt scans, obsolete migration/grant/key
-state and supplied in-memory floors with callers. Keep typed transactions, exact point/range reads and snapshot
-ownership.
-
-After implementation verify complete/empty capture, interrupted capture before effects, fixed-input restart,
-bounded pages/transactions, exact evidence routing with minimal Qdrant payload, physical/query-profile separation,
-old-view binding, commit/install gap, source/profile change during build, whole-generation cleanup rows and retained
-page growth. Stage 3B source-prefix cases run only if selected. R052 changes docs only.
+After code run minimal locked check/Clippy for real consumers. Focused cases: interrupted/empty capture, fixed-input
+restart, bounded staging/final commit, minimal routing payload, physical/query separation, old-view binding,
+commit/install gap, concurrent desired-state change, whole-generation cleanup and retained-page growth.

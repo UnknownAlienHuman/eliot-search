@@ -1,32 +1,17 @@
-# Working on search-access
+# Working on scope resolution
 
-Read the [query owner](../README.md), [implementation spine](../../../docs/implementation/README.md) and local
-[README](README.md). Reduce this package to selected-scope resolution or move the few pure functions into query
-composition.
+Read [FUNCTIONS.md](FUNCTIONS.md) and only affected query/Exact/evidence/bridge consumers.
+Resolve requested/default sources against one pinned view and any real session restriction. Explicit empty stays
+empty; unknown, foreign or incomplete selection fails or reports a gap and never widens.
 
-Input is one pinned `PublishedView`, requested/default source set and optional real restricted-session allowed set.
-Return:
+Base population controls candidates and IDF. Request-only narrowing affects candidates, not IDF. When the base
+is the entire physical collection, omit only its redundant base predicate and IDF override. Preserve request-only
+candidate clauses; omit the candidate filter only when it has no clauses. Known empty scope performs no RPC.
 
-```text
-ordered selected memberships
-base population filter = selected sources ∩ session/access restriction
-candidate filter = base population + request-only narrowing
-exact retained inventory refs
-```
+Use current source/revision inventory for Exact and evidence. A selected restricted session owns authentication,
+allowed set and revocation/cancellation of its windows, not a durable influence journal. Do not add grants,
+eligibility proofs, per-membership legs or raw-score sorting across incompatible populations.
 
-The base filter controls both candidates and `SearchParams.idf.corpus`. Request-only path/kind/topic filters affect
-candidates only. If base equals the whole collection, omit filter/IDF. Explicit empty never widens; unknown,
-foreign or incomplete membership fails or reports a gap.
-
-Different physical collections/retrieval profiles remain different populations. Do not compare raw scores across
-them or create per-source legs. Qdrant BM25 statistics are shard-local; do not introduce a custom-shard portfolio.
-
-Remove signed grants, recipe permissions, snapshot/predicate digests, overlap proofs, eligibility plans,
-per-membership legs, phase checkpoints and durable restriction barriers with callers. A selected restricted-client
-profile authenticates one session, derives one allowed source set and cancels/removes that session's windows on
-revocation—no durable influence journal.
-
-Source changes publish a new view. Existing local requests use their pinned view; new requests see new state.
-After code verify default/explicit/empty/unknown sets, restricted narrowing, base filter parity between candidates
-and IDF, request-only filter separation, exact/evidence inventory parity and old-view behavior. R051 changes docs
-only.
+Move useful resolution into query composition if small; remove the old policy framework with real callers.
+After production changes run minimal locked Rust 1.98 check/Clippy. Focused cases include whole base with nonempty
+request-only narrowing, as well as empty/unknown/restricted sets and candidate/IDF parity.

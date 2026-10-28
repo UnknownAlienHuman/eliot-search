@@ -1,137 +1,77 @@
-# Immutable object store — plain baseline, optional encrypted profile
+# Immutable object store
 
-This owner persists source bodies and prepared artifacts. It decides object identity, publication, verification,
-range reads and exact deletion mechanics. Source membership, preparation currentness, publication reachability and
-query scope belong elsewhere.
+One owner persists source bodies and prepared artifacts. It owns content identity, publication, verification,
+ranges and exact deletion mechanics; source membership, currentness, query scope and reachability belong elsewhere.
 
-## Baseline boundary
+## Plain baseline and API
 
-Implement the `Plain` current-format profile first. It has no key, secret catalogue or encryption lifecycle.
-#598 may later provide an encrypted profile through the same Eliot-owned `ObjectRef` after an accepted public
-handoff. It must not create a second source/preparation/evidence path.
+Implement plain current-format storage without keys. An accepted #598 encrypted profile may later use the same
+ObjectRef and source/preparation/evidence path; do not inspect or compete with its private work.
 
 ```text
-put_object(kind, Plain, owned_bytes, RequestContext) -> ObjectRef
-open_object(ObjectRef, RequestContext) -> VerifiedObject
-read_ranges(ObjectRef, ranges, RequestContext) -> VerifiedRanges
+put_object(kind, Plain, owned_bytes, ExecutionContext) -> ObjectRef
+open_object(ObjectRef, ExecutionContext) -> VerifiedObject
+read_ranges(ObjectRef, ranges, ExecutionContext) -> VerifiedRanges
 list_objects(cursor, limit) -> bounded identities
 remove_exact(ObjectRef) -> Absent | Removed | Unresolved
 ```
 
-`ObjectRef` binds current object-format version, storage profile, kind, content address and exact length. It carries
-no source membership, current-head, access or query authority.
+ObjectRef binds format, storage profile, kind, content address and exact length, not membership or access authority.
+[ExecutionContext](../../../docs/implementation/README.md#minimal-cross-owner-values) supplies the calling operation's
+deadline/cancellation and actual byte limits. It never requires a PublishedView or query-scoring profile. Queries
+pass their existing execution budget through the reader without resetting it.
 
-## Plain publication
-
-```text
-validate final namespace/address and byte limit
-→ create unique stage in final parent
-→ write exact bytes while computing content identity
-→ verify address/length before finalization
-→ flush file data according to advertised durability profile
-→ publish final name no-clobber through platform owner
-→ if final exists, open through ordinary reader and verify exactly
-→ verify final object once
-→ remove this writer's stage where safe
-→ return ObjectRef and optionally retained verified bytes
-```
-
-Two writers of identical bytes converge. Different bytes/profile/kind at one address are immutable conflict. A
-known pre-publication failure removes the stage where safe. Possible publication resolves through exact final
-readback. Leftover stages or unreferenced finals are stopped-root maintenance input, not operation history.
-
-## Windows finalization — corrected R054 boundary
-
-Git's loose-object flow remains the high-level donor. A random-stage helper may create the file, but no helper owns
-final publication authority.
-
-Rejected baseline operations:
-
-- path-based `tempfile::persist_noclobber` / `MoveFileExW`;
-- the reachable legacy relative-`RootDirectory` Win32 wrapper in source registration;
-- private user-mode `NtSetInformationFile` or an equivalent direct NT call selected by R053.
-
-Use the same documented finalization seam as the root owner:
+## Immutable publication
 
 ```text
-opened verified stage handle with DELETE access
-+ retained verified directory-handle chain from data root to final parent
-  (share read/write; no FILE_SHARE_DELETE)
-+ canonical absolute content-addressed final path derived from retained final parent
-→ SetFileInformationByHandle(FileRenameInfo)
-   RootDirectory = NULL
-   ReplaceIfExists = FALSE
-→ reopen final relative to retained parent
-→ compare stable file identity
-→ verify format/profile/kind/address/length/content
+validate namespace/address/limits → unique stage in final parent
+→ write exact acquired bytes while computing identity → check address/length → file-data flush
+→ shared platform no-clobber finalizer → exact existing/final verification → safe stage cleanup → ObjectRef
 ```
 
-The no-delete-share chain prevents replacement of any path component during the operation. Required canary cases:
+Do not reread a mutable source pathname. The [root owner's platform recipe](../../search-runtime/search-runtime-owner/FUNCTIONS.md#windows-finalization)
+owns the Windows operation and canary; its Unix section owns that platform's no-replace rule. Root and object code
+share a small private mechanism, not duplicated wrappers or a filesystem framework. No new platform guarantee is
+established by this page.
 
-- accepted absolute/extended path form and exact access/share flags;
-- absent destination succeeds;
-- existing identical destination converges only after ordinary-reader verification;
-- existing conflicting destination refuses;
-- ancestor/parent rename or replacement attempts fail while handles are retained;
-- unsupported/non-local/cross-volume filesystems refuse;
-- failed call leaves a classifiable stage/final state;
-- exact relative reopen and identity/content readback;
-- file-data flush, namespace visibility and sudden-power-loss durability remain separate claims.
+Identical writers converge only after ordinary-reader verification of the existing final. Different bytes,
+profile or kind at one address are an immutable conflict. Never compare the current writer's stage identity to an
+independently published identical object as though both must be the same file.
 
-Official docs describe relative `RootDirectory`, but a current supported-build report shows the wrapper may
-absolutize the destination and fail with a non-null root handle. Do not use that form until demonstrated. Do not
-work around it with private NT APIs.
-
-If the documented absolute-target operation is unavailable for the advertised profile, refuse. Do not silently
-use `MoveFileExW`, direct NT calls, hard-coded path-only helpers or a generic filesystem abstraction.
-
-## Unix finalization
-
-Prefer an owner-private directory-relative no-replace rename. A hard-link + unlink fallback is allowed only on the
-same filesystem, with exact final readback and visible leftover-stage handling. `std::fs::rename` may overwrite and
-is not selected.
+Known pre-publication failure cleans owned stages where safe. Possible publication resolves through exact final
+readback. Uncertain outcomes preserve classifiable debris rather than overwrite or report success. Stages and
+unreferenced finals are stopped-root maintenance input, not permanent operation history.
 
 ## Reads
 
-- never reacquire a mutable live source path;
-- validate format/profile/kind/length before returning bytes;
-- use the original request deadline, cancellation and byte counters;
-- reject declared oversize before allocation/I/O;
-- share one integrity pass across ranges from the same object;
-- return exact coordinates and scanned-byte accounting;
-- corruption, wrong profile and short/long content are hard failures.
+Validate format/profile/kind/declared length before allocation and enforce actual byte ceilings while reading.
+Use the original deadline/cancellation. Verify content integrity and returned ranges; a supplied digest alongside
+arbitrary bytes is not verification. Short/long content, corruption, wrong profile or invalid ranges fail.
 
-A digest returned beside arbitrary bytes is not verification.
+Share one integrity pass across ranges of the same object where useful and charge all bytes actually read/hash-
+verified, not only excerpt length. A small output page does not make whole-object integrity verification cheap.
+Never reopen the live source to substitute missing retained evidence.
 
-## Metadata commit
+## Metadata and lifetime
 
-Object publication/readback completes outside the short redb source/preparation transaction. A stale conditional
-commit may leave an unreferenced immutable object for stopped-root maintenance but cannot overwrite current state.
-No redb writer spans object I/O.
+Complete object publication/readback before the short conditional source/preparation redb commit. No redb writer
+spans object I/O. Stale work can leave an unreferenced immutable object but cannot overwrite a newer source head.
 
-## Reachability and deletion
+The store enumerates/removes exact objects; it does not decide reachability. Stopped-root maintenance marks the
+current/prepared/published/pending/cleanup/archive references under exclusive ownership, then sweeps only proven
+unreferenced objects. Uncertain traversal/deletion preserves bytes. No online object GC or purge-proof platform.
 
-The store enumerates/removes exact objects; it does not decide reachability. Stopped-root maintenance marks from
-current source/preparation rows, published/pending state and retained archives, then sweeps exact unreferenced
-objects. Failed Windows deletion remains visible for another run.
+## Optional encryption and removal
 
-No online object GC, tombstone database, purge proof or completed-operation archive belongs to the baseline.
+After accepted #598 handoff, retain only its concrete codec, key-use seam and exact authenticated profile checks.
+Encrypted publication uses the same platform finalizer. Plain storage has no secret lifecycle.
 
-## Encrypted profile handoff
+Remove duplicate materializer/DIRECT writers, stage/receipt APIs, in-memory lifecycle histories, obsolete inventory/
+migration codecs and old formats with callers. Retain a narrow old-data reader only when explicit user-data access
+requires it; unsupported old roots otherwise remain untouched.
 
-After #598 publishes an accepted implementation, retain only its concrete encrypted `put/open/read`, exact profile
-metadata, real OS-protected key owner and authenticated envelope checks. Encrypted publication reuses the same
-documented platform finalization seam and does not create another Windows rename or private-NT path.
+## Checks after code
 
-## Removal boundary
-
-Delete duplicate materializer/DIRECT writers, contextual receipt/stage APIs, in-memory object lifecycle histories,
-legacy inventory/migration codecs and old DIRECT formats after current callers move. Move only proven useful
-relative-open/native-identity code from the legacy daemon owner; delete its publication phases, wrapper and direct-NT
-experiments.
-
-## Focused checks
-
-Plain profile: zero/nonzero bytes, concurrent identical writers, final conflict, stage replacement, ancestor/parent
-replacement, destination-exists refusal, stage cleanup, restart reopen, corruption, range bounds, cancellation and
-truthful durability status. Run minimal Rust 1.98 check/Clippy before native filesystem cases.
+Run minimal locked Rust 1.98 check/Clippy for the store and actual source/preparation/query consumers. Focused
+cases: empty/nonempty input, identical writers, conflicting final, stage/path replacement, failed finalization,
+restart, corruption/range bounds, pre-I/O oversize rejection, active cancellation and honest durability.

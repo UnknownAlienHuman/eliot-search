@@ -1,99 +1,75 @@
 # ELIOT Search — architecture
 
-ELIOT Search helps agents and people understand large codebases and document collections without
-reading the entire corpus. It finds useful evidence, shows where it came from and makes the next
-source read or exact check obvious.
-
-This manifesto stays in the lead developer's context. The
-[implementation guide](../implementation/README.md) owns code locations, integration and donor choices.
-It overrides conflicting requirements in the historical 8.4 design and old task packets.
+ELIOT Search helps agents and people understand codebases and document collections without reading the whole
+corpus. It finds useful evidence, shows its origin and makes the next source read or exact check obvious.
+[Implementation](../implementation/README.md) owns delivery order and mechanisms; this page owns product invariants.
+Historical Architecture 8.4 and task packets do not override it.
 
 ## Product
 
-A user selects local repositories or corpora, indexes them and asks a question. Search returns relevant
-files, symbols or document ranges with short excerpts, revision identity and clear gaps. The user can
-open the exact evidence, orient themselves in an unfamiliar project and compare implementations.
+Users select local repositories/corpora and receive ranked source locations with short verified excerpts,
+revision identity and explicit gaps. They can read exact evidence, orient in an unfamiliar project and compare
+implementations. Search operates through its own CLI/local interface without a model, agent controller or ELIOT
+integration. Large repositories and portfolios remain core workloads, not optional demos.
 
-The application works on its own through a CLI and local client interface. Large repositories and
-portfolios are a core workload. A model, agent controller or ELIOT integration is not required.
+## Result contract
 
-## What a useful result means
+A citation binds the retained revision that supplied its bytes. Ranking proposes useful reading, not exhaustive
+coverage, uniqueness, semantic equivalence or absence. Exact checks report their actual scanned inventory and
+representation. Unsupported formats, missing revisions, stale observations and unfinished work stay visible.
 
-- A citation corresponds to the exact source revision that supplied its bytes.
-- A ranked result helps navigate; it does not prove exhaustive coverage or absence.
-- An explicit exact check can cover one stated, actually scanned inventory.
-- Changes become searchable incrementally. Restart preserves committed state; a lost index rebuilds.
-- Unsupported formats, missing revisions, stale observations and unfinished work remain visible.
-- Interactive requests stay bounded and cancellable while background indexing progresses.
-- Foreground queries and evidence reads take priority; background preparation/indexing yields under resource pressure.
+Committed state survives restart; lost derived indexes rebuild. Updates converge to current selected content.
+Preparation reuses unchanged work. Publication starts with complete fresh generations and gains source-local
+mutation only where declared corpus budgets require it; do not promise that the reference profile avoids every
+unrelated index rewrite. Interactive work remains bounded/cancellable and takes priority under resource pressure.
 
-## Design principles
+## Invariants
 
-**Source truth has one owner.** Retained source bytes and their coordinates establish evidence.
-Qdrant is the only indexed retrieval engine. Control storage tracks current application state.
-Search does not maintain another search database or parallel authority for the same fact.
+**One source of evidence.** Immutable source/prepared objects and their coordinates establish citations. Qdrant is
+the only indexed retrieval engine; control storage holds compact application metadata, not another search corpus.
 
-**One coherent view.** A query uses one explicit scope and one published view. Incomplete writes never
-become a mixed visible index. Recovery resolves real unfinished effects. Ordinary reads and pure
-transformations need no durable receipts.
+**One coherent view.** A request selects a non-widening scope from one published view. Evidence and retrieval must
+refer to that same view. Incomplete writes never become a mixed visible index. Recovery resolves real unfinished
+effects; ordinary reads and pure transforms need no durable receipts.
 
-**Scope is selected from a view.** The published view already fixes its source memberships, route,
-profiles and evidence bindings. A request selects a subset of that view; a source update publishes a new
-view. The local product needs no parallel immutable corpus/portfolio authority, overlap proof, scope digest
-or security checkpoint protocol around that selection.
+**Lifetime follows ownership.** Current/pending references and live query windows preserve required data. Cleanup
+also accounts for unresolved external writers; the last reader disappearing is not enough. Publication owns
+whole-generation index cleanup. Local-object collection is explicit stopped-root maintenance, not a hot-path GC
+or universal lease/legal-hold/purge platform.
 
-**Views own lifetime.** Current and pending views, plus live query windows derived from them, keep their
-manifests and referenced artifacts alive. After a view is no longer acquirable and its last guard is gone,
-its derived data may be reclaimed. Ordinary local operation needs no universal lease, legal-hold, purge,
-mark-and-sweep or restore platform.
+**Results are not capabilities.** Cards carry exact source/revision/location/excerpt. Paging and bounded expansion
+use one short-lived same-session window derived from the pinned view. It is not a durable history or second bearer-
+security system and may expire on disconnect/restart.
 
-**Results are evidence, not capabilities.** A normal card carries source, revision, location and excerpt.
-Paging or bounded expansion may use one short-lived query window derived from the pinned view. That window
-is not a second authority, durable history or bearer-security system and may expire on disconnect/restart.
+**Availability is factual.** A handler works only when its real dependencies are constructed. A name, registry,
+digest, qualification receipt or advertisement does not create behavior or grant request authority.
 
-**Connected handlers define availability.** The application can perform an operation when its real handler
-and dependencies are constructed. A capability name, registry revision, descriptor digest or qualification
-receipt does not make an absent handler work. Optional client advertisement is derived from connected
-handlers and is never request authorization.
+**Local and no-execute by default.** The baseline serves the owning OS account and explicitly selected sources.
+It never executes indexed material or silently widens scope. Restricted clients, remote adapters and encryption
+are separately selected needs, not mandatory infrastructure for ordinary local work.
 
-**Local by default.** The baseline serves the owning OS account and explicitly selected sources.
-It neither executes indexed material nor silently broadens the corpus. Restricted clients, remote
-adapters and encrypted storage are separate needs with real consumers, not universal prerequisites.
+**Complexity must serve a consumer.** Prefer direct calls and concrete values. A trait/package/worker earns its
+place through a real dependency, effect or substantial algorithm, not a hypothetical future backend. Reuse maintained
+parsing, matching, serialization, storage and transport; do not build a compiler or lifecycle operating system.
 
-**Complexity must buy useful behavior.** Prefer a direct call and a concrete data structure. An
-abstraction earns its place by removing duplication or isolating a real dependency or effect.
-A capability name, agent assignment or hypothetical future backend does not justify another subsystem.
+**Hashes have a purpose.** Content identity and integrity use real hashes. Requests, plans, reviews, configuration
+and local state transitions do not need digests merely to appear trustworthy. Trusted local exchange needs no
+additional cryptographic authority platform.
 
-**Libraries supply established machinery.** Reuse parsing, matching, serialization, storage and
-transport implementations. Search adds source semantics and useful results. It does not need its own
-compiler, transaction platform, lifecycle operating system or general cryptographic protocol.
+**Replacement preserves user data.** Internal pre-release APIs/formats have no compatibility promise. Remove old
+implementations and their exclusive fixtures, but preserve original files and sole retained copies. Unsupported
+roots fail before writes; do not silently migrate or destroy them.
 
-**Hashes have a specific purpose.** Content identity and necessary integrity checks use real hashes.
-A local request, plan, configuration, state transition or review does not need a digest or signature
-merely to look trustworthy. A trusted local exchange needs no separate cryptographic identity system.
+**Bound work, not prose.** Stages/temporary pages/unreferenced objects are bounded discoverable debris, not permanent
+operation history. Keep finite pending state only where a real effect can outlive the process. Source identity,
+revision, current location and reusable transform input remain separate facts.
 
-**Replace obsolete designs.** Internal and pre-release formats carry no backward-compatibility promise.
-Legacy implementations and their fixtures do not constrain the new product. Original files and sole
-retained copies remain user data; simplification never silently destroys them.
-
-**Transient work is disposable.** Staging files, temporary pages and failed unpublished objects are not
-product history. Success removes them; interruption may leave bounded, discoverable debris for ordinary
-GC. They never justify a permanent receipt archive or another lifecycle database.
-
-**Cost follows useful work.** Normal updates touch changed content. Storage does not grow with an eternal
-history of completed operations. Query bookkeeping is short-lived. Source occurrence, current location
-and reusable derived input are separate facts: a small edit must not invalidate unrelated work merely
-because later offsets or revision identifiers changed.
-
-**Completion means an application.** Deliver connected behavior and remove the replaced implementation.
-Small files, a low line count, closed tickets and structural checks do not establish a working product.
-Tests should expose incorrect results, lost state, excessive rewrite or unbounded work.
+**Completion is observable.** Deliver connected behavior and remove its displaced route. File size, crate count,
+closed issues, source presence and structural checks cannot prove correct results, recovery, relevance or scale.
 
 ## Product boundary
 
-Search owns source acquisition, retained revisions, preparation, indexed retrieval, exact verification
-and compact evidence for its clients. Agent scheduling, task governance, general memory, online research,
-a hosted service, legal-record management and universal data migration are outside this application.
-
-Optional code intelligence, document formats, semantic ranking and adapters extend the same source and
-query path when selected. Their future possibility is not a reason to build an empty framework now.
+Search owns source acquisition, retained revisions, preparation, indexed retrieval, exact verification and compact
+evidence. Agent scheduling, task governance, general memory, online research, hosted services, legal-record
+management and universal migration are outside it. Optional code intelligence, formats, semantic ranking and
+adapters extend the same source/query path only with real consumers.

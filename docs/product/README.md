@@ -1,34 +1,24 @@
 # Product behavior
 
-This directory owns user-visible outcomes. It does not define package status, launch authority or an agent
-control plane.
+This directory defines user-visible outcomes, not package status or agent-control machinery. These are target
+requirements; [the registry](../audit/ANALYSIS_REGISTRY.md#evidence-status) records what currently runs.
 
-## Required capabilities
-
-| Capability | Observable result | Current owner |
+| Capability | Observable result | Owner |
 |---|---|---|
-| Search | Bounded ranked cards with exact source/revision/location, verified excerpt, nomination reason and truthful gaps | [Query operations](../../crates/search-query/README.md) |
-| Exact | A stated raw/decoded/derived predicate over one pinned inventory, reporting complete match/no-match, incomplete or invalid with accounting | [Exact owner](../../crates/search-query/search-exact/FUNCTIONS.md) |
-| Continue/Expand | Same-session paging and bounded context around an emitted item without rerunning the corpus or widening scope | [Window owner](../../crates/search-query/search-continuation/FUNCTIONS.md) |
-| Orientation | Useful entry files, definitions, tests/docs and next reads from observed source facts; ambiguity and missing producers remain visible | [Agent analysis behavior](AGENT_ANALYSIS_FRAMEWORK.md) |
-| Comparison | Selected implementations compared over requested axes with exact evidence, conditions and unknown/unsupported axes | [Agent analysis behavior](AGENT_ANALYSIS_FRAMEWORK.md) |
-| Documents | Supported page/section/table/reference representations use the same retained-source/evidence path with honest coordinates and loss | [Agent analysis behavior](AGENT_ANALYSIS_FRAMEWORK.md) |
-| Incremental/restart | Committed source and published state survive restart; edits/removals converge without stale completion or full unrelated rewrite | [Implementation](../implementation/README.md) |
+| Search | Bounded ranked cards with exact source/revision/location, verified excerpt, nomination basis and gaps | [Query](../../crates/search-query/README.md) |
+| Exact | Stated raw/decoded/derived predicate over one pinned inventory, with actual coverage and incomplete/invalid outcomes | [Exact](../../crates/search-query/search-exact/FUNCTIONS.md) |
+| Continue/Expand | Same-session paging and bounded context around an emitted item without rerunning the corpus or widening scope | [Window](../../crates/search-query/search-continuation/FUNCTIONS.md) |
+| Orientation/comparison | Useful next reads and supported comparisons from real evidence, with ambiguity/unknown axes | [Agent workflows](AGENT_ANALYSIS_FRAMEWORK.md) |
+| Documents | Supported representations with honest page/section/region coordinates, transformations and gaps | [Agent workflows](AGENT_ANALYSIS_FRAMEWORK.md) |
+| Restart/update | Committed state survives; edits/removals converge within declared corpus budgets | [Delivery sequence](../implementation/README.md#delivery-sequence) |
 
-Ranked retrieval is navigation, not proof of identity, correctness, equivalence, consensus, completeness or
-absence. Exact retained-source operations own complete claims over the inventory and representation they
-actually evaluate.
+Stage 3A publication rebuilds complete generations while preparation can reuse unchanged artifacts. Point-level
+incrementality is required only where those generations fail predeclared release budgets. Do not promise unrelated
+index writes are absent in Stage 3A or silently weaken the large-corpus requirement.
 
-## Reading and status
+Ranked retrieval is navigation, not proof of identity, equivalence, independence, completeness or absence. Exact
+retained-source operations own complete claims over what they actually evaluate. Deleting an obsolete package
+does not delete its useful product requirement.
 
-- [Architecture](../architecture/README.md) defines product boundary and principles.
-- [Agent-oriented analysis behavior](AGENT_ANALYSIS_FRAMEWORK.md) defines workflows and evidence semantics.
-- [Implementation](../implementation/README.md) selects current mechanisms and owners.
-- [Analysis registry](../audit/ANALYSIS_REGISTRY.md) records current implementation/evidence status.
-
-Deleting a broken package does not delete a product requirement. Optional syntax, model, document, overlay and
-MCP producers join the same source/query/evidence path only when selected by a real workflow.
-
-`PACKAGE_STATUS.toml`, wave queues and execution protocols from Architecture 8.4 were removed. Git history is
-their archive. Do not recreate a machine-readable package/status graph: source presence, closed tasks and
-structural checks do not prove connected behavior.
+[Architecture](../architecture/README.md) defines invariants. Optional producers join the same evidence path when
+selected. Historical package-status/wave/control graphs stay in Git history and are not regenerated.

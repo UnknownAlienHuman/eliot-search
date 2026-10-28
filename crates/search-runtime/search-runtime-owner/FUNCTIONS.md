@@ -1,134 +1,111 @@
-# Root owner — one current-format data-root guard
+# Root owner — one current-format guard
 
-This owner classifies, initializes and opens one current-format root. It owns process-lifetime exclusion and root
-metadata. It does not own source membership, Qdrant, query sessions, encryption policy or a lifecycle ledger.
+This owner classifies, initializes and opens one root, holds process-lifetime exclusion, and owns the small
+platform finalization seam shared with the object writer. It owns no source catalogue, query session or lifecycle
+ledger. Target behavior below is not implemented/runtime evidence.
 
-## Public operation
+## Public operations
 
 ```text
 inspect(path) -> RootInspection
-initialize_plain(path, settings, RequestContext) -> DataRootGuard
-open_existing(path, settings, RequestContext) -> DataRootGuard
-explicit_discard_incomplete(path, RequestContext)
+initialize_plain(path, settings, ExecutionContext) -> DataRootGuard
+open_existing(path, settings, ExecutionContext) -> DataRootGuard
+explicit_discard_incomplete(path, ExecutionContext)
 ```
 
-Help/version perform no root effects. `inspect` is read-only.
+Use the [execution/query separation](../../../docs/implementation/README.md#minimal-cross-owner-values).
+Root work needs deadline/cancellation and its own finite limits, never a query view or scoring profile.
+Help/version perform no root effects; inspect is read-only.
 
-## Foundation layout and classification
+## Classification
 
-The plain root contains only the final root manifest, minimal redb/control layout, immutable-object namespace and
-owned initialization debris. Root metadata contains format/root identity, `storage_profile=plain`, and concrete
-store schema versions—no source catalogue copy, owner epoch, operation receipt or secret state.
+The plain layout contains a final root manifest, minimal control store, immutable-object namespace and recognizable
+owned initialization debris. Root metadata binds format/root identity, plain profile and store schema versions.
 
-- no final manifest and no recognized owned marker/layout: `Uninitialized`;
-- exact marker plus recognized empty layout, no final manifest: `IncompleteInitialization`;
-- final manifest plus exact compatible layout: `Current`;
-- final manifest with missing/conflicting layout: `Corrupt`;
-- unsupported/foreign/pre-release layout: `Unsupported`;
-- actual exclusive owner present: `Busy`.
+| Observation | Classification |
+|---|---|
+| Absent or empty target without a final manifest/owned marker | Uninitialized |
+| Exact current marker and recognized unfinished empty layout, no final manifest | IncompleteInitialization |
+| Final manifest with exact compatible layout | Current |
+| Final manifest with missing/conflicting required layout | Corrupt |
+| Unknown, foreign, unsafe or unsupported pre-release layout | Unsupported |
+| Actual exclusive owner present | Busy |
 
-Ordinary open/search/status never repairs, resumes, migrates or deletes.
+Unknown entries are not an empty uninitialized root. A valid final manifest with leftover owned debris is not
+permission to discard the committed root. Ordinary open/search/status never repairs, resumes, migrates or deletes.
 
 ## Final-manifest-last initialization
 
 ```text
-validate selected local target
-→ acquire initialization exclusion
-→ retain/verify every directory handle from root to manifest parent
-→ create exact owned initialization marker
-→ create/flush/close/verify empty redb + object layout
-→ create one unique manifest stage in final parent
-→ write exact manifest + file-data flush
-→ publish final manifest no-clobber last through tested platform owner
-→ reopen final relative to retained parent and verify current layout
-→ remove marker/stage debris where safe
-→ return DataRootGuard
+validate target → acquire actual exclusion → retain/verify required path handles
+→ exact owned initialization marker → create/flush/close/verify empty stores
+→ unique manifest stage in final parent → write/flush exact bytes
+→ platform no-clobber finalization → verified final manifest/layout
+→ safe removal of owned marker/stage debris → DataRootGuard
 ```
 
-Foundation accepts no user source before the final manifest, so recovery is discard/retry rather than replay.
+No user source is admitted before the final manifest. Interruption before publication uses strict discard/retry,
+not resume or phase replay. Resolve an uncertain finalization through exact final/marker/layout inspection;
+never restart creation over a possibly committed root.
 
-## Windows finalization — corrected R054 boundary
+<a id="windows-finalization"></a>
+<a id="windows-finalization--corrected-r054-boundary"></a>
+## Windows finalization candidate
 
-Rejected baseline paths:
-
-1. `tempfile::persist_noclobber` / `MoveFileExW`, because publication is path-based;
-2. the reachable legacy relative-`RootDirectory` Win32 wrapper in `registration_native::rename`;
-3. private user-mode `NtSetInformationFile` or equivalent direct NT calls selected prematurely by R053.
-
-Use one documented owner-private operation:
+This is the single root/object Windows recipe. The selected candidate is documented Win32, but its ELIOT path
+stability and durability remain unexecuted. [Upstream evidence and exact report](../../../docs/audit/DONOR_VERIFICATION_REGISTER_2026-10-09.md#plain-object-publication-donor)
+are separate from support qualification.
 
 ```text
-opened stage handle with DELETE access
-+ retained verified directory-handle chain from data root to final parent
-  (share read/write; omit FILE_SHARE_DELETE)
-+ canonical absolute final path derived from retained final-parent handle
+retain verified root→final-parent directory handles
+  with FILE_SHARE_READ | FILE_SHARE_WRITE, without FILE_SHARE_DELETE
+retain verified stage handle with DELETE access
+establish a stable absolute destination namespace from the retained final parent
 → SetFileInformationByHandle(FileRenameInfo)
-   RootDirectory = NULL
-   ReplaceIfExists = FALSE
-→ reopen final relative to retained parent
-→ compare stable file identity; verify non-reparse kind, length and complete manifest bytes
+   RootDirectory=NULL; ReplaceIfExists=FALSE
+→ reopen final through the verified parent relationship
+→ compare stable identity, non-reparse kind, length and exact bytes
 ```
 
-Holding every directory component without delete sharing prevents rename/delete replacement of the path chain while
-the documented absolute-target operation runs. The implementation canary must cover:
+No-delete sharing constrains rename/delete access to the opened objects; it is not by itself proof that every
+component of an absolute path is stable. The implementation must also account for mutable ancestors above the
+data root and reparse/device-path resolution. Do not claim safety from the root→parent chain alone.
 
-- accepted extended absolute path form derived from the retained parent;
-- stage DELETE access and exact share modes;
-- successful absent destination and refusal of existing destination;
-- ancestor/final-parent rename or replacement attempts while handles are retained;
-- local same-volume filesystem support and unsupported-profile refusal;
-- source/stage classification after failure;
-- exact relative reopen, identity and byte readback;
-- bounded content-free Win32 error mapping.
+The focused canary must establish accepted absolute/extended path form, access/share flags, absent-target
+success, existing-target refusal, stage/parent/ancestor replacement resistance, safe reopen, local same-volume
+support, bounded errors and classifiable failure debris. Refuse an unsupported or unproven profile.
 
-Official `FILE_RENAME_INFO` documentation describes a relative `RootDirectory`, but a current supported-build report
-shows the wrapper may absolutize the name while retaining that handle. Do not use the relative form until a supported
-platform canary proves it. Do not bypass the wrapper with private NT APIs.
+Do not use path-only MoveFileExW/tempfile publication, the legacy relative-RootDirectory wrapper, a private direct
+NT finalizer or a generic filesystem framework as fallback. Reuse useful verified-open/identity code only after
+tracing current callers; the legacy source-registration publication route is removed with its consumers.
 
-If the documented absolute-target operation cannot be demonstrated for the advertised Windows/filesystem profile,
-refuse initialization. There is no `MoveFileExW`, private-NT or generic-filesystem fallback.
-
-File-data flush is separate from namespace persistence. Do not claim sudden-power-loss directory durability without
-an executed primitive and crash evidence.
+File-data flush, namespace visibility, final readback and sudden-power-loss durability are separate claims.
+Do not advertise the last one without executed evidence.
 
 ## Unix finalization
 
-Use an owner-private no-replace operation relative to the retained directory when available. A link-then-unlink
-fallback is acceptable only with same-filesystem validation, exact final verification and visible leftover-stage
-handling. `std::fs::rename` is not a no-clobber primitive.
+Use a private directory-relative no-replace operation where available. A same-filesystem link/unlink fallback
+needs exact final verification and visible stage-debris handling. Ordinary overwriting rename is not no-clobber.
 
-## Explicit discard of incomplete empty initialization
+## Explicit discard
 
-`discard-incomplete` runs only under actual exclusion and only when:
-
-- no final manifest exists;
-- the exact current-format marker is valid;
-- only recognized empty control/object layout and owner-created stages exist;
-- no source/preparation/published/pending/import reference exists;
-- retained/opened objects still match inspected identities.
-
-Unknown entries, replacement objects, conflicting bytes or uncertain deletion refuse. No baseline `resume`, phase
-journal, operation digest, owner epoch or quarantine platform exists.
+Discard requires actual exclusion, no final manifest, the exact current-format marker, only recognized empty
+control/object layout and owned stages, no source/prepared/published/pending/import references, and matching
+inspected/opened identities. Unknown entries, conflicting bytes, replacement or uncertain deletion refuse.
+No baseline resume, initialization journal, operation digest, owner epoch or quarantine platform.
 
 ## Open and shutdown
 
-Open retains the root/path-component handles, acquires one real exclusive guard, rereads/verifies current metadata,
-then opens concrete stores. Shutdown stops admission, drains/cancels finite requests, stops publication and Qdrant
-users, closes stores, then drops the guard. No `DRAINING/RELEASED` record.
+Open retains required handles, acquires one actual exclusive guard, rereads current metadata, then opens stores.
+Shutdown stops admission, drains/cancels finite work, drops windows/views, stops publication/backend users, closes
+stores, then drops the guard. No DRAINING/RELEASED record or per-request borrowing of the guard as a global mutex.
 
-No redb writer, view/window lock or Qdrant/object/process I/O is nested through the guard as a per-request mutex.
+## Removal and checks
 
-## Removal boundary
+Remove owner leases/slots/succession, unrelated process/executable identities, health/drain receipts, compatibility
+locks, argv/stage custody, initialization resume/journal and root-owned source/key/migration wrappers with callers.
+Preserve user data and unpublished #598 overlap.
 
-Remove owner leases/slots/succession, process/executable identities unrelated to the lock, health/drain receipts,
-dual compatibility locks, `NativeRootRequest` argv/stage custody, initialization journal/resume and root-level
-source/registry/DEK/migration/service wrappers.
-
-Remove the legacy source-registration publication route and defective relative-root Win32 wrapper after useful
-relative-open/identity code is moved. Do not retain its backup/phase/receipt protocol or its direct-NT experiment.
-
-## Focused evidence
-
-Run minimal Rust 1.98 check/Clippy for root/daemon/store consumers, then canaries for absent/current/incomplete/
-foreign/busy, destination-exists refusal, ancestor/parent replacement, every initialization failure point, strict
-discard, restart after crash and shutdown order. Record the exact platform and durability profile achieved.
+After code run minimal locked Rust 1.98 check/Clippy for root/daemon/store consumers. Focused cases cover
+classification, all initialization interruption points, strict discard, exclusive ownership, documented platform
+publication/replacement behavior, restart and shutdown order. Record exact platform and achieved durability.

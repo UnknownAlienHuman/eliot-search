@@ -1,31 +1,16 @@
-# Working on search-epoch-pins
+# Working on view lifetime
 
-Read the [implementation guide](../../../docs/implementation/README.md), local [source map](FUNCTIONS.md) and
-[publication map](../search-publication/FUNCTIONS.md).
+Read [FUNCTIONS.md](FUNCTIONS.md) and the
+[publication lifetime rule](../search-publication/FUNCTIONS.md#view-lifetime-and-whole-generation-cleanup).
+Extract one private current-view manager: strong current Arc, weak retired references and owned guards.
 
-This package is a replacement/removal target. Implement one private standard-library current-view manager:
-one strong current `Arc`, weak retired refs and lexical `ViewGuard` ownership. Do not repair the raw pin
-registry.
+Pin only current; a window inherits an existing guard. No public route/epoch acquisition, renewal or watermark
+API. After durable current commit, open/verify the matching snapshot and install it under a short manager lock.
+No manager lock spans redb writer, object or Qdrant I/O. Last guard drop only wakes cleanup.
 
-Publication commits redb current/cleanup state first, then takes the short manager mutex to install the
-target. Never hold the manager lock across redb fsync or object/Qdrant I/O. A query which pins old in that gap
-remains valid and merely delays cleanup.
+Whole-generation cleanup waits for every live view/window and targetable unresolved attempt. Do not introduce
+point deletion based on sequence or immediate-predecessor drain; neither baseline nor Stage 3B uses a physical
+point reclaimer. Restart reconstructs current; ordinary interactive windows expire.
 
-`pin_current()` clones only current. A window can clone only an existing live guard. No API accepts route,
-generation, sequence, owner ID, caller time or renewal.
-
-Cleanup evaluates every live view:
-
-- point IDs closed at N wait until no same-generation live view has sequence below N;
-- an old collection waits until no live view uses its generation.
-
-The immediate predecessor's last guard is not enough when an earlier view remains live. Last drop only wakes
-cleanup. Periodic scan is fallback. Restart reconstructs current from redb; old interactive guards disappear
-while durable cleanup rows remain.
-
-Delete pin IDs/owners/counts, raw route/epoch acquisition, release-by-owner, renewal, snapshots/watermarks,
-continuation bindings, P18 APIs and shape fixtures. Move the small manager into publication/query composition
-if no real package boundary remains.
-
-After code, run minimal Rust 1.98 compiler/Clippy for publication/query/window/cleanup consumers and focused
-commit→install gap, v1/v2/v3, restart and dead-weak behavior.
+Move surviving callers and delete old registry/continuation/receipt fixtures. Run minimal Rust 1.98 check/Clippy
+for the affected production consumers after code.

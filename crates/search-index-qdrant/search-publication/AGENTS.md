@@ -1,24 +1,14 @@
 # Working on publication
 
-Read the [implementation spine](../../../docs/implementation/README.md), local
-[FUNCTIONS.md](FUNCTIONS.md), the [bridge](../search-qdrant-bridge/FUNCTIONS.md) and
-[control](../../search-control-redb/FUNCTIONS.md).
+Read [FUNCTIONS.md](FUNCTIONS.md), then only the affected bridge/control/view/query consumers.
 
-Implement one serialized publisher and one pending artifact with actual bounded Qdrant inputs.
+Stage 2/3A uses one serialized publisher, fixed complete generation input, InsertOnly build, exact readiness,
+bounded evidence/current commit and explicit view installation. No sequence, closure or occurrence matching.
+Conditional Stage 3B follows its own recipe only after failed measured budgets.
 
-Baseline invariants:
+Cleanup is whole-generation in both profiles; no physical point deletion or point-cleanup ledger. Never treat a
+timeout or matching readback as proof that every earlier dispatched writer has stopped. No redb writer/view lock
+spans backend or object I/O. Local object collection remains stopped-root maintenance.
 
-- new points are immutable and use insert-only creation;
-- retry only the same fixed point value and verify exact readback;
-- closure writes one fixed `valid_until` value;
-- never physically delete individual points;
-- compaction/rebuild creates a fresh never-reused generation;
-- cleanup deletes whole retired generations after all view/window guards are gone;
-- one redb transaction installs evidence/inventory/current and removes pending;
-- the matching redb snapshot is installed before reporting visibility;
-- local object collection is stopped-root maintenance.
-
-Do not implement isolated-route succession, possible-writer receipts, per-point cleanup journals, full manifest
-copies or another publication state machine. Change bridge/control/view/query consumers together. After code run
-minimal Rust 1.98 compiler/Clippy for actual changed owners, then focused retry/closure/view/restart/generation
-cases.
+Change actual consumers and remove displaced machines/fixtures together. Run minimal locked Rust 1.98
+check/Clippy after production changes. Algorithms and failure rules stay in the recipe, not duplicated here.

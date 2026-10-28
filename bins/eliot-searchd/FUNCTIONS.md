@@ -1,189 +1,75 @@
-# eliot-searchd — one application, one owner chain
+# Daemon composition — one application
 
-Follow [architecture](../../docs/architecture/README.md) and the
-[implementation spine](../../docs/implementation/README.md). Existing command/package/receipt boundaries are not
-compatibility requirements. The [analysis registry](../../docs/audit/ANALYSIS_REGISTRY.md) records evidence and
-unfinished checks; it is not a second specification.
+The daemon owns invocation capture, construction of concrete owners, handler availability, cancellation/deadlines,
+shutdown and one local dispatcher. Target composition below is not current runtime evidence.
 
-## Current composition problem
+<a id="inspected-callers-and-effects"></a>
+## Current entrypoints and removal seams
 
-The binary still contains several applications selected by an ordered interceptor chain:
+At inspected head `45ddf887`, src/entry.rs orders independent interceptors before app::run_main:
+legacy-effect refusal, direct registry, native-root lifecycle, migration, preparation, DIRECT service and secure
+commands. The [immutable route audit](https://github.com/UnknownAlienHuman/eliot-search/blob/45ddf887c9e84861b1302334a1f5ecabb263f7f3/bins/eliot-searchd/README.md)
+records which command is shadowed and why a compiled module is not a connected handler. Recheck actual callers
+at the source cut; do not add another interceptor or enable all old wave features to mask this topology.
 
-```text
-legacy effect refusal
-→ registry/journal command
-→ native-root lifecycle
-→ migration
-→ legacy preparation
-→ DIRECT session
-→ secure command stack
-→ final shell
-```
+Useful source seams to move with their callers:
 
-Each may capture argv/config and shadow later handlers. Feature names and compiled modules therefore do not prove a
-connected product. Do not repair reachability by enabling all features or adding another dispatcher.
-
-Representative current islands:
-
-- source admission can read and hash a body but drops the owned bytes before immutable retention;
-- source sync still ends in `SOURCE_ROOT_SYNC_EFFECTS_UNAVAILABLE`;
-- preparation uses another DIRECT store/profile/receipt family;
-- query/rebuild proof modules are not connected to the real Qdrant runtime;
-- DIRECT query retains old continuation/result-handle and line-protocol systems;
-- provider composition contains pairing/grant/envelope machinery unrelated to trusted child stdio;
-- query/output can trigger corpus/history-sized storage inspection.
-
-## R054 Windows publication correction
-
-The active legacy source-registration route remains a concrete counterexample:
-
-```text
-secure_commands::maybe_run
-→ source_registration::{--register-source-root | --unregister-source-root}
-→ run_source_registration
-→ registration_mutation::CatalogCustody::publish
-→ registration_native::rename
-→ SetFileInformationByHandle(FileRenameInfo) with relative leaf + non-null RootDirectory
-```
-
-R053 correctly rejected this wrapper as the new finalizer but incorrectly selected a private direct NT call as the
-replacement. The current product uses neither path.
-
-Selected owner operation:
-
-```text
-retain verified directory handles for every component from data root to final parent
-  without FILE_SHARE_DELETE
-retain opened stage handle with DELETE access
-derive canonical absolute final path from retained final-parent handle
-→ documented SetFileInformationByHandle(FileRenameInfo)
-   RootDirectory=NULL; ReplaceIfExists=FALSE
-→ reopen final relative to retained parent
-→ verify stable identity, kind, length and bytes
-```
-
-The no-delete-share handle chain prevents rename/delete replacement of the absolute path while the documented call
-runs. A focused canary must prove accepted path form, access/share flags, destination-present refusal, ancestor and
-parent replacement resistance, supported local filesystem, failure debris and exact readback.
-
-Disposition:
-
-- do not reuse/repair the relative-root legacy wrapper;
-- do not use path-based `MoveFileExW`/`tempfile::persist_noclobber` as authority;
-- do not add private `NtSetInformationFile`/equivalent user-mode FFI;
-- preserve only useful relative-open and file-identity techniques after current caller review;
-- remove the legacy source-registration command route, mutation phases and wrapper during Foundation/source cut.
-
-Passing old command tests cannot qualify the current finalizer. Until the documented canary runs, Windows root and
-object publication remain unverified.
-
-## Current Qdrant/query direction
-
-```text
-one explicit file
-→ stable acquired bytes
-→ plain ObjectRef + current SourceRecord
-→ prepared retrieval_text
-→ vectorless Qdrant 1.20 physical collection
-→ explicit scoring Text index V1
-→ InsertOnly complete build + exact readback
-→ durable evidence/current commit
-→ PublishedView install
-→ TextQuery(k=1.2,b=0.75)
-→ pinned evidence/ObjectRef/range
-→ typed CLI output
-```
-
-Stage-2 text index is explicit: Code tokenizer, lowercase, no ASCII folding/phrase/stemmer/stopwords/token limits/
-nested path, BM25 scoring, payload HNSW disabled, memory Pinned. Stage 2 creates no filter indexes. Query requests
-no vectors and only evidence-routing payload.
-
-Stage 2/3A uses complete immutable physical generations and deterministic generation-bound point IDs. Old/new
-occurrence matching, stable point continuity, sequence and closures belong only to Stage 3B if release budgets fail.
-Baseline cleanup deletes whole retired collections after guards and targetable attempts are gone.
-
-## One target daemon
-
-```text
-startup:
-  capture args_os/config once
-  → explicit initialize or open current root
-  → one process-lifetime DataRootGuard
-  → construct current object/source/control/Qdrant owners
-  → recover exact durable current state
-  → install PublishedView and concrete handlers
-  → one framed local dispatcher
-ingest:
-  selected source → stable read → immutable ObjectRef
-  → conditional current SourceRecord → preparation outcome
-  → complete Qdrant generation + readback
-  → bounded evidence/current commit → view install
-query:
-  typed request → pin current view + resolve scope + RequestContext
-  → TextQuery → point ID/routing payload
-  → pinned evidence row → retained read
-  → bounded terminal response → optional same-session QueryWindow
-maintenance:
-  stopped daemon + exclusive root
-  → explicit local object collection or completed archive/import
-```
-
-An arrow is not recovery. Current input/outcome comparison repairs lost wake-ups. Pending external effects retain
-only finite unfinished state. Normal reads and pure transforms create no durable receipt.
-
-## Surviving responsibilities
-
-| Owner | Responsibility |
+| Existing seam | Required cutover |
 |---|---|
-| invocation/root | one settings value, initialize/open, documented tested finalization, one OS guard, bounded shutdown |
-| source/object | stable acquisition; immutable bytes durable before current-head commit |
-| current state | short typed redb rows/transactions; no history replay per operation |
-| preparation | one materialization/unitization outcome with empty/gap/failure/stale guard |
-| Qdrant | one private 1.20 runtime/client for publication and query |
-| publication/view | fixed generation input, complete effects/readback, evidence/current commit and view install |
-| query/evidence | direct TextQuery handler, pinned view/scope/context and retained read |
-| session/window | one fixed-expiry final-order cursor for later Continue/Expand |
-| protocol/CLI | framed local exchange, active Cancel and one owned-child lifetime |
-| maintenance/import | stopped-root mark/sweep; completed archive; fresh destination/generation |
+| owner_composition/kernel/native_source | Transfer the already acquired bytes to immutable retention; do not drop and reread them. |
+| safe_reader_adapter | Preserve actual containment, cancellation/deadline and byte limits through the real reader. |
+| native_root_command / registration_mutation / registration_native | Move useful verified-open/identity mechanics to the root owner; remove legacy custody/publication wrappers. |
+| preparation_composition | Preserve usable/empty/gap distinctions, replace duplicate DIRECT store/profile/receipt paths. |
+| public_runtime_service / provider composition | One current framed dispatcher; remove shadowed line/tab/hex, pairing/grant and duplicate session routes. |
+| publication/rebuild/query proof modules | Connect actual owners and effects, not fixture-backed plans or supplied readback. |
 
-Responsibilities do not imply one crate each. Keep boundaries only for real dependencies/effects or substantial
-algorithms.
-
-## Removal order
-
-Remove with actual consumers:
-
-- current legacy source-registration command and relative-root wrapper;
-- any direct-NT finalizer experiment introduced from R053 guidance;
-- remaining argv interceptors and duplicate command implementations;
-- registry/original-input replay and aggregate snapshots for ordinary source work;
-- duplicate object/preparation stores and compatibility formats;
-- migration/sealed/secure-command owner-slot/epoch/succession machinery;
-- remaining wave features and optional old-package wiring;
-- CLI/provider endpoint/token/pairing/grant/capability compatibility;
-- query planner/ticket/access/proof systems and old rebuild/reclaimer composition;
-- continuation/result-handle catalogues and recursive query-time storage inventories;
-- fixtures whose only subject is removed topology.
-
-Unsupported old roots fail before writes and remain untouched. Preserve original data and actual unpublished #598
-overlap.
-
-## Verification
-
-After a Rust slice, run pinned Rust 1.98 check and strict Clippy for the changed production binary/owners and their
-immediate consumers. `eliot-searchd --lib` does not cover binary composition.
-
-Focused first evidence:
+<a id="query-publication-and-rebuild-boundaries"></a>
+## Target data and effect path
 
 ```text
-Windows documented finalization canary
-→ Foundation initialize/open/status
-→ one retained file
-→ Qdrant 1.20 schema/build/TextQuery canary
-→ CLI Search
-→ pinned evidence lookup
-→ exact retained excerpt
+startup: capture invocation/settings once → current root + process-lifetime DataRootGuard
+         → construct concrete stores/backend → recover durable current → install view/handlers
+         → one framed dispatcher
+
+ingest:  selected source → stable owned bytes → immutable ObjectRef → conditional SourceRecord
+         → preparation outcome → fixed complete Qdrant build → evidence/current commit → view install
+
+query:   typed request → pin current view → resolve scope → bounded TextQuery or retained Exact
+         → pinned evidence lookup → retained verification → complete terminal response
+
+shutdown: stop admission → cancel/drain finite work → drop windows/views → stop backend users
+          → close stores → release root guard
 ```
 
-Then exercise restart/edit/removal, incomplete inventory, old views, cleanup, cancellation, paging, relevance and
-scale. Help, self-test, compilation and constructors are not application-level evidence.
+Stage 2 supplies one file and one-shot output using final persisted owners. Stage 3A adds restart/inventory and
+complete-generation convergence. Source-local incrementality is conditional on failed measured budgets.
+[Implementation](../../docs/implementation/README.md#delivery-sequence) owns this order.
+
+## Load only the affected rule
+
+| Boundary | Canonical recipe |
+|---|---|
+| Settings | [Config](../../crates/search-config/FUNCTIONS.md) |
+| Root and platform finalization | [Root](../../crates/search-runtime/search-runtime-owner/FUNCTIONS.md) |
+| Immutable bodies/artifacts | [Object store](../../crates/search-source/search-revision-store/FUNCTIONS.md) |
+| Source/current state | [Source family](../../crates/search-source/README.md), [control](../../crates/search-control-redb/FUNCTIONS.md) |
+| Qdrant schema/calls | [Lexical profile](../../crates/search-lexical/FUNCTIONS.md), [bridge](../../crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md) |
+| Build/recovery/view/cleanup | [Publication](../../crates/search-index-qdrant/search-publication/FUNCTIONS.md) |
+| Query/evidence/window | [Query family](../../crates/search-query/README.md) |
+| Framing and CLI | [Protocol](../../crates/search-provider-protocol/FUNCTIONS.md), [CLI](../eliot-search/FUNCTIONS.md) |
+
+Foundation/object code uses execution-only context; query constructs its own view/scope/scoring state. No redb
+writer, view mutex or window mutation borrow spans external I/O. Preserve the
+[lock order](../../docs/implementation/README.md#lifetime-and-lock-order). No copied algorithm or second runtime
+ledger belongs in daemon composition.
+
+## Removal and verification
+
+Remove duplicate argv parsing/interception, source-registration publication, obsolete migration/secure/sealed
+custody, registry replay/snapshots, duplicate writers, old wave dependencies, provider pairing/grants and separate
+handle/continuation catalogues as their consumers move. Unsupported roots fail before writes and remain intact.
+
+After production changes run minimal locked Rust 1.98 check/Clippy for the real binary and affected consumers.
+Record executed root/file/backend/excerpt behavior separately from compilation. Historical detailed findings stay
+in the [pre-R055 map](https://github.com/UnknownAlienHuman/eliot-search/blob/45ddf887c9e84861b1302334a1f5ecabb263f7f3/bins/eliot-searchd/FUNCTIONS.md)
+and [registry](../../docs/audit/ANALYSIS_REGISTRY.md#evidence-status).

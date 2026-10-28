@@ -1,25 +1,15 @@
-# search-qdrant-bridge
+# Qdrant bridge
 
-Private translation between Eliot Search and the pinned Qdrant SDK. This package owns actual collection,
-point, query and readback RPCs. Publication owns effect ordering, recovery and visible-view commit;
-retained sources and published evidence metadata establish citations.
+The private boundary for actual Qdrant schema, point, query and readback calls. One client/runtime serves
+publication and query. Publication owns effect ordering/recovery/view commit; retained objects and pinned metadata
+establish citations.
 
-Read the [architecture](../../../docs/architecture/README.md),
-[implementation guide](../../../docs/implementation/README.md) and [single implementation recipe](FUNCTIONS.md).
-Do not treat this README as a second mutation or query specification.
+[FUNCTIONS.md](FUNCTIONS.md) owns SDK operations and readback.
+[Lexical](../../search-lexical/FUNCTIONS.md) owns physical/query profile semantics;
+[publication](../search-publication/FUNCTIONS.md) owns uncertainty and cleanup.
+The selected scoring-text/TextQuery path replaces baseline sparse inference, not an additional backend.
 
-## Current code versus the target
-
-At `7d92fb8b`, `RealDataPlane::connect` no longer accepts `QualifiedGate`. The live-probe report validator
-returns `()` for diagnostics/tests; it cannot issue a constructor credential.
-
-The rest of the direct-runtime cutover is not complete. The current adapter still has supervisor/key-lease
-binding, an exact server-build check, fixed nested timeouts, a process-local mutation map, explicit sparse
-inputs and the read-only blocking facade. Removing the gate did not connect publication/query to native BM25.
-
-The source inventory, selected operations, immutable published-point rule, empty-scope behavior, native
-inference readback and late-write boundary live only in [FUNCTIONS.md](FUNCTIONS.md). In particular, SDK
-support for narrow vector/payload updates is not an instruction to implement them or mutate published points.
-
-[Analysis registry](../../../docs/audit/ANALYSIS_REGISTRY.md) records inspected revisions and exact check
-coverage. A successful library check/Clippy run is not a daemon, live-server or recovery result.
+The lock still contains client 1.19.0; selected 1.20.x integration is not implemented. Earlier gate-removal library
+checks do not establish daemon/server behavior. [Registry](../../../docs/audit/ANALYSIS_REGISTRY.md#evidence-status)
+owns evidence; [historical source inventory](https://github.com/UnknownAlienHuman/eliot-search/blob/45ddf887c9e84861b1302334a1f5ecabb263f7f3/crates/search-index-qdrant/search-qdrant-bridge/README.md)
+records remaining legacy wrappers at that revision.

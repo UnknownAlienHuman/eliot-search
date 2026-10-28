@@ -1,59 +1,45 @@
-# Query selection — direct handlers, not a plan compiler
+# Query selection — direct handlers
 
-The [query owner](../README.md) defines the connected operation. This file maps the old planner to the small amount
-of direct selection logic which may survive. Before deleting/inlining the crate, repeat exact current caller search
-across manifests, Rust/non-Rust code, path inclusion, features, targets, tests and workflows.
+The [query owner](../README.md) owns request/result meaning. The inherited planner is a removal target; trace
+current callers before inlining/deleting it and move actual consumers in the same cut.
 
 ## Direct baseline
 
-The query owner receives:
-
 ```text
-typed request
-PublishedViewGuard
-ResolvedScope
-RequestContext
-constructed handlers
-```
-
-Dispatch is direct:
-
-```text
-Search   → Qdrant 1.20 TextQuery handler
+typed request + RequestContext(view, scope, query scoring, execution) + constructed handlers
+Search   → Qdrant TextQuery
 Exact    → retained-source scan
-Continue → QueryWindow page
-Expand   → selected-item bounded context
+Continue → stored QueryWindow page
+Expand   → emitted-item bounded context
 ```
 
-Optional Orient/Compare appear only with real producers. Unsupported operations fail before backend/source work.
-No recipe normalization, capability set, task/leg plan, grant, dependency proof or plan fingerprint.
+Optional operations appear only with actual producers/handlers. Unsupported modes fail before source/backend
+work. A call to one handler requires no recipe, capability set, task/leg plan or fingerprint.
 
-## Search branch selection
+## Search selection
 
-Baseline Search has one physical collection/retrieval profile and one compatible base population. Use the pinned
-view's collection, `retrieval_text` field and explicit profile `k`/`b`. `ResolvedScope` supplies:
+Use the view's physical collection/text field and the admitted request's separate query-scoring profile. Do not
+read k/b from physical view identity. The [scope owner](../search-access/FUNCTIONS.md) supplies:
 
 ```text
-candidate filter = base selected source/access population + request-only narrowing
-idf.corpus       = base selected source/access population
+base = selected sources ∩ real session/access restriction
+candidate filter = base + request-only narrowing
+IDF corpus = base
 ```
 
-When base equals whole collection, omit both filter and IDF. Free text is any-term `TextQuery`; typed required or
-excluded clauses become explicit filters. Exact punctuation/location never silently falls back to Search.
+For an entire-collection base, omit its redundant predicate and IDF override, not request-only clauses. Omit the
+candidate filter only when no clauses remain. Known empty performs no RPC. Free text nominates by TextQuery;
+explicit required/excluded clauses remain filters, not exact spelling/phrase proof.
 
-For actual multiple physical collections or incompatible profiles, produce a finite ordered branch list. Each
-branch uses the same absolute deadline and finite nomination ceiling. Raw scores are different populations and are
-not directly compared. Add one explicit bounded rank merge only when a real product operation needs it.
+Only a real operation over incompatible collections/profiles justifies a finite private branch list and explicit
+bounded rank merge. Branches share the absolute deadline/counters; raw scores from different populations cannot
+be directly sorted. Do not create per-source legs in a compatible collection.
 
-## Remove
+## Remove and verify
 
-Delete V1 recipe tables, public capability/task/leg/compiled-plan types, grants, overlap/drift/dependency proofs,
-relative per-leg timeouts and fixtures which only seal those records. Move any surviving tiny grouping/check-limit
-helper into query composition; delete the crate if no substantial independent algorithm remains.
+Delete V1 recipe tables, public capability/task/leg/plan records, grants, overlap/drift/dependency proofs, relative
+leg timeouts and exclusive fixtures. Keep only nontrivial actual selection helpers, otherwise delete the crate.
 
-## Verification
-
-After code and minimal check/Clippy, verify Search/Exact dispatch, unsupported mode before I/O, whole-collection
-scope omission, selected-source base/candidate/IDF split, explicit empty/unknown no widening, one absolute context,
-TextQuery order preservation and deterministic multi-population behavior only where a real branch exists. R051
-changes documentation only.
+After code run minimal locked Rust 1.98 check/Clippy for real consumers. Check direct/unsupported dispatch,
+whole collection plus request-only narrowing, empty/unknown scope, candidate/IDF separation, unchanged k/b physical
+identity and order preservation. Additional branch cases exist only with a real branch consumer.

@@ -1,182 +1,83 @@
 # Analysis registry
 
-Continuation memory and evidence status. It records inspected facts, selected decisions, published changes and
-unrun work; it is not architecture, permission or an implementation prerequisite.
+Current checkpoint and evidence, not another specification or permission system. Algorithms live with owners.
 
 <a id="resume"></a>
+<a id="resume-after-interruption"></a>
 ## Resume
 
-**Checkpoint:** R054, 2026-10-26 — R053 private-NT finalizer overreach corrected.  
-**Branch:** `codex/refactor-preparation-20261017`, PR #610.  
-**Inspected ELIOT head:** `9910a15bf34a6d5417da8e45eac9a3f124733f11` (R053).  
-**Original source baseline:** `c8e38b6fc9829f1cd38070773b1b3e5b21de18ad`.
+**Checkpoint:** R055, 2026-10-28 — reconcile instructions and shorten implementation entrypoints.
+**Branch:** codex/refactor-preparation-20261017, [PR #610](https://github.com/UnknownAlienHuman/eliot-search/pull/610).
+**Inspected parent:** 45ddf887c9e84861b1302334a1f5ecabb263f7f3 (R054).
+**Original source baseline:** c8e38b6fc9829f1cd38070773b1b3e5b21de18ad.
 
-Read [docs/README](../README.md), the [implementation sequence](../implementation/README.md#delivery-sequence),
-then only the affected owner recipe, current callers and owning issue.
+R055 is documentation-only. No product code, manifest, lockfile or workflow is changed. The target product remains
+unconnected end to end. Until PR #610 merges, main retains the older documentation generation.
 
-R054 changes documentation only. Product remains unimplemented. The next implementation remains Foundation, but
-the Windows finalization canary now uses a documented Win32 absolute-target operation protected by a retained
-no-delete-share handle chain. It does not use private NT user-mode APIs.
+Next implementation: [Foundation](../implementation/README.md#1-foundation--invocation-settings-and-root).
+Read its affected settings/root recipes and actual callers, not the whole audit history. Implement the small
+root/object platform seam, then root/settings and the one-file path; do not start another broad audit.
 
-## R054 inspected evidence
+<a id="established-decisions--do-not-rediscover"></a>
+## Decisions retained and clarified
 
-### Upstream platform material
+| Question | Decision and owner |
+|---|---|
+| Query k/b versus index identity | Query-time settings never cause physical rebuild; [lexical](../../crates/search-lexical/FUNCTIONS.md) and corrected [projection](../../crates/search-index-qdrant/search-projection-planner/FUNCTIONS.md). |
+| Interrupted initialization | Strict recognized-empty discard/retry, no resume/journal; [root](../../crates/search-runtime/search-runtime-owner/FUNCTIONS.md). |
+| Index cleanup | Whole-generation only, including conditional Stage 3B; [publication](../../crates/search-index-qdrant/search-publication/FUNCTIONS.md#view-lifetime-and-whole-generation-cleanup). |
+| Context before a query exists | Execution-only deadline/cancellation/counters; query adds its view/scope/scoring; [shared boundary](../implementation/README.md#minimal-cross-owner-values). |
+| Windows finalization | One candidate recipe at the root owner; exact Q&A environment/source in donor register; not an executed safety guarantee. |
+| Documentation maintenance | Owner defines rule once; README/AGENTS/index link to it. Historical readsets remain at immutable Git links. |
 
-Inspected:
+The selected Qdrant upgrade, complete-generation reference implementation and conditional optimization order are
+unchanged. Optional encryption/models/documents/adapters do not block the lexical product.
 
-- Microsoft `FILE_RENAME_INFO` and `SetFileInformationByHandle` documentation;
-- Microsoft `CreateFile`/`CreateFile2` share-mode semantics: omitting `FILE_SHARE_DELETE` prevents subsequent
-  delete-access opens, and delete access covers rename;
-- current supported-build report reproducing `ERROR_INVALID_PARAMETER` when the Win32 wrapper is given both a
-  relative destination and non-null `RootDirectory`, while absolute destination + null root succeeds;
-- Microsoft driver/DDI material for `FILE_RENAME_INFORMATION`, showing that direct NT file-information APIs are not
-  the ordinary documented desktop Win32 contract;
-- current R053 root/object/daemon instructions and reachable legacy wrapper route.
+<a id="coverage-ledger"></a>
+## Documentation work
 
-### ELIOT source/docs checked
-
-- root `AGENTS.md`, `README.md`, `docs/README.md`;
-- implementation spine;
-- root owner and immutable object-store recipes;
-- daemon composition map;
-- donor register;
-- PR #610 and active root/object/programme issues.
-
-## Findings and decisions
-
-### F1 — R053 replaced one unqualified wrapper with another unqualified API boundary
-
-R053 correctly rejected:
-
-- path-based `MoveFileExW`/`tempfile::persist_noclobber` as trusted authority;
-- the reachable legacy relative-`RootDirectory` Win32 wrapper.
-
-It then selected a direct `NtSetInformationFile`-style user-mode operation. That is not the documented Win32
-application contract and would require private ntdll ABI/support assumptions. This was an architectural error.
-
-**Decision:** remove private direct NT rename from the selected baseline.
-
-### F2 — documented absolute-target rename can be made path-stable without a private API
-
-The root owner already needs retained directory handles. Windows share-mode documentation states that omitting
-`FILE_SHARE_DELETE` prevents later opens requesting delete access; delete access includes rename.
-
-**Decision:** retain and verify every directory component from data root to final parent without delete sharing,
-retain the stage handle with DELETE access, derive one canonical absolute final path from the retained final-parent
-handle, then call documented `SetFileInformationByHandle(FileRenameInfo)` with:
-
-```text
-RootDirectory = NULL
-ReplaceIfExists = FALSE
-```
-
-Reopen final relative to the retained parent and verify stable file identity plus exact content. The handle chain
-prevents rename/delete replacement of the path components while the absolute path is resolved and used.
-
-### F3 — relative RootDirectory remains documentation-versus-runtime evidence, not a baseline
-
-Official `FILE_RENAME_INFO` documentation describes a relative destination with `RootDirectory`. A current supported-
-build reproduction shows the wrapper may convert the name to absolute and leave the root handle set, producing
-`ERROR_INVALID_PARAMETER`.
-
-**Decision:** do not use that form until a supported-platform canary demonstrates it. Do not bypass it with private
-NT APIs. The documented absolute-target form is the only selected Windows candidate.
-
-### F4 — support is a canary result, not a prose assertion
-
-Before Windows Foundation is advertised, execute:
-
-- canonical path derivation from retained parent and accepted extended-path form;
-- stage DELETE access and exact share modes;
-- retained root→parent chain without `FILE_SHARE_DELETE`;
-- absent destination success and existing destination refusal;
-- attempted ancestor/parent rename or replacement during operation;
-- local same-volume filesystem support and unsupported-profile refusal;
-- failure/crash debris classification;
-- relative reopen, stable file identity and complete byte verification;
-- truthful file-data, namespace and sudden-power-loss durability claims.
-
-Failure means the platform profile is unsupported. There is no MoveFileEx, relative-root-wrapper, private-NT or
-generic-filesystem fallback.
-
-## Preserved Qdrant decisions
-
-Stage-2 physical Text index remains explicit:
-
-```text
-vectorless one-shard collection
-retrieval_text Text index
-Code tokenizer; lowercase=true
-ascii_folding=false; phrase_matching=false; stemmer disabled
-stopwords/min/max/nested absent
-BM25 scoring
-enable_hnsw=false
-memory=Pinned
-```
-
-Query profile remains k=1.2, b=0.75, finite/range validated, no threshold. Stage 2 creates no filter indexes,
-requests no vectors and only routing payload, and requires exact schema/resource/point/count readback plus a
-deterministic TextQuery canary. Repository lock remains client 1.19; implementation upgrades all 1.20 pieces
-together.
-
-## Current implementation sequence
-
-| Stage | Observable result | Primary owners |
+| Stage | R055 disposition | Continue with |
 |---|---|---|
-| 1 Foundation | documented Windows finalization canary; root/plain settings; manifest-last initialize/open; one guard; status | #333/#266/#360 |
-| 2 Walking skeleton | one file → ObjectRef → retrieval text → explicit Qdrant 1.20 Text index → TextQuery canary/query → retained CLI excerpt | #264 and vertical owners |
-| 3A correctness/reference | restart; inventory; explicit filter/residency profile; complete generation/view; budget matrix | #270/#271/#331/#261/#300/#303 |
-| 3B conditional optimization | source-local diff/identity/mutation only where 3A budgets fail | #259/#329/#261/#263 |
-| 4 Exact/session | retained-source Exact and one framed live QueryWindow | #249/#275/#280/#332 |
-| 5 Maintenance/depth | stopped-root maintenance and selected product leaves | #302/#244/#281/#227/#335 |
+| Conflicting rules | Corrected query/index profile split, initialization, cleanup and context ownership | Change the owner first when behavior changes. |
+| Entry/navigation | Shortened root/index/implementation and CLI/daemon entrypoints; restored owner map and meaningful legacy registry anchors | Check incoming links when moving a section. |
+| Duplicate recipes | Removed Windows recipe copies from entry/object/composition documents; root owns it | Apply the same owner/link rule to other families when touched. |
+| Evidence/history | Exact Windows source/environment added; old detailed records linked, not copied | Keep inspected and executed states distinct. |
+| Whole-tree assurance | No claim that every remaining owner document or code path is now defect-free | Review only the next affected owner/caller chain; record concrete new contradictions. |
 
-## Anti-bureaucracy and lock rules
+This is a bounded documentation repair, not repository-wide code audit closure.
 
-- Issues are owners, not dependency order.
-- One manager owns each vertical cut; parallel writes are disjoint.
-- No hidden server defaults, backend abstraction, alias manager, custom-shard fusion, watcher ledger, init journal,
-  query scheduler/tickets, lexical qualification receipts or operation archive.
-- No platform framework: one private current root/object finalization seam only.
-- No redb writer/view mutex/window mutation borrow spans object/Qdrant/process/model/filesystem publication I/O.
-- Complete build + schema/canary + durable evidence commit precede view installation.
-- Last view drop only wakes cleanup.
-- Current-caller search is local to code moved/deleted.
-- Minimal Rust 1.98 check/Clippy follows production cuts; broad evidence follows connected behavior.
+<a id="delivery-remaining"></a>
+## Remaining product work
+
+Foundation and the one-file Qdrant/CLI path remain to implement. Restart/inventory/convergence, measured corpus
+budgets, Exact/session and selected product depth remain afterward. The
+[delivery sequence](../implementation/README.md#delivery-sequence) is the single owner of their order and scope.
+R055 does not mark a product stage complete or make optional work a prerequisite.
 
 <a id="evidence-status"></a>
+<a id="execution-evidence"></a>
 ## Evidence status
 
-| Area | Status |
+| Area | Evidence / limit |
 |---|---|
-| Legacy relative-root wrapper route | CHECKED reachable by static caller trace |
-| Relative RootDirectory Win32 form | DOCUMENTED upstream but REJECTED pending supported-platform canary |
-| R053 direct private NT candidate | REJECTED as baseline |
-| Documented absolute-target Win32 candidate | SELECTED CANARY, not implemented/executed |
-| Retained no-delete-share path chain | SELECTED design, not executed |
-| Exact Qdrant physical text profile V1 | SELECTED, not compiled/executed |
-| Qdrant client/server upgrade | NOT DONE; lock remains 1.19 |
-| Compiler evidence | R031 materializer + unitizer only |
-| Foundation/walking skeleton/current binaries | UNRUN |
-| Windows durability/live Qdrant/restart/relevance/scale/end-to-end | UNRUN |
+| R055 documentation | Four contradictions addressed in their owners and affected instructions; entrypoints/known broken navigation reconciled. This is editorial/static evidence. |
+| Windows references | Microsoft API pages and dated Q&A reproduction inspected 2026-10-28; no ELIOT Windows canary executed. |
+| Runtime safety | Windows namespace/ancestor/reparse handling and durability remain unverified; the candidate must refuse unsupported profiles. |
+| Qdrant | Lock remains 1.19.0; selected 1.20.x integration has not been compiled or executed. |
+| Compiler history | R031 materializer/unitizer check + minimal Clippy, [run 40084893130](https://github.com/UnknownAlienHuman/eliot-search/actions/runs/40084893130); not a new whole-product build. |
+| Current product | Foundation, current binaries, end-to-end search, restart, relevance and scale remain NOT_RUN. |
+| R055 Rust/tests | Not run: documentation-only changes; cargo is absent in this editing environment. No new test suite or workflow added. |
+| Link-check scope | Known navigation targets/anchors are the repair scope; no new repository-wide 202-file crawler result is claimed. |
 
-No static donor/source inspection proves correctness.
+<a id="evidence-index"></a>
+## Prior evidence
 
-## Immutable prior records
+- [R054 registry and earlier checkpoint list](https://github.com/UnknownAlienHuman/eliot-search/blob/45ddf887c9e84861b1302334a1f5ecabb263f7f3/docs/audit/ANALYSIS_REGISTRY.md).
+- [Detailed earlier registry through R031](https://github.com/UnknownAlienHuman/eliot-search/blob/da382b66e59d0b44e758bad9b22e2f5703a4e8c2/docs/audit/ANALYSIS_REGISTRY.md).
+- [Current donor evidence](DONOR_VERIFICATION_REGISTER_2026-10-09.md).
+- CLI/daemon/ports recipes link their own immutable prior source readsets.
 
-- R001–R031: audit/removal/dependency work through `da382b66`.
-- R032–R045: canonical documentation reconciliation through `af337ec7`.
-- R046: implementation-readiness correction `1eeb4191`.
-- R047: active-surface hostile verification `858d1e34`.
-- R048: donor/analogue synthesis `fed10c1e`.
-- R049: Qdrant 1.20/platform-finalization correction `9edd2c1d`.
-- R050: active Qdrant-owner synchronization `a4c23110`.
-- R051: exact Qdrant query/schema reconciliation `87c84c24`.
-- R052: explicit Qdrant text-index resource/query semantics `8942d823`.
-- R053: active Win32 wrapper trace and direct-native selection `9910a15b`.
-- R054: private-NT rejection and documented handle-locked Win32 finalization correction.
+## Updating this record
 
-## Next action
-
-Implement the smallest documented Windows finalization canary in the current root/object owner. Run minimal
-compiler/Clippy and focused path-lock/finalization cases. Then complete Foundation, upgrade the exact Qdrant
-client/server/schema/query profile and implement #264.
+Keep one short current checkpoint with inspected SHA, changed owners, actual checks and unrun work. Preserve old
+readsets through immutable links. Do not copy local algorithms, add approval tokens or accumulate a second job log.

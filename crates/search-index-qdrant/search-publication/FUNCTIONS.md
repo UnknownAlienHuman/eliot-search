@@ -1,145 +1,120 @@
-# Publication — complete generations first, measured incrementality later
+# Publication — complete generations before measured incrementality
 
-One serialized publisher connects retained prepared state to physical Qdrant generations, durable evidence/current
-metadata and one matching `PublishedView`. It owns no source reader, parser, query window or second recovery
-platform.
+One serialized publisher owns fixed build input, external effects, matching durable evidence/current state, view
+installation and finite cleanup obligations. It owns no reader/parser/query window or second recovery platform.
 
+<a id="reconcile-desired-and-published-state"></a>
 ## Desired state
 
-Publication compares one consistent selected source/preparation snapshot with the durable published inventory.
-Queues are acceleration only; startup/explicit/periodic reconciliation rediscovers differences.
+Compare both the selected current source/preparation snapshot and published inventory; a success-only scan misses
+removed or newly failed sources. Use bounded ordered reads. Startup/explicit/periodic reconciliation repairs lost
+queue hints. Repeated identical outcomes are no-ops.
 
-Outcomes remain distinct:
+| Observation | Desired outcome |
+|---|---|
+| Complete usable preparation, including zero units | Publish exact captured input and its gaps. |
+| Selected terminal unsupported/failure | Gap-only outcome; never relabel old evidence as the failed revision. |
+| Confirmed removal/exclusion after complete inventory | Omit membership in the new view even without a new prepared artifact. |
+| Running/incomplete/unavailable observation | Do not infer removal or empty success; retain prior served data explicitly labelled prior/pending where applicable. |
+| Exact desired/published match | No new generation. |
 
-- usable preparation, including zero units: selected complete outcome;
-- terminal unsupported/failure: selected gap-only outcome;
-- confirmed removal/exclusion after complete inventory proof: omitted from desired selected inventory;
-- running/incomplete observation: prior served view remains; pending/gap is reported;
-- exact desired/published match: no publication.
-
-Incomplete inventory never retires unseen data.
+The source owner distinguishes confirmed absence from filtered/incomplete inventory. Desired input and served
+published input remain different facts. Changes arriving during a fixed build become later work.
 
 ## Fixed pending generation input
 
-Before Qdrant effects, persist one bounded `PendingGenerationBuild` containing:
+[Control](../../search-control-redb/FUNCTIONS.md#restartable-generation-input-capture) owns complete capture and
+staging evidence tables. Before backend effects, persist one bounded PendingGenerationBuild referencing exact
+source/prepared objects/outcomes, physical profile, never-reused collection name and complete uploadable pages.
+Each page contains actual retrieval text/payload and fixed point IDs with finite byte/count limits.
+
+An in-memory read transaction is not a durable manifest. Interrupted incomplete capture discards the metadata-only
+target; complete capture never substitutes newer live rows. Oversize input refuses or produces an explicit selected
+gap, not a falsely complete half-source. Retry preserves the same fixed input.
+
+## Stage 2/3A complete-generation operation
 
 ```text
-operation/generation identity
-expected durable current/source/preparation guards
-never-reused physical collection name
-retrieval profile and explicit scoring full-text schema
-complete desired evidence/inventory pages
-actual retrieval text payloads and fixed point IDs
-page checksums/counts/limits
+fixed input/pages → exact collection and required indexes
+→ InsertOnly batches with wait → exact schema/point/payload/count readback + TextQuery readiness canary
+→ finish bounded staging evidence/inventory writes
+→ short compare/commit: current pointer + predecessor cleanup + clear pending
+→ open/verify matching redb snapshot → short PublishedView install → report visible
 ```
 
-Pages live in immutable objects when too large for compact redb rows. Retry uses those fixed pages; it never rereads
-live paths, regenerates units or splices newer work into the same generation.
+The final pointer transaction does not copy corpus-sized evidence rows; they were built in bounded transactions
+while the target was unserved. No redb writer or view mutex spans object/backend I/O. Do not start another
+publication before view installation succeeds or recovery refuses serving.
 
-A failed or uncertain generation is never served. Its name is never reused. Recovery first resolves or abandons
-that exact pending build before creating another.
+Query addresses the view's physical collection, not an alias. Visible Stage 2/3A collections are immutable.
+A physical profile or selected-state change builds a fresh complete generation. Query k/b alone does not.
 
-## Stage 2 / 3A complete-generation operation
+<a id="apply-observed-state-is-not-dispatch-completion"></a>
+## Uncertain effects
 
-```text
-read fixed pending pages
-→ create exact physical Qdrant 1.20 collection/schema
-→ create scoring full-text index with explicit text processing
-→ explicit insert_only complete build
-→ exact schema/point/count readback
-→ bounded redb transaction:
-     compare expected durable current + pending build
-     install complete evidence/inventory rows
-     set durable current physical generation/profile
-     add predecessor RetiredCleanup when needed
-     remove pending build
-  commit
-→ open and verify the matching redb read snapshot
-→ install PublishedView under a short manager lock
-→ report visible
-```
+An attempt uses one absolute execution deadline/cancellation. A lost response, timeout, client drop or process
+restart is not rollback or remote termination. Exact readback observes state; it does not settle every earlier
+possibly dispatched writer. Preserve bounded unresolved progress with the pending build, not a separate ledger.
 
-No redb writer or view-manager lock spans object/Qdrant I/O. Do not begin another publication until view
-installation succeeds or recovery refuses serving.
+A completed mutation followed by failed readback retries observation first. Do not publish or clean a target while
+an unresolved attempt could still change the required state. Identical InsertOnly input does not authorize full
+upsert, changing pending pages or treating matching readback as universal completion proof.
 
-`PublishedView` carries the exact physical collection. Qdrant aliases are not consulted. Once visible, a Stage 3A
-collection is immutable. A real desired-state difference builds a new complete generation.
+<a id="small-conservative-recovery-boundary"></a>
+When terminality cannot be established, keep the uncertain target unserved and its obligation visible. A bounded
+replacement may use the same fixed input in another never-reused generation; never silently retarget the old
+attempt or reuse its collection name. Bound replacement count/retained disk/cleanup backlog and stop writes on
+exhaustion. The external server is not ours to kill merely to claim a fence.
 
 ## Stage 3A release gate
 
-Stage 3A is the mandatory correctness/reference implementation. It is the shipped mode only for declared corpus
-classes where #215 records numeric budgets and raw measurements for:
-
-- full build p50/p95 and edit-observed → view-installed latency;
-- points/payload bytes and backend writes;
-- peak memory/CPU/handles;
-- current + building + reader-retained generation disk;
-- build throughput versus coalesced update arrival rate;
-- cleanup backlog and longest supported reader/window lifetime.
-
-The publisher coalesces to the latest desired state while one build runs. It must remain bounded and eventually
-publish the newest complete state. If declared latency/disk/throughput budgets fail, Stage 3B becomes required for
-that corpus class before release. Do not choose arbitrary thresholds inside the publisher.
+The complete-generation path is the correctness/reference implementation. Ship a corpus class only after its
+predeclared #215 correctness/latency/throughput/resource budgets pass. Include current+building+reader-retained
+collections, redb retained pages, maximum reader/window lifetime and cleanup backlog. Coalesce newer desired state
+without unbounded work. Failed budgets require Stage 3B for that class, not arbitrary internal thresholds.
 
 ## Stage 3B optional incremental publication
 
-Only after measured need:
+Only after measured need: persist one fixed complete-source delta; reuse unambiguous unchanged occurrences; create
+new points with InsertOnly; close replaced points once at a fixed exclusive validity boundary without creating
+missing points; verify effects and scoring/optimizer convergence; atomically commit matching complete-source
+metadata. Old views retain their original eligibility/evidence.
 
-- persist one fixed complete-source delta;
-- reuse only unambiguous occurrences with unchanged retrieval input/context;
-- explicitly `insert_only` new immutable points;
-- apply one fixed non-creating exclusive `valid_until` closure to replaced points;
-- exact readback precedes one atomic complete-source evidence/inventory/current commit;
-- individual point IDs are never physically deleted;
-- profile/schema change or measured closed-point growth creates a fresh generation.
-
-Default upsert is forbidden. Missing-point closure fails rather than creating. Transition into the incremental
-profile is an explicit generation rebuild, never reinterpretation of an existing collection.
-
-Custom shard keys are not a general Stage 3B substitute because full-text/BM25 statistics are shard-local and a
-portfolio query across shards would compare different score populations or require another fusion owner.
+No physical point deletion. Profile changes, interval exhaustion or measured closed-point growth build a fresh
+generation. Oversize delta uses fresh generation or explicit gap. Do not reinterpret an existing collection as the
+incremental profile or use custom source shards as an unmeasured ranking/publication shortcut.
 
 ## Commit/install gap and restart
 
-Durable current commit precedes process-local view installation. If the process crashes in the gap, startup:
+Durable current precedes installation. Startup verifies exact current collection/profile and complete evidence,
+opens the matching snapshot and installs it before admitting queries. Missing/corrupt/conflicting bindings refuse
+serving, not empty success. An empty valid generation still has explicit schema and complete inventory.
 
-1. reads durable current generation/profile;
-2. verifies exact physical collection/schema and complete evidence snapshot;
-3. opens the matching redb read snapshot;
-4. installs `PublishedView` before accepting query traffic;
-5. refuses serving if any binding is missing/conflicting.
-
-No alias, receipt or publication journal can substitute for these real observations.
+A restart resolves pending/cleanup and reconciles current inputs; importing a backup is a separate fresh-destination
+operation. Copied pending records must not mutate the original installation's backend.
 
 <a id="view-lifetime-and-whole-generation-cleanup"></a>
 ## View lifetime and whole-generation cleanup
 
-One strong current `Arc<PublishedView>` plus weak retired states is sufficient. Query clones the guard under a
-short manager lock and releases the lock before backend/object work. A live `QueryWindow` may retain the same
-guard.
+One strong current Arc and weak retired views suffice. Queries clone current under a short lock; windows inherit
+that guard. Last drop wakes cleanup and does no I/O.
 
-A `RetiredCleanup` row names one exact never-reused physical collection. Cleanup may start only when:
+RetiredCleanup names one exact whole collection. Delete only when it is not durable current, no pending/future
+build can target it, no live view/window uses it and no unresolved targetable attempt remains. All guards matter,
+not only the immediate predecessor. Reader drain is not writer quiescence.
 
-- it is not durable/current;
-- no pending/current/future build can target it;
-- no live view/window guard uses it;
-- no owned unresolved attempt remains targetable;
-- no redb writer or view-manager lock is held across backend I/O.
+The bridge performs terminal collection delete and exact logical-absence observation outside writer/view locks.
+Never reuse the name. Unknown/partial/foreign state retains the obligation and bounded backpressure; one absence
+observation does not settle an unresolved creator. Logical absence is not physical erasure. Remove obsolete
+metadata only after its consumers are gone. Local object GC is separate stopped-root maintenance.
 
-Last guard drop only wakes cleanup. The bridge terminally deletes the exact collection and verifies exact logical
-absence. Never reuse the name. Uncertainty retains the row and bounded publication backpressure. Logical absence
-is not physical-erasure proof. Local immutable-object collection remains stopped-root maintenance.
+## Removal and verification
 
-## Removal
+Delete old floor/journal/proof machines, caller-supplied readback, daemon publication ledger, possible-writer
+platform, point reclaimer, raw pin registry and exclusive fixtures after callers move. Keep only concrete fixed
+pending input, current/evidence/cleanup metadata and the small view manager.
 
-Delete old floor/journal/proof machines, supplied readback, daemon publication ledger, isolated-route succession,
-possible-writer platform, per-point reclaimer, raw pin registry and exclusive fixtures after real callers move.
-Keep only fixed pending input, compact durable current/evidence/cleanup rows and the small view manager.
-
-## Verification
-
-Run minimal Rust 1.98 check/Clippy for publication/bridge/control/query/daemon consumers. Focused live cases:
-complete first build, zero/gap generation, lost insert response, foreign point/schema, commit/install crash,
-restart install, dropped wake-up, edit/removal full rebuild, incomplete inventory preserving prior view, old guard,
-cleanup/name non-reuse, delayed request/delete race, uncertainty/backpressure and Stage 3A measurement matrix.
-Stage 3B cases run only if selected.
+After code run minimal locked Rust 1.98 check/Clippy for actual consumers. Focused connected cases cover initial/
+empty/gap builds, lost responses, conflict, commit/install crash, restart, dropped notifications, edit/removal,
+incomplete inventory, old guards, delayed effects versus cleanup, bounded recovery and declared Stage 3A budgets.
+Stage 3B cases apply only if selected. No runtime success is claimed by this recipe.

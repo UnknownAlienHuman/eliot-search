@@ -1,93 +1,49 @@
-# ELIOT Search documentation
+# Documentation index
 
-Read progressively: product contract → implementation sequence → affected owner/callers → current evidence. Audit
-records do not authorize code or create readiness credentials.
+ELIOT Search is a standalone source-backed search application. The target architecture is not a claim that the
+current binaries implement it. Start with the relevant row below; do not load every linked document.
 
-## Authority
+## Read by task
 
-| Layer | Owns |
+| Task | Short path |
 |---|---|
-| [Architecture](architecture/README.md) | Product purpose, boundary and observable requirements |
-| [Implementation spine](implementation/README.md) | Selected mechanisms, delivery order, ownership and removal rules |
-| Nearest `FUNCTIONS.md` | Exact source seams, algorithm and failure rules |
-| [Product behavior](product/README.md) | User-visible Search/Exact/orientation/comparison/document outcomes |
-| [Analysis registry](audit/ANALYSIS_REGISTRY.md) | Current checkpoint, inspected evidence and unrun work |
-| [Donor register](audit/DONOR_VERIFICATION_REGISTER_2026-10-09.md) | Exact upstream versions/APIs/defaults and applicability limits |
+| Understand the product | [Architecture](architecture/README.md) |
+| Continue implementation | [Registry resume](audit/ANALYSIS_REGISTRY.md#resume) → current [delivery stage](implementation/README.md#delivery-sequence) → affected owner |
+| Find the owner of a rule | [Owner map](implementation/README.md#owners) |
+| Change configuration | [Typed settings](../crates/search-config/FUNCTIONS.md) |
+| Change root initialization/platform publication | [Root recipe](../crates/search-runtime/search-runtime-owner/FUNCTIONS.md) |
+| Change stored source/prepared bytes | [Object recipe](../crates/search-source/search-revision-store/FUNCTIONS.md) |
+| Change lexical meaning or physical/query profiles | [Lexical profile](../crates/search-lexical/FUNCTIONS.md) |
+| Change Qdrant calls | [Bridge recipe](../crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md) |
+| Change publication, recovery or cleanup | [Publication recipe](../crates/search-index-qdrant/search-publication/FUNCTIONS.md) |
+| Change results or CLI | [Query](../crates/search-query/README.md) or [CLI recipe](../bins/eliot-search/FUNCTIONS.md) |
+| Change a dependency/platform assumption | Relevant [donor evidence](audit/DONOR_VERIFICATION_REGISTER_2026-10-09.md), then its actual consumer |
+| Remove obsolete tests | Relevant section of [test cutover](implementation/TEST_CUTOVER.md) |
 
-When text conflicts, correct the owning layer and make other documents link to it. Do not satisfy both by adding
-compatibility code, a second route or another registry.
+## Authority and maintenance
 
-## Reading path
+| Document | Owns | Does not own |
+|---|---|---|
+| Architecture + product docs | Purpose, invariants and observable outcomes | Package layout, audit history |
+| Implementation | Delivery order, cross-owner values and owner map | Copies of local algorithms |
+| Owner `FUNCTIONS.md` | Concrete algorithm, failures, source seams and removal boundary | Another global architecture |
+| `AGENTS.md` | Working method and local editing constraints | Duplicate algorithm/profile specifications |
+| README/index | Purpose, status pointer and navigation | A competing rule set |
+| Registry | Inspected revision, changes, checks and remaining work | Permission or runtime readiness |
+| Donor register | Versioned upstream evidence and its limits | Installed capability or product qualification |
 
-| Task | Read |
-|---|---|
-| Understand product | [Architecture](architecture/README.md) → [product workflows](product/AGENT_ANALYSIS_FRAMEWORK.md) |
-| Implement a slice | [Delivery sequence](implementation/README.md#delivery-sequence) → nearest owner recipe → actual callers |
-| Resume interrupted work | [R054 resume](audit/ANALYSIS_REGISTRY.md#resume) → affected owner only |
-| Change donor/service | [Donor register](audit/DONOR_VERIFICATION_REGISTER_2026-10-09.md) → consuming owner |
-| Move/delete legacy tests/code | [Test cutover](implementation/TEST_CUTOVER.md) → exact current caller search |
-| Inspect ownership graph | [Dependency graph](handoff/DEPENDENCY_GRAPH.md) |
+Resolve a conflict in the owning rule and update its references in the same change. Do not implement both versions.
+Keep product invariants; a local recipe cannot silently weaken them. Issues track responsibility and acceptance
+and link to the owner rather than reproducing the algorithm. Existing code shows what runs, not what must survive.
 
-## Current status — R054
+Keep important anchors stable. When moving a section, update incoming links or retain a meaningful anchor at its
+replacement. Put historical rationale in Git-linked evidence, not on every implementation reading path.
 
-R052 froze the exact Qdrant 1.20 lexical baseline:
+## Supporting navigation
 
-```text
-PhysicalTextIndexProfileV1:
-  vectorless one-shard collection
-  retrieval_text Text index
-  Code tokenizer, lowercase
-  no ASCII folding, phrase matching, stemmer, stopwords, token limits or nested path
-  BM25 scoring
-  payload HNSW disabled
-  Stage-2 memory=Pinned
+[Product workflows](product/AGENT_ANALYSIS_FRAMEWORK.md) · [Configuration](config/README.md) ·
+[Dependency/lifetime graph](handoff/DEPENDENCY_GRAPH.md) · [ADRs](adr/README.md) ·
+[Audit records](audit/README.md) · [Windows Qdrant](runtime/QDRANT_NATIVE_WINDOWS.md)
 
-QueryScoringProfileV1:
-  k=1.2
-  b=0.75
-  no score threshold
-```
-
-R053 correctly found that the reachable legacy source-registration Win32 wrapper is not a trusted relative-parent
-finalizer. It then overreached by selecting a private direct NT call as the baseline. R054 removes that prescription.
-
-Selected Windows boundary:
-
-```text
-retain verified handles for every directory from data root to final parent
-  without FILE_SHARE_DELETE
-retain opened stage handle with DELETE access
-derive canonical absolute destination from the retained final-parent handle
-→ documented SetFileInformationByHandle(FileRenameInfo)
-   RootDirectory=NULL; ReplaceIfExists=FALSE
-→ reopen final relative to retained parent
-→ exact identity/bytes verification
-```
-
-Official Win32 documentation describes relative `RootDirectory`, but a current supported-build report shows the
-wrapper may absolutize the name and fail when the root handle remains set. The implementation therefore does not
-use that form. It also does not call private user-mode `NtSetInformationFile`. The retained handle chain prevents
-rename/delete replacement of path components while the documented absolute-target operation runs.
-
-The operation remains a canary until executed on each advertised Windows/local-filesystem profile. Unsupported
-profiles refuse; there is no `MoveFileExW`, relative-root-wrapper, private-NT or generic-filesystem fallback. The
-legacy source-root publication route is removed with callers rather than repaired as a compatibility platform.
-
-Physical schema/resource changes create a fresh Qdrant generation. Query-time k/b changes do not. Stage 2 creates
-no filter indexes. Query requests no vectors and only evidence-routing payload; excerpts come from pinned immutable
-objects.
-
-The repository still locks `qdrant-client 1.19.0`. No Rust/runtime change is claimed. Foundation, Windows
-finalization, Qdrant 1.20, walking skeleton, restart, relevance and scale remain unrun.
-
-## Focused supporting material
-
-- [Configuration](config/README.md)
-- [Qdrant adapter boundary](runtime/QDRANT_ADAPTER_BOUNDARY.md)
-- [Windows Qdrant notes](runtime/QDRANT_NATIVE_WINDOWS.md)
-- [ADRs](adr/README.md)
-- [Audit navigation](audit/README.md)
-- [Handoff](handoff/README.md)
-
-Historical Architecture 8.4, waves, packets, receipts, generated maps and standalone applications remain in Git
-history. They may explain a finding but cannot restore dead APIs or block the current vertical path.
+Historical Architecture 8.4, waves, receipts and generated control maps remain in Git history. They cannot restore
+retired APIs or block the current connected implementation.
