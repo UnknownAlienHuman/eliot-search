@@ -1,38 +1,13 @@
-# P00 contract implementation pack
+# P00 contract pack — historical
 
-Bounded W0 projection from Architecture 8.4 SHA-256
-`ae4c18ccff256ce4d5fdf91dfd9041236ff6f332b611bae3bd748c2da8ac6a1c`.
-Part I wins; contradictions stop work and update this pack through the integration owner.
+This pack does not define current APIs, required readsets or acceptance. Do not read every schema or restore
+recipes, grants, digests and receipts merely because a legacy registry names them.
 
-## Read sets
+Use [cross-owner values](../../implementation/README.md#minimal-cross-owner-values),
+[shared data](../../../crates/search-contracts/FUNCTIONS.md), [concrete ports](../../../crates/search-ports/FUNCTIONS.md)
+and the affected [operation owner](../../implementation/README.md#owners). Add a shared value with an actual producer
+and consumer, not from the old schema catalogue.
 
-- `search-contracts`: every file except port-support implementation ownership remains with
-  `search-ports` as marked.
-- `search-domain`: canonical types, named type completions, support schemas, source graph,
-  query/results, recipe results and reasons, plus the accepted frozen `search-contracts` API/type digest.
-- `search-ports`: canonical types, type registry/completions port-support sections, support schemas port
-  note, port operations, reasons and accepted contracts digest.
-
-The bounded `search-domain` context does not duplicate the full raw type registry after
-`search-contracts` is accepted; the immutable accepted API/type digest is the authority for all other
-shared shapes.
-
-## Files
-
-- `CANONICAL_TYPES.md` — primitive encodings and digest domains.
-- `TYPE_REGISTRY.md` — helper types, owners, visibility, bounds and enums.
-- `TYPE_COMPLETIONS.md` — named types used by P00 schemas but previously missing from the registry:
-  `RecipeIdV1`, `RecipeBodyV1`, `ComparisonAxis`, `ProtocolRange` and `PackageOpaque`.
-- `SUPPORT_SCHEMAS.md` — ranking, behavior, exact, readiness and subordinate records.
-- `CONTRACT_CHALLENGES.md` — precedence and ambiguity decisions.
-- `SOURCE_GRAPH.md` — source, ownership, residency, view and preparation schemas.
-- `RECIPES.md` — exact requests.
-- `QUERY_AND_RESULTS.md` — grants, plans, validated candidates, gaps and exact reports.
-- `RECIPE_RESULTS.md` — eleven field-level result variants.
-- `PROTOCOL_AND_LIFECYCLE.md` — protocol, opaque handles, server records and lifecycle.
-- `PUBLICATION_GUARDS_CORRECTION.md` — required publication-guard compatibility and verification rules.
-- `REASON_CODES.md` — error namespaces.
-- `PORT_OPERATIONS.md` — shared port operation inventory.
-
-W0 receipt records architecture/manifest/file hashes, contracts/domain/ports API digests, exact
-toolchain/dependencies, test outcomes and zero unresolved challenges.
+The [original pack index](https://github.com/UnknownAlienHuman/eliot-search/blob/d3330da162822e6cfe7b4a5e1d8b91cb8dcc5aad/docs/contracts/p00/README.md)
+preserves the old readsets and file inventory. Remaining files and `manifest.toml` here describe legacy source
+or feed old tooling; they do not override the current owners. Retire those inputs with their actual consumers.
