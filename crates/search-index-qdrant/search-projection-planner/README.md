@@ -1,27 +1,14 @@
-# search-projection-planner
+# Projection pages
 
-**C13 — Projection planning.**
+Turn complete captured preparation outcomes into bounded uploadable Qdrant pages and matching evidence bindings.
+Stage 2/3A uses generation-bound identities; source-local old/new diff and occurrence continuity are conditional
+Stage 3B work, not prerequisites for the first result.
 
-**Status:** `SOURCE_PRESENT / LEGACY_PROFILE`; substantial planning/manifest source exists, but the selected sole canonical S9.5 projection-manifest owner is #209. Do not extend a parallel payload or completeness contract. See [central package status](../../../docs/product/PACKAGE_STATUS.toml).
+[FUNCTIONS.md](FUNCTIONS.md) owns assembly, physical/query-profile separation, conditional delta and removal.
+[Publication](../search-publication/FUNCTIONS.md) owns effects and recovery. Read adjacent owners only when their
+interfaces change.
 
-Plan the exact rebuildable point set and immutable manifests for one projection membership without performing vendor I/O.
-
-## Owns
-
-- projection profile and input-descriptor validation
-- one-membership-per-projection enforcement
-- point/vector/payload plan construction from prepared contract artifacts
-- old/new manifest diff
-- expected payload/vector digests
-
-## Must not own
-
-- Qdrant transport
-- source truth or access authority
-- broad closure filters when exact IDs exist
-- sharing retrieval points across memberships
-- depending directly on parser, enricher or encoder implementations
-
-- **Delivery wave:** W3 / P06
-- **Soft source-line target:** 7,000
-- **Agent instructions:** [AGENTS.md](AGENTS.md)
+The old whole-plan/proof API is a removal target. Preserve actual retrieval text and ranges, not vector digests
+as substitutes for uploadable input. A small assembler can live in publication/preparation rather than a crate.
+Exact historical source findings remain in the
+[pre-R055 README](https://github.com/UnknownAlienHuman/eliot-search/blob/45ddf887c9e84861b1302334a1f5ecabb263f7f3/crates/search-index-qdrant/search-projection-planner/README.md).

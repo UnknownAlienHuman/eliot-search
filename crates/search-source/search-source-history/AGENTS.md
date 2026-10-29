@@ -1,19 +1,20 @@
-# Source history ownership — #569
+# Working on search-source-history
 
-Own immutable source-revision occurrence registration, exact head/operation
-readback/replay and observed state/history coherence. The initial implementation
-and its causal cases are exact relocations from SourceRegistry. It remains one
-logical Source history over the consuming control port, not another database,
-canonical task history or current admission authority.
+This package is a 70 KiB forwarding restore/history layer scheduled for deletion. Read [README.md](README.md),
+[search-source-records](../search-source-records/README.md) and the
+[source registry map](../search-source-registry/FUNCTIONS.md).
 
-No source-body reads, identity derivation, Source/namespace admission, current
-policy/access decisions, native owner qualification or publication belongs here.
-Opaque observed-history reconstruction must not mint live/currentness grants.
-The semantic registry and concrete daemon/redb remain the effect/currentness
-owners. Preserve frozen bytes, formulas, exact predecessor checks and original
-caller context. Do not invent verification receipts from supplied booleans.
+Do not add revision history, namespace cutover, registry replay, receipts, compatibility codecs or new
+callers. Do not preserve the package merely to reexport moved value types.
 
-Root owns manifests/lock. Read root/Architecture Part I/exact #569 split scope,
-owning revision contracts, then smallest Rust1.98 locked/offline check/strict
-and affected existing cases. Count all owned handwritten Rust/fixtures: split
-review before8500, hard10000. Compilation/source presence is not qualification.
+After #598's accepted handoff and #270/#271 current-state cutover:
+
+- move the small current `RevisionRef` fields/validation to the object/source owner;
+- use typed redb current source-head reads/writes;
+- keep old revisions through current/pending/cleanup/live-view references;
+- delete restore/cutover/history code, tests and dependencies.
+
+Unsupported old roots remain intact. No automatic migration or universal history replay.
+
+Run minimal Rust 1.98 compiler/Clippy for actual source/object/control/daemon consumers after production
+changes. Registry replay fixtures and old byte compatibility are removed with their APIs.

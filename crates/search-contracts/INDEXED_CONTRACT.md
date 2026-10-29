@@ -1,59 +1,24 @@
-# Indexed contract v1 — issue #258
+# Indexed boundaries — navigation, not a second schema
 
-`search_contracts::indexed` owns the provider-neutral S9.5/S10.3 values. It
-performs no I/O and grants no source, access, publication or finish authority.
-The planner, publication and bridge ports remain separate issues.
+The historical sparse/vector/validity contract is superseded. Do not implement it beside the current profile.
+[Shared contracts](FUNCTIONS.md) owns cross-owner data; concrete indexed algorithms live at these owners:
 
-The sole ordered `PAYLOAD_FIELDS` table has 20 fields. Filtering its `indexed`
-flag yields exactly 19 baseline indexes: 11 UUID, six keyword and two integer.
-The full point-identity digest is readback evidence, not a baseline filter
-index. Source membership, text, paths, vector digests and payload digests are
-absent. Four optional fields are omitted when absent; explicit null is rejected.
-Provider map iteration order does not change the admitted index set.
+| Question | Owner |
+|---|---|
+| Physical text index versus query scoring | [Lexical](../search-lexical/FUNCTIONS.md) |
+| Generation-bound addresses and collision evidence | [Point identity](../search-index-qdrant/search-point-identity/FUNCTIONS.md) |
+| Exact Qdrant schema, payload and RPC translation | [Bridge](../search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md) |
+| Fixed build input, visibility, recovery and cleanup | [Publication](../search-index-qdrant/search-publication/FUNCTIONS.md) |
+| Pinned evidence lookup | [Control](../search-control-redb/FUNCTIONS.md) |
+| Empty/unknown selection and candidate/IDF filters | [Scope](../search-query/search-access/FUNCTIONS.md) |
 
-Epoch retains signed `i64` storage and is closed to `0..=2^53`. Zero is an empty
-generation, published payload validity begins at one, and the maximum remains
-readable with no next epoch. Open-ended validity omits its upper bound. Epochs
-are compared only after collection generation equality. Stored values above
-the new bound fail closed; this is a narrower admission contract, not an
-in-place rewrite of old state.
+Stage 2/3A has no required vectors, occurrence incarnations, sequence or validity interval. Points are immutable
+within one never-reused physical collection. Conditional Stage 3B cannot introduce those fields before its
+measured need and consumers exist. Neither profile physically deletes individual points.
 
-The initial schema mode is explicitly sparse-only. Sparse vectors have a
-nonzero logical index ceiling and required filtered-IDF modifier. Values are
-finite, nonempty and capped; sparse indices must be strictly increasing and
-below their ceiling. An explicit dense mode binds dimensions and distance to
-the schema candidate. It does not enable or qualify a semantic worker. Multivectors,
-quantization and vendor defaults are outside v1.
+A Qdrant hit is a nomination. Its address is not the full identity, and payload is not retained source evidence.
+Known empty selection returns without RPC; unknown selection fails instead of widening. Do not reinstate the
+old empty-is-error rule, provider-neutral field table or schema/qualification digests.
 
-One bounded, nonempty canonical membership population supplies retrieval,
-filtered IDF, count, scroll and response validation. Empty, duplicate and
-excessive sets are rejected; input permutations produce one sorted population.
-Restrictive fences must already have removed denied memberships before this
-value is built. There is no global or omitted-IDF population variant.
-
-Collection schema identity is internally computed by the #237 canonical CBOR
-and BLAKE3 owner. It binds generation, installation incarnation, profile set,
-field/index plans, vector mode/requirements, epoch domain, frozen baseline
-topology/strictness and fixture/profile versions. Restore recomputes identity
-before comparing the expected full digest. A stored digest alone is not an
-admitted schema. Payload identity is likewise computed over the closed payload;
-it never substitutes for authoritative source/revision readback.
-
-Source donors were inspected at immutable commits:
-
-- #209: `e5c14cde20292fec59e5cabcc921eda3ae5aaa67`, planner model/schema.
-- #200: `615d64f70d8b953cc585990659b865cfe250092b`, payload/query/schema/filter.
-
-The existing enum wire strings are retained. Donor branches, local byte writers,
-generic crypto owners, physical collection routes and Qdrant SDK types were
-not adopted. No new external dependency or lockfile change is needed.
-
-Changed schema/vector/scoring topology requires a fresh collection generation
-and a rebuild from retained source/preparation. Old points cannot be adopted,
-relabelled or mixed into the new schema. Consumers #259/#260/#262/#263 must
-delete their duplicate definitions when they port to this contract. The
-indexed spine remains disabled until the separate #264 product qualification.
-
-The PR records exact-head locked check, strict Clippy, nonzero focused fixture
-execution and bounded independent source review. Those are contract source
-gates; no native, Qdrant, installed or complete product claim follows.
+The [prior contract](https://github.com/UnknownAlienHuman/eliot-search/blob/44ee1661833c1139f1e0f1486f365a3a523fe814/crates/search-contracts/INDEXED_CONTRACT.md)
+is historical evidence only. Physical/query profile rules and validation cases must not be copied here again.

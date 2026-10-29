@@ -1,47 +1,20 @@
-# Agent contract — search-model-provider
+# Working on optional model support
 
-Own only `crates/search-model-provider/**`. Do not edit workers, daemon, Cargo root, shared contracts,
-qualification evidence, configuration registry or architecture. Missing load-bearing fields use the
-contract-change process.
+This directory is a design note, not a Cargo package. Keep it that way until one exact measured model has a
+real preparation or query consumer.
 
-## Gate and read set
+Delete the always-unavailable model worker and unused `ModelProviderPort`; do not implement a generic provider
+registry, plugin framework, qualification receipt, model lifecycle OS or capability flag in advance.
+Baseline Search uses Qdrant native BM25 and remains independent of optional models.
 
-This W10/P16 package is blocked until an integration ticket supplies the exact accepted P15 receipt,
-candidate ADR, selected profile/artifacts, G6 evidence plan and accepted direct handoffs.
+A later implementation issue must name the exact model/artifact/tokenizer/task/options, measured need,
+packaging, finite limits, direct consumers and failure semantics. Prefer an in-process library. Create a
+worker only for demonstrated dependency/crash/resource isolation, using the same bounded local framing.
 
-Read only root/package instructions, package assignment, `FUNCTIONS.md`, the W10 cross-contract,
-`model-profile.toml`, W10 settings and exact accepted dependency/API digests listed by the ticket.
+Model code may encode bounded prepared/query inputs or rerank a finite supplied candidate set. It cannot own
+source discovery/scope, Qdrant publication, citations, generated answers, query rewriting, graphs or research
+scheduling. Cache only by exact input/context/role/model/options; current source bindings remain with the
+ordinary manifest/publication owners.
 
-## Ownership
-
-- immutable provider-neutral model profile identity;
-- document/query dense or multivector input/output contracts;
-- bounded rerank subset transform;
-- output/profile validation and content-free receipts;
-- profile-change/migration classification;
-- instrumentation and removal-plan validation seams.
-
-## Forbidden ownership
-
-- worker process, model/runtime/vendor implementation or artifact selection in scaffold;
-- Qdrant/redb/CAS/source/handle/client access;
-- query scope, access, evidence, exact proof or client disposition;
-- generative answers, network, download/update, training/learning or persistent content cache;
-- G6 benefit verdict or self-acceptance;
-- fallback to another provider.
-
-## Required invariants
-
-- provider output is nomination/ranking only;
-- rerank output is a subset of its bounded input;
-- inaccessible/stale/denied/purged/shadowed content cannot influence output;
-- exact profile identity covers all tokenizer/runtime/vector/rerank/resource behavior;
-- dense/multivector require new collection generation;
-- cancellation/timeout/crash produces no successful partial output;
-- P15 baseline works when provider is absent or fails;
-- unsaved/source/query content is process-memory-only and absent from diagnostics.
-
-## Size
-
-Target `src/` <=6,500 lines; split review before 8,500 total; hard stop at 10,000 including local tests.
-No crate split without a real dependency/replacement/security/test boundary and ADR.
+After future code, run minimal Rust 1.98 compiler/Clippy for the concrete owner and real consumers, then
+measure against lexical baseline. Until then, no model code is correct.

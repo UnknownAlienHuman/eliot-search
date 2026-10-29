@@ -1,28 +1,18 @@
-# search-research-export-adapter
+# Optional Research export — design note only
 
-**C30 optional Research profile — Optional Eliot Research export adapter.**
+No Cargo package, runtime handler or production consumer exists here. Export is not a baseline prerequisite.
+The retired package contract and activation/receipt framework are preserved in
+[Git history](https://github.com/UnknownAlienHuman/eliot-search/blob/44ee1661833c1139f1e0f1486f365a3a523fe814/crates/search-research-export-adapter/FUNCTIONS.md), not implementation instructions.
 
-**Status:** documentation-only optional design; no Cargo package or runtime API exists. The unused generic export builder was removed under #529. [FUNCTIONS.md](FUNCTIONS.md) preserves the exact `eliotr.normalized.v1` contract for implementation after an accepted profile and its direct consumer exist. See [central package status](../../docs/product/PACKAGE_STATUS.toml).
+Add an adapter only with a named downstream consumer and its verified current format. Map selected retained
+source/prepared data into that format with bounded output, truthful revision/coordinates and explicit loss.
+Use the existing evidence reader and operation deadline/cancellation. Calculate only checksums required by
+that actual format; never relabel an internal digest as a different algorithm.
 
-Export qualified durable materializations through the exact eliotr.normalized.v1 wire bundle and validate ownership-cutover receipts.
+The adapter does not own source admission, storage, publication, ownership transfer, grants, receipt archives
+or activation gates. Do not reserve a wire version, dependency list, package size or public API before a
+consumer exists. Implement the smallest mapping beside its caller and change the caller in the same cut.
 
-## Owns
-
-- manifest assembly
-- native BLAKE3 readback and independent wire SHA-256
-- ownership mode validation
-- source.owner-cutover.v1 receipt validation
-- unknown-field fail-closed behavior
-
-## Must not own
-
-- unsaved overlay export without durable admission
-- relabeling internal digests as wire SHA-256
-- transferring ownership by ordinary export
-- cross-domain CAS/key reuse
-- Research canonical writes
-- opening CAS/redb/Qdrant directly; exact bytes are supplied through the daemon-owned export port
-
-- **Delivery wave:** W8 / optional P14 profile
-- **Soft source-line target:** 6,000
-- **Agent instructions:** [AGENTS.md](AGENTS.md)
+Follow the [delivery sequence](../../docs/implementation/README.md#delivery-sequence) and
+[retained-evidence owner](../search-query/search-candidate-validator/FUNCTIONS.md). Optional export cannot
+restore Architecture 8.4 waves, qualification fixtures, cutover receipts or package-only edit restrictions.

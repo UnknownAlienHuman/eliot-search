@@ -1,24 +1,19 @@
-# Agent contract — search-result-projector
+# Working on search-result-projector
 
-Own only `crates/search-query/search-result-projector/`. Do not edit another package, root workspace,
-shared contracts or architecture. Missing fields use the contract-change process.
+Read the [query cutover](../README.md) and local [source map](FUNCTIONS.md).
 
-The bounded packet is `swarm/assignments/search-result-projector.md`.
+Do not connect the current raw-score/handle projector. Retrieval establishes final order; evidence resolution
+establishes actual source bytes; `QueryWindow` owns paging and optional item locators. Projection only formats
+already ordered `VerifiedEvidenceItem` values under remaining output limits.
 
-## Ownership
+Preserve input order. Charge limits before copying/encoding excerpts. Include actual verified source,
+revision, representation, location and excerpt. Keep gap details bounded and report aggregate omissions.
+Never mint handles, compare raw backend scores, accept caller proof Booleans or infer complete-negative
+coverage from top-k.
 
-- compact response/coverage/budget projection
-- deterministic handle-subject selection and creation requests
+Change current protocol/result consumers directly and delete old projector types/fixtures. If formatting is
+small, inline it into query/protocol composition and remove this crate rather than maintaining another
+boundary.
 
-## Forbidden ownership
-
-- raw dumps, vendor metadata or client admission
-- mutable handle storage, authorization, expansion or revocation
-
-## Dependencies
-
-`search-contracts`, `search-domain`, `search-candidate-validator`, `search-handles`.
-
-## Size
-
-Target `src/` ≤ 7,000 lines; split review before 8,500 total; hard stop at 10,000 hand-written Rust lines.
+After code, run minimal Rust 1.98 compiler/Clippy for actual query/daemon/protocol consumers. Broad result
+fixtures follow the connected retained-evidence path.

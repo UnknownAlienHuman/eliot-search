@@ -1,25 +1,20 @@
-# Agent contract — search-retrieval-executor
+# Working on retrieval execution
 
-Own only `crates/search-query/search-retrieval-executor/`. Do not edit another package, root workspace,
-shared contracts or architecture. Missing fields use the contract-change process.
+Read the [architecture](../../../docs/architecture/README.md),
+[query design](../README.md), [README](README.md) and [function map](FUNCTIONS.md).
 
-The bounded packet is `swarm/assignments/search-retrieval-executor.md`.
+Connect the real Qdrant bridge through one request context holding the pinned view, resolved scope,
+absolute deadline, cancellation and finite counters. Do not preserve public scheduler snapshots, plans,
+leg tickets, terminal ledgers or per-leg timeout resets.
 
-## Ownership
+For baseline lexical search, call one BM25 query and preserve server order. Use Qdrant native RRF/grouping
+for actual indexed branches. Add one small private integer rank merge only when a real non-Qdrant branch
+exists. Never compare raw scores across populations or include leg ID in candidate identity.
 
-- bounded leg scheduling/dispatch/cancellation
-- deterministic safe-leg fusion and partial coverage
+Bound backend nominations before collecting/sorting them. Keep branch contributions separate from stable
+point identity. Pass final order unchanged to evidence lookup/result formatting.
 
-## Forbidden ownership
-
-- validation/admission or durable query history
-- raw-score comparison across populations
-- concrete Qdrant/redb/process dependencies
-
-## Dependencies
-
-`search-contracts`, `search-domain`, `search-query-planner`, `search-lexical`, `search-epoch-pins`, `search-access`.
-
-## Size
-
-Target `src/` ≤ 7,500 lines; split review before 8,500 total; hard stop at 10,000 hand-written Rust lines.
+Remove unconditional exact count, fake completeness, floating/default fusion and process-test adapters from
+the product path. If the surviving code is direct calls plus a tiny merge, inline it rather than preserve
+this package for fixtures. Verify cancellation/deadline, scope/IDF population, duplicate/conflicting points,
+limit enforcement and order through the connected application.

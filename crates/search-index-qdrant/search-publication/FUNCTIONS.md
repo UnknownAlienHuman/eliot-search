@@ -1,82 +1,120 @@
-# Function contract — `search-publication`
+# Publication — complete generations before measured incrementality
 
-**Status:** W3/P07 linearizable state-machine contract; no storage implementation yet.
+One serialized publisher owns fixed build input, external effects, matching durable evidence/current state, view
+installation and finite cleanup obligations. It owns no reader/parser/query window or second recovery platform.
 
-At most one publication transaction is active globally. Prepared work may run concurrently, but a later
-epoch cannot enter staging while an earlier intent is unresolved.
+<a id="reconcile-desired-and-published-state"></a>
+## Desired state
 
-## Core operations
+Compare both the selected current source/preparation snapshot and published inventory; a success-only scan misses
+removed or newly failed sources. Use bounded ordered reads. Startup/explicit/periodic reconciliation repairs lost
+queue hints. Repeated identical outcomes are no-ops.
 
-### `submit(prepared, ports, context) -> Result<PublicationReceipt, PublicationError>`
+| Observation | Desired outcome |
+|---|---|
+| Complete usable preparation, including zero units | Publish exact captured input and its gaps. |
+| Selected terminal unsupported/failure | Gap-only outcome; never relabel old evidence as the failed revision. |
+| Confirmed removal/exclusion after complete inventory | Omit membership in the new view even without a new prepared artifact. |
+| Running/incomplete/unavailable observation | Do not infer removal or empty success; retain prior served data explicitly labelled prior/pending where applicable. |
+| Exact desired/published match | No new generation. |
 
-Validates owner/source/membership/access/shadow/purge/profile guards and the exact immutable projection
-manifest before reserving the next epoch.
+The source owner distinguishes confirmed absence from filtered/incomplete inventory. Desired input and served
+published input remain different facts. Changes arriving during a fixed build become later work.
 
-### `persist_intent(prepared, next_epoch, control, mutation) -> Result<PublicationIntent, PublicationError>`
+## Fixed pending generation input
 
-Durably records `INTENT_DURABLE` with exact manifest refs and operation identity. The epoch is consumed
-even if later abandoned and is never reused.
+[Control](../../search-control-redb/FUNCTIONS.md#restartable-generation-input-capture) owns complete capture and
+staging evidence tables. Before backend effects, persist one bounded PendingGenerationBuild referencing exact
+source/prepared objects/outcomes, physical profile, never-reused collection name and complete uploadable pages.
+Each page contains actual retrieval text/payload and fixed point IDs with finite byte/count limits.
 
-### `stage_new_points(intent, index, context) -> Result<StageReceipt, PublicationError>`
+An in-memory read transaction is not a durable manifest. Interrupted incomplete capture discards the metadata-only
+target; complete capture never substitutes newer live rows. Oversize input refuses or produces an explicit selected
+gap, not a falsely complete half-source. Retry preserves the same fixed input.
 
-Upserts exact new IDs at `valid_from=N` with no upper bound, then performs exact readback.
+## Stage 2/3A complete-generation operation
 
-### `close_old_points(intent, index, context) -> Result<ClosureReceipt, PublicationError>`
+```text
+fixed input/pages → exact collection and required indexes
+→ InsertOnly batches with wait → exact schema/point/payload/count readback + TextQuery readiness canary
+→ finish bounded staging evidence/inventory writes
+→ short compare/commit: current pointer + predecessor cleanup + clear pending
+→ open/verify matching redb snapshot → short PublishedView install → report visible
+```
 
-Sets `valid_until_epoch_exclusive=N` on the exact old manifest ID list and verifies every closed ID and
-count. Broad-filter closure is structurally unavailable.
+The final pointer transaction does not copy corpus-sized evidence rows; they were built in bounded transactions
+while the target was unserved. No redb writer or view mutex spans object/backend I/O. Do not start another
+publication before view installation succeeds or recovery refuses serving.
 
-### `verify_readback(intent, staged, closed) -> Result<ReadbackVerified, PublicationError>`
+Query addresses the view's physical collection, not an alias. Visible Stage 2/3A collections are immutable.
+A physical profile or selected-state change builds a fresh complete generation. Query k/b alone does not.
 
-Checks IDs, full identity digests, payload/vector digests, epoch fields and absence of unexpected points.
+<a id="apply-observed-state-is-not-dispatch-completion"></a>
+## Uncertain effects
 
-### `commit_visible_epoch(verified, guards, control) -> Result<ControlCommit, PublicationError>`
+An attempt uses one absolute execution deadline/cancellation. A lost response, timeout, client drop or process
+restart is not rollback or remote termination. Exact readback observes state; it does not settle every earlier
+possibly dispatched writer. Preserve bounded unresolved progress with the pending build, not a separate ledger.
 
-One control compare-and-swap revalidates all load-bearing generations and atomically changes visible
-epoch/manifest refs/shadows/receipt. Qdrant aliases are not the linearization point.
+A completed mutation followed by failed readback retries observation first. Do not publish or clean a target while
+an unresolved attempt could still change the required state. Identical InsertOnly input does not authorize full
+upsert, changing pending pages or treating matching readback as universal completion proof.
 
-### `publish_control_snapshot(commit, snapshot_port, context) -> Result<SnapshotPublishReceipt, PublicationError>`
+<a id="small-conservative-recovery-boundary"></a>
+When terminality cannot be established, keep the uncertain target unserved and its obligation visible. A bounded
+replacement may use the same fixed input in another never-reused generation; never silently retarget the old
+attempt or reuse its collection name. Bound replacement count/retained disk/cleanup backlog and stop writes on
+exhaustion. The external server is not ours to kill merely to claim a fence.
 
-Acknowledgement waits for immutable in-memory snapshot publication. Failure is fail-closed and recovered
-from the committed journal state.
+## Stage 3A release gate
 
-### `emit_retired_manifest(commit) -> RetiredPointManifest`
+The complete-generation path is the correctness/reference implementation. Ship a corpus class only after its
+predeclared #215 correctness/latency/throughput/resource budgets pass. Include current+building+reader-retained
+collections, redb retained pages, maximum reader/window lifetime and cleanup backlog. Coalesce newer desired state
+without unbounded work. Failed budgets require Stage 3B for that class, not arbitrary internal thresholds.
 
-Produces the exact committed retired-ID manifest consumed by the reclaimer. No physical deletion occurs
-here.
+## Stage 3B optional incremental publication
 
-## Recovery and doctor operations
+Only after measured need: persist one fixed complete-source delta; reuse unambiguous unchanged occurrences; create
+new points with InsertOnly; close replaced points once at a fixed exclusive validity boundary without creating
+missing points; verify effects and scoring/optimizer convergence; atomically commit matching complete-source
+metadata. Old views retain their original eligibility/evidence.
 
-### `recover(active_intent, ports, context) -> Result<PublicationRecoveryDecision, PublicationError>`
+No physical point deletion. Profile changes, interval exhaustion or measured closed-point growth build a fresh
+generation. Oversize delta uses fresh generation or explicit gap. Do not reinterpret an existing collection as the
+incremental profile or use custom source shards as an unmeasured ranking/publication shortcut.
 
-Uses durable state and exact readback to complete, compensate exact IDs, commit invalidation-only or
-enter `PUBLICATION_BLOCKED`. It never guesses from collection presence.
+## Commit/install gap and restart
 
-### `compensate_exact(intent, index, context) -> Result<CompensationReceipt, PublicationError>`
+Durable current precedes installation. Startup verifies exact current collection/profile and complete evidence,
+opens the matching snapshot and installs it before admitting queries. Missing/corrupt/conflicting bindings refuse
+serving, not empty success. An empty valid generation still has explicit schema and complete inventory.
 
-Operates only on IDs recorded by the intent/manifests and verifies the resulting exclusion.
+A restart resolves pending/cleanup and reconciles current inputs; importing a backup is a separate fresh-destination
+operation. Copied pending records must not mutate the original installation's backend.
 
-### `abandon(intent, fence, control) -> Result<AbandonReceipt, PublicationError>`
+<a id="view-lifetime-and-whole-generation-cleanup"></a>
+## View lifetime and whole-generation cleanup
 
-Allowed only after an `AbandonedPublicationFence` excludes the complete affected membership/partition
-before retrieval and IDF. The skipped epoch remains unusable.
+One strong current Arc and weak retired views suffice. Queries clone current under a short lock; windows inherit
+that guard. Last drop wakes cleanup and does no I/O.
 
-## Collection-generation migration
+RetiredCleanup names one exact whole collection. Delete only when it is not durable current, no pending/future
+build can target it, no live view/window uses it and no unresolved targetable attempt remains. All guards matter,
+not only the immediate predecessor. Reader drain is not writer quiescence.
 
-`create_candidate`, `build_base_at_r0`, `catch_up_change_log`, `enter_final_barrier`,
-`validate_candidate_at_r1`, `commit_route_switch`, `drain_old_route`, and `mark_old_route_reclaimable`
-implement the S13.7 state machine. Route switch is one guarded control transaction; active route pins
-keep the old collection alive.
+The bridge performs terminal collection delete and exact logical-absence observation outside writer/view locks.
+Never reuse the name. Unknown/partial/foreign state retains the obligation and bounded backpressure; one absence
+observation does not settle an unresolved creator. Logical absence is not physical erasure. Remove obsolete
+metadata only after its consumers are gone. Local object GC is separate stopped-root maintenance.
 
-## Idempotency, cancellation and crash semantics
+## Removal and verification
 
-Each external mutation has one durable operation identity. Replaying identical input is safe; differing
-input with the same identity is rejected. Cancellation before intent creation has no effect. After
-intent durability, cancellation yields a recoverable unresolved intent, never silent rollback.
-Every state transition and failpoint is crash-reopen tested.
+Delete old floor/journal/proof machines, caller-supplied readback, daemon publication ledger, possible-writer
+platform, point reclaimer, raw pin registry and exclusive fixtures after callers move. Keep only concrete fixed
+pending input, current/evidence/cleanup metadata and the small view manager.
 
-## Required fixtures
-
-Full H11/S13 kill matrix; guard race; exact readback mismatch; skipped epoch non-reuse; snapshot
-publication failure; exact compensation; abandon fence; invalidation-only path; migration catch-up and
-route-pin drain; fake journal/index ports proving adapter independence.
+After code run minimal locked Rust 1.98 check/Clippy for actual consumers. Focused connected cases cover initial/
+empty/gap builds, lost responses, conflict, commit/install crash, restart, dropped notifications, edit/removal,
+incomplete inventory, old guards, delayed effects versus cleanup, bounded recovery and declared Stage 3A budgets.
+Stage 3B cases apply only if selected. No runtime success is claimed by this recipe.

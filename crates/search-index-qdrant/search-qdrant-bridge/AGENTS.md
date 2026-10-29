@@ -1,42 +1,15 @@
-# Agent contract — search-qdrant-bridge
+# Working on the Qdrant bridge
 
-Own only `crates/search-index-qdrant/search-qdrant-bridge/`. Do not edit another
-package, root workspace, shared contracts or architecture. Missing fields use
-the contract-change process.
+Read [FUNCTIONS.md](FUNCTIONS.md) and the affected [publication recipe](../search-publication/FUNCTIONS.md).
+Use one daemon-owned pinned client/runtime; vendor types and credentials remain private.
 
-The bounded packet is `swarm/assignments/search-qdrant-bridge.md`.
+Implement only operations used by the current stage. Stage 2/3A builds complete vectorless scoring-text
+generations and queries them through TextQuery. No sparse inference, point closure, sequence or local BM25.
+Stage 3B mutation is conditional on failed measured budgets; physical point deletion is absent in both profiles.
 
-## Ownership
+Use the same fixed inputs and absolute execution context for an attempt. An ambiguous external effect is not
+success or proof of cancellation. Publication owns recovery; the bridge must not create another mutation ledger.
+Known empty scope performs no RPC; whole base population does not remove request-only candidate filters.
 
-- Qdrant schema/capability/data-plane translation
-- strict filters and exact acknowledged mutations/readback
-- private vendor types
-- adapter-local handling of vendor API/protobuf changes
-
-## Forbidden ownership
-
-- executable/process/ACL/Job Object lifecycle or secret storage
-- recipe/access/publication/result semantics
-- vendor types in public ports
-- automatic downloads, upgrades, version ranges or silent fallback
-- requiring daemon/query/publication/control changes for an SDK rename
-
-## Dependencies
-
-Public behavior uses Eliot-owned contracts. `qdrant-client` is a private
-workspace-pinned dependency inherited only by this package; the daemon supplies
-a qualified endpoint/auth lease. Keep `default-features = false` in the root
-workspace pin and run:
-
-```powershell
-cargo run --locked -p xtask -- validate qdrant-boundary --json
-```
-
-See
-[`docs/runtime/QDRANT_ADAPTER_BOUNDARY.md`](../../../docs/runtime/QDRANT_ADAPTER_BOUNDARY.md).
-
-## Size
-
-Target `src/` ≤ 7,000 lines; split review before 8,500 total; hard stop at
-10,000 hand-written Rust lines. Split vendor transport by operation family
-instead of growing `real.rs` or `live.rs`.
+Remove obsolete supervisor/qualification/lease wrappers with callers. Run minimal locked Rust 1.98 check/Clippy
+for bridge and actual publication/query consumers after code; record native behavior separately.

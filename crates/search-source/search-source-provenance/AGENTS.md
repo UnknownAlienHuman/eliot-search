@@ -1,28 +1,20 @@
-# Source provenance ownership — #569
+# Working on search-source-provenance
 
-Own only this package's complete v2 original-input persistence, canonical
-protocol fields, owner-governed reconstitution and causal fixtures. This is a
-real untrusted-format/rehydration boundary, not a receipt forwarding package.
+This package is a legacy original-input/archive compatibility owner scheduled for deletion. Read
+[README.md](README.md) and the current [admission map](../search-source-admission/FUNCTIONS.md).
 
-Policy compilation, field normalization and effective evaluation remain in
-search-source-admission; receipt issuance/verification stays in the permanent
-receipt leaf. Use their immutable models and existing constructors. No second
-evaluator, local canonical/crypto implementation, supplied trusted fingerprint,
-accepted flag, v1 conversion/fallback, native/root/source identity, database,
-clock, deadline renewal or source-byte read belongs here.
+Do not add fragments, archive profiles, receipt reconstruction, storage proofs, current ingestion callers,
+forwarding APIs or compatibility promises. Do not optimize the v4 restore path.
 
-Use the original caller probe throughout copy/parse/recompile/evaluation and
-before return. Unknown/incomplete/noncanonical/altered inputs return no partial
-value. Historical reproduction is separate from verification against current
-policy. Every outcome remains exact; Deny/Review/Unsupported cannot become Allow.
+Migrate each caller to current typed state:
 
-The initial inclusive source review ceiling is 2,000 physical handwritten Rust
-lines, including every fixture, bound to this exact new owner and #569 only.
-No other package/old allowance transfers. Final code and actual Source registry
-consumer require independent exact-head review before the public source PR.
+- native acquisition keeps the exact body and small final admission outcome;
+- source registry stores only current root/source/head references;
+- restart point-reads current redb state;
+- unsupported old roots remain intact and unavailable.
 
-Read root instructions, Architecture Part I/ADRs5/6, #569 and owning permanent
-policy/observation/evaluation/receipt contracts. Root integrates workspace and
-Cargo.lock; no agent modifies them. Minimum source gates are Rust1.98 locked
-offline production-lib check/strict and affected static guards. Focused causal
-proofs are separate from Native/scale/installed qualification under #215.
+Delete this package, source-record/registry original-input codecs and their fixtures after the final caller
+moves. Preserve #598's active private work and use only its accepted handoff.
+
+After production changes, run minimal Rust 1.98 compiler/Clippy for the actual source/admission/registry/
+daemon consumers. Archive byte parity and provenance fixtures are removed with their APIs.

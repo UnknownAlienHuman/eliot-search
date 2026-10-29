@@ -1,85 +1,57 @@
-# Dependency graph and launch topology
+# Data and lifetime graph
 
-`swarm/crates.toml` is the machine authority. This file explains semantic topology and the sole
-progressive-composition exception.
-
-## Foundation
+Navigation only: [implementation](../implementation/README.md#owners) maps concrete owners; their recipes own
+algorithms. These responsibilities do not prescribe a crate count.
 
 ```text
-search-contracts
-  ├─ search-domain
-  └─ search-ports
+Invocation / settings
+  → DataRootGuard ── lifetime ──→ control + object owners
+  → stable acquired bytes → ObjectRef → conditional current SourceRecord
+  → materialize/unitize → PreparedRef/outcome
+  → fixed complete generation input → Qdrant build/readback
+  → evidence/current redb commit → matching snapshot → PublishedView install
+  → scoped Search / retained Exact → pinned evidence → verified excerpt → client
 ```
 
-`search-contracts` is accepted first. `search-domain` and `search-ports` may then run in parallel from
-the same immutable contracts API/schema digest.
+Qdrant stores derived retrieval state. Immutable objects store evidence. Redb stores compact current bindings and
+matching read snapshots, not a second searchable corpus.
 
-## Capability waves
+## Context
+
+Root, source, object, preparation and publication use operation-specific execution state. Query additionally owns
+view/scope/scoring. Lower-level I/O borrows the same deadline/cancellation/counters without a reset; it never needs
+a fabricated query view. See [cross-owner values](../implementation/README.md#minimal-cross-owner-values).
+
+## Platform finalization
+
+Root and object writers share the root owner's small private
+[platform seam](../../crates/search-runtime/search-runtime-owner/FUNCTIONS.md#windows-finalization).
+That candidate is not an executed Windows guarantee. Do not duplicate its algorithm or add another filesystem owner.
+
+## Publication and lifetime
+
+Stage 2/3A selects complete immutable generations; Stage 3B adds source-local mutation only after failed measured
+budgets. Both use whole-generation cleanup, not physical point deletion. Query pins the physical collection and
+matching evidence snapshot. A live window may retain that guard; last drop wakes cleanup without doing I/O.
+
+The publisher's [cleanup rule](../../crates/search-index-qdrant/search-publication/FUNCTIONS.md#view-lifetime-and-whole-generation-cleanup)
+requires all relevant guards and targetable attempts to be gone. Reader drain alone is not proof of writer quiescence.
+Local-object collection is separate stopped-root maintenance.
+
+## Lock order
 
 ```text
-W1  runtime-owner, os-secrets, control-redb, provider-protocol shell
-W2  source-admission, source-identity, registry, safe-reader, revision-store,
-    text/code materializer and unitizer
-W3  point identity, projection planner, Qdrant supervisor/bridge, lexical encoder,
-    publication, epoch pins and index reclaimer
-W4  access, query planner/executor, candidate validator, handles, projector,
-    continuation and evaluation baseline
-W5  reconciler, overlay and Rust code enrichment
-W6  exact proof, subject resolver and comparator
-W7  retention/purge/restore and security/lifecycle hardening
-W8  generic edge hardening and optional ELIOT/Research leaf adapters
-W9  Product Pulse and Windows qualification
-W10 optional model/document/advanced-scale work after accepted P15 + ADR
+process-lifetime root guard → construct stores
+publication: fixed input → external I/O → bounded redb commit → matching snapshot → short view install
+query: short current-view clone → scope/backend/evidence I/O → complete output → window/cursor commit
+shutdown: stop work → close stores → drop root guard
 ```
 
-Packages in one wave are not automatically parallel. Every direct dependency and consumed port must
-have an accepted commit and API digest first. Exact dependency lists live only in
-`swarm/crates.toml`; Markdown does not duplicate them.
+No redb writer, view-manager mutex or window mutation borrow spans external I/O. The
+[implementation lock rule](../implementation/README.md#lifetime-and-lock-order) is canonical.
 
-## Adapter direction
+## Optional leaves
 
-```text
-search-contracts records
-        ↓
-search-ports traits ← pure search-domain rules where applicable
-        ↓
-capability/orchestration package
-        ↓
-concrete adapter implementation
-        ↓
-eliot-searchd composition
-```
-
-A Qdrant startup example:
-
-```text
-SecretStorePort → search-os-secrets → bounded SecretLease
-ProcessSupervisorPort → search-qdrant-supervisor consumes lease
-SearchIndexPort → search-qdrant-bridge owns data plane
-eliot-searchd constructs and connects all three
-```
-
-No concrete adapter opens another adapter's private store or exposes a vendor type through a port.
-
-## Progressive daemon composition
-
-```text
-wave1-shell
-  contracts + domain + ports + runtime-owner + os-secrets + control-redb + provider-protocol
-wave2-source
-  + source admission/identity/registry/readback/revision/materialization/unitization
-wave3-index
-  + lexical + point/projection + Qdrant supervisor/bridge + publication + pins/reclaimer
-wave4-query
-  + access/planner/executor/validator + handles/projector/continuation + eval baseline
-wave5-current
-  + reconciler/overlay/code enrichment
-wave6-proof
-  + exact/subject/comparator
-wave7-lifecycle
-  + retention/purge/restore hardening
-```
-
-`eliot-searchd` is first launched at W1 but declares feature-gated optional dependencies from later
-waves. `progressive_composition = true` is the only wave-monotonicity exception; a feature cannot be
-enabled without accepted dependency receipts.
+Encryption, watcher, regex, PDF, MCP, models, overlay, managed Qdrant and syntax intelligence join an actual
+source/preparation/query consumer. None creates a parallel store, authority or session system. Preserve private
+#598 work and use only its accepted public handoff. Remove displaced routes and exclusive fixtures with callers.

@@ -1,20 +1,59 @@
-# Source family
+# Sources — one retained-body path
 
-**Organizational capability family — not a Cargo package.**
+A selected source becomes immutable retained bytes, one current source head, one preparation outcome and later
+published evidence. The [implementation spine](../../docs/implementation/README.md) defines delivery order.
 
-## Child packages
+## Baseline path
 
-- [`search-source-registry/`](search-source-registry/) — C03: Own admitted roots, source memberships, reference portfolios and coherent SourceView/WorkspaceViewRevision resolution.
-- [`search-source-identity/`](search-source-identity/) — C04: Derive stable source identity, retain path history and enforce single-writer namespace ownership and cutover.
-- [`search-source-reconcile/`](search-source-reconcile/) — C05: Turn watcher/USN hints and bounded inventories into truthful currentness, shadows and reconciliation work.
-- [`search-safe-reader/`](search-safe-reader/) — C06: Acquire exact source bytes without executing content, escaping admitted roots or mislabeling unstable files.
-- [`search-revision-store/`](search-revision-store/) — C07: Admit, retain and reopen immutable source revisions under complete residency identities.
+```text
+explicit selected file
+→ pre-read policy
+→ one stable final-handle/Git-object read
+→ post-read classification
+→ plain immutable put_object
+→ one typed SourceRecord compare/set
+→ one preparation result
+→ later PublishedView
+```
 
-## Family invariants
+The first walking skeleton supports one explicit local file. Root inventory and periodic reconciliation follow
+after the end-to-end Search path works.
 
-- Paths are locators, not identity.
-- Watchers are hints; inventory reconciliation proves observation continuity.
-- Only exact bytes or immutable admitted revisions are source truth.
-- SourceIdentity carries no membership or access policy.
+## Storage profiles
 
-Each writer agent owns exactly one child package and follows that package's `AGENTS.md`.
+`Plain` is the baseline current-format profile and has no secret dependency. It must implement the complete
+immutable-object contract now.
+
+An encrypted profile is optional. #598 owns only that profile and may be integrated after an accepted public
+handoff. It does not block plain retention, preparation, Qdrant publication, evidence, Exact or CLI work. Do not
+inspect or modify #598's private branch/worktrees.
+
+Both profiles, when present, produce the same Eliot-owned `ObjectRef` semantics. Do not create parallel source
+registries, preparation stores or query paths.
+
+## Identity and current state
+
+- a path locates a source;
+- `SourceId` is persisted current identity;
+- a non-reset row/registration revision rejects stale work across A→B→A and remove/re-add;
+- content identity names a revision, never the logical source;
+- an optional exact physical key may support rename matching;
+- Git evidence binds selected tree/path/object identity and retained bytes.
+
+Current source state may be newer than the served `PublishedView`. Old queries remain coherent through their
+pinned view and exact ObjectRefs, not path history or registry replay.
+
+## Ownership
+
+| Responsibility | Owner |
+|---|---|
+| root containment and stable read | root/safe-reader composition |
+| selected-source policy | one small admission evaluator |
+| immutable bytes | revision-store object owner |
+| roots/sources/current heads | typed redb/source methods |
+| changed/missing/incomplete observations | reconcile owner |
+| source transformation | preparation owner |
+| served evidence | PublishedView + immutable reader |
+
+Delete receipt, provenance, history, portfolio, restore and replay platforms after their actual callers move.
+Keep only concrete current rows and behavior used by the connected path.

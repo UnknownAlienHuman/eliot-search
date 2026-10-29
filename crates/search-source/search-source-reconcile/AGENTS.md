@@ -1,74 +1,23 @@
-# Agent contract — search-source-reconcile
+# Working on source reconciliation
 
-You own only `crates/search-source/search-source-reconcile/`. Do not edit another package, the root workspace, or shared contracts.
-When a missing contract blocks correct work, open a contract-change issue with the exact field,
-invariant, producer, consumer and compatibility impact; do not patch around it.
+Read the [architecture](../../../docs/architecture/README.md),
+[implementation](../../../docs/implementation/README.md) and [local recipe](FUNCTIONS.md).
+FUNCTIONS owns observation, selection, freshness and scheduling rules; do not copy another algorithm here.
 
-The Architecture 8.4 master does not need to be loaded for ordinary work. This file contains the
-package slice. Traceability only: S13.2, S14.1, S16.1-S16.2, P09.
+Trace the actual source reader/current-row writer and sync entrypoint. The old comparator is not correct
+merely because it is pure: its missing-root check, combined key/content update, same-path identity policy
+and failure reasons need the recorded cutover. Directory availability and a nonempty observation receipt
+do not establish file inventory or completed synchronization.
 
-## Mission
+Use one daemon scheduler and current typed rows. Startup/explicit/periodic reconciliation works before the
+optional watcher. Keep root IDs stable across catalog changes, preserve newly arriving dirty work, and use
+captured current-row/registration checks when applying results. Do not build a watcher journal, supervisor,
+lease, accepted-observation wrapper or receipt archive.
 
-Turn watcher/USN hints and bounded inventories into truthful currentness, shadows and reconciliation work.
+Use the selected donor with its actual error/filter behavior. Preserve useful current-scope and gap semantics
+from the old design, not its port/API catalogue. Inspect both iterator errors and entry-attached errors;
+never treat a filtered omission as confirmed physical absence or a dirty path as a user override.
 
-## Ownership
-
-- watcher hint ingestion
-- cursor continuity and gap state
-- startup/resume/periodic reconciliation plans
-- inventory diffs and source-head observations
-- observation freshness classification
-
-## Forbidden ownership
-
-- treating watchers as complete source truth
-- reading file bytes directly
-- publishing index epochs
-- claiming current workspace across a gap
-- depending on the concrete redb adapter; durable state is reached through a vendor-neutral port
-
-## Allowed dependencies
-
-`search-contracts`, `search-domain`, `search-source-registry`, `search-source-identity`, `search-safe-reader`. Additional internal or external dependencies require an explicit boundary review. Public
-APIs may expose only `search-contracts` or package-owned opaque types; vendor types stay private.
-
-## Required logical surface
-
-These are behavior contracts, not mandated Rust syntax. Preserve the semantics even if the concrete API
-is improved:
-
-- `ingest_change_hint(hint, cursor) -> ReconcileSignal`
-- `detect_observation_gap(previous, next) -> GapState`
-- `plan_reconciliation(snapshot, budget) -> ReconcilePlan`
-- `apply_inventory_diff(snapshot, observations) -> ReconcileOutcome`
-- `preflight_current_workspace(view, freshness) -> Result<CurrentnessPermit, ReconcileError>`
-
-## Failure surface
-
-Use typed errors/reason codes. Relevant public reasons: `OBSERVATION_GAP`, `INDEX_GAP`, `SOURCE_HEAD_MISMATCH`. Never turn a degraded or partial
-state into an apparent success.
-
-## Test seams and exit evidence
-
-- `watcher overflow creates OBSERVATION_GAP`
-- `resume reconciliation restores continuity only after inventory proof`
-- `current_workspace preflight denies unresolved gaps`
-- `selected candidate live-head mismatch creates shadow/reconcile request`
-- `deletion shadow blocks stale published membership`
-
-Property/fault tests belong beside the owning behavior. Shared control-corpus fixtures may be requested,
-but the writer does not edit another package opportunistically.
-
-## Size and split guard
-
-- Delivery wave: **W5 / P09**
-- Soft `src/` target: **7,000 lines**
-- Hard review threshold: **10,000 total hand-written Rust lines**
-- Split on a real security, runtime, replacement, test or dependency boundary; never create a forwarding
-  wrapper or crate-per-type shell.
-
-## Definition of done
-
-The package has a vendor-neutral public contract, deterministic tests for its invariants, explicit
-degradation behavior, no forbidden dependency, and a handoff reporting commands and raw outcomes.
-Compilation alone is insufficient.
+Apply the source identity and preparation owners' rules rather than recreating them. Remove obsolete ledger,
+receipt-only inputs and their exclusive fixtures with callers. Minimal pinned compiler/Clippy follows code;
+behavior checks follow the implementation, and every result records the exact revision/targets.

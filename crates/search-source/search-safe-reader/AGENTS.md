@@ -1,28 +1,22 @@
-# Agent contract — search-safe-reader
+# search-safe-reader — agent instructions
 
-Own only `crates/search-source/search-safe-reader/`. Do not edit another package, root workspace,
-shared contracts or architecture. Missing fields use the contract-change process.
+Read the [architecture](../../../docs/architecture/README.md) and
+[implementation](../../../docs/implementation/README.md). This package obtains exact bytes;
+[FUNCTIONS.md](FUNCTIONS.md) names the actual kernels, callers and Git gap.
 
-The bounded packet is `swarm/assignments/search-safe-reader.md`.
+- Keep bounded same-handle file reads, useful before/after observations and cancellation. The final
+  opened source must correspond to the selected root and locator; a walker is not that check.
+- Return the bytes and necessary identity/length observations to the existing revision writer.
+  Do not reread a pathname to replace an already verified body or introduce another byte owner.
+- Use controlled system Git plumbing for the first actual local object backend. Launch the selected
+  builtin with direct arguments; do not execute repository hooks, textconv/filter drivers, builds or
+  implicit fetches. A Git subprocess is permitted; the old blanket no-process rule is retired.
+- Keep raw Git objects distinct from working-tree content. Missing objects, unsupported input and
+  incomplete reads have ordinary explicit outcomes. Do not fake expected identity or return truncated
+  bytes as a successful source revision.
+- Change old V1/V2 receipt-bearing requests and their real consumers together. Keep hashes for actual
+  content identity/integrity, not generic local grants, read receipts or release proofs.
 
-## Ownership
-
-- final-handle root containment
-- stable pre/post metadata and digest reads
-- no-execute filesystem/Git-object acquisition
-- bounded retry/size/encoding observations
-
-## Forbidden ownership
-
-- source-admission rules
-- root/identity/membership state
-- parsing/materialization or durable retention
-- hooks, filters, prompts, macros, builds or network execution
-
-## Dependencies
-
-Only `search-contracts` and `search-domain`.
-
-## Size
-
-Target `src/` ≤ 6,500 lines; split review before 8,500 total; hard stop at 10,000 hand-written Rust lines.
+Admission policy, source/head persistence, preparation and publication have existing owners. Reuse their
+path; no new backend framework, dependency-approval process, source-line quota or qualification wave is
+required. Verify changed read behavior and its real consumer rather than preserving old receipt goldens.

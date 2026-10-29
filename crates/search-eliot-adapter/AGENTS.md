@@ -1,78 +1,43 @@
-# Agent contract — search-eliot-adapter
+# Working on search-eliot-adapter
 
-You own only `crates/search-eliot-adapter/`. Do not edit another package, the root workspace, or shared contracts.
-When a missing contract blocks correct work, open a contract-change issue with the exact field,
-invariant, producer, consumer and compatibility impact; do not patch around it.
+Read the [architecture](../../docs/architecture/README.md),
+[implementation guide](../../docs/implementation/README.md), local [source audit](FUNCTIONS.md), deletion issue
+[#535](https://github.com/UnknownAlienHuman/eliot-search/issues/535) and optional MCP issue
+[#219](https://github.com/UnknownAlienHuman/eliot-search/issues/219).
 
-The Architecture 8.4 master does not need to be loaded for ordinary work. This file contains the
-package slice. Traceability only: S1.3, S32.3, H16.3-S16.5, P14.
+## Currentness boundary
 
-## Mission
+The R039 inspection found no production construction/import of `EliotAdapter` outside this package and found a
+disconnected binding/grant/replay/terminal lifecycle. That is evidence for the inspected revision, not a
+permanent claim about every later branch head.
 
-Map ELIOT external-provider contracts to generic Search contracts as a disabled-by-default leaf package.
+Immediately before deletion, repeat an exact current-branch search across:
 
-## Ownership
+- workspace and package manifests;
+- Rust imports, constructors, path/module inclusion and feature wiring;
+- daemon/CLI targets, tests, workflows and non-Rust tooling.
 
-- WorkScope/disclosure to grant mapping
-- SourceView/StateFence mapping
-- capability pulse projection
-- Search result to ELIOT provider-result translation
-- binding/session mapping
+If no real consumer exists, delete the package, workspace/dependency/lock wiring and exclusive fixtures. If a
+consumer is found, name it and retain only the smallest truthful unavailable boundary required while that caller
+moves. Do not connect or harden `EliotAdapter`, payload digests, terminal receipts, drain/quarantine or the
+exact-eleven-recipe model.
 
-## Forbidden ownership
+## Optional MCP leaf
 
-- ELIOT canonical DB credentials or writes
-- memory/admission/finish dispositions
-- Qdrant/redb types
-- importing ELIOT internals into Search core crates
-- creating a new authority surface
+MCP follows a working standalone Search application. `rmcp` is absent from the ELIOT lock. The latest stable
+SDK inspected in R039 was `rmcp 3.7.0` at commit
+`5d6a11f2ae022f513aec0f6e0f10f89a57891a7f` with Rust 1.88 MSRV. This is candidate evidence, not an installed or
+reserved pin. Recheck the exact current SDK, advisories, features and transitive closure with the real #219
+consumer.
 
-## Allowed dependencies
+The first leaf is stdio-only and uses the same current `search-provider-client::LocalClient` as the CLI. Expose
+only implemented `Search`, `Exact`, `Continue` and `Expand` handlers. The leaf owns MCP process lifetime, finite
+tool schemas and request/result mapping only. It never owns source scope, grants, capabilities, Qdrant/redb/
+object state, planning, ranking, windows or another session ledger.
 
-`search-contracts`, `search-domain`, `search-provider-protocol`. Additional internal or external dependencies require an explicit boundary review. Public
-APIs may expose only `search-contracts` or package-owned opaque types; vendor types stay private.
+Do not enable HTTP/OAuth/auth/resources/prompts/sampling/elicitation/Tasks/child-process/client transports or
+raw filesystem/Qdrant/internal tools in the first profile merely because the SDK supports them.
 
-## Required logical surface
-
-These are behavior contracts, not mandated Rust syntax. Preserve the semantics even if the concrete API
-is improved:
-
-- `map_eliot_scope(input) -> Result<SearchReadGrantClaims, AdapterError>`
-- `map_state_fence(input) -> Result<SearchRequestFence, AdapterError>`
-- `map_capability_descriptor(descriptor) -> EliotProviderPulse`
-- `map_search_result(result) -> EliotProviderResult`
-- `prove_no_reverse_authority(config) -> Result<(), AdapterError>`
-
-## Failure surface
-
-Use typed errors/reason codes. Relevant public reasons: `CLIENT_ADAPTER_AUTHORITY_VIOLATION`, `ADAPTER_MAPPING_MISMATCH`, `INCOMPLETE_COVERAGE`. Never turn a degraded or partial
-state into an apparent success.
-
-## Test seams and exit evidence
-
-- `no canonical database access or credentials`
-- `no ELIOT memory disposition in Search response`
-- `generic request-plan-result round trip preserves generations/coverage`
-- `provider failure narrows coverage without blocking unrelated work`
-- `feature disabled by default`
-
-Property/fault tests belong beside the owning behavior. Shared control-corpus fixtures may be requested,
-but the writer does not edit another package opportunistically.
-
-## Size and split guard
-
-- Delivery wave: **W8 / optional P14 profile**
-- Soft `src/` target: **5,500 lines**
-- Hard review threshold: **10,000 total hand-written Rust lines**
-- Split on a real security, runtime, replacement, test or dependency boundary; never create a forwarding
-  wrapper or crate-per-type shell.
-
-## Gate
-
-This package is optional. Do not implement or enable it before the stated gate and ADR.
-
-## Definition of done
-
-The package has a vendor-neutral public contract, deterministic tests for its invariants, explicit
-degradation behavior, no forbidden dependency, and a handoff reporting commands and raw outcomes.
-Compilation alone is insufficient.
+After future code, run minimal Rust 1.98 compiler/Clippy for the leaf, current client/contracts and direct
+consumers, plus focused schema, bounds, cancellation/EOF and source-backed result cases. Optional MCP work never
+blocks the baseline product.

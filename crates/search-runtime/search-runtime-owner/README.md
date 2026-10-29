@@ -1,27 +1,16 @@
-# search-runtime-owner
+# Root owner
 
-**C01 — Data-root runtime owner.**
+The target is one current-format root and one process-lifetime exclusive guard. Inspection is read-only;
+initialization is explicit and publishes the root manifest last. A recognized empty incomplete initialization
+may be explicitly discarded and retried. There is no baseline resume, replay journal or migration-on-open.
 
-**Status:** pure W1 ownership, fencing, recovery, drain, and release state machine implemented. Concrete OS lock, process observation, durable-record, ACL, and Windows path adapters remain separate runtime work.
+[FUNCTIONS.md](FUNCTIONS.md) owns classification, initialization, platform finalization, discard and shutdown.
+[AGENTS.md](AGENTS.md) contains local editing constraints. Read the
+[Foundation stage](../../../docs/implementation/README.md#1-foundation--invocation-settings-and-root) for scope.
 
-Guarantees that exactly one process incarnation can be admitted as owner of one canonical data root and exposes a fenced lifecycle to the daemon.
+The existing lease/epoch/receipt and command-custody machinery is not the target design. Trace current callers,
+retain useful native checks/handles and remove displaced routes with consumers. Historical source inventory is in
+[the pre-R055 recipe set](https://github.com/UnknownAlienHuman/eliot-search/blob/45ddf887c9e84861b1302334a1f5ecabb263f7f3/crates/search-runtime/search-runtime-owner/README.md),
+not a current size claim or obligation to preserve packages.
 
-## Owns
-
-- data-root lease and owner epoch
-- standalone/managed mode fence
-- crash/reopen ownership recovery decisions
-- active/draining/releasing/unknown/quarantined lifecycle
-- process-local owner guard, drain token, release permit, and shutdown receipt
-- exact operation identity and readback-bound recovery
-
-## Must not own
-
-- filesystem, process, clock, database, registry, or network I/O
-- retrieval semantics
-- Qdrant schema or query operations
-- source catalog or access policy
-
-- **Delivery wave:** W1 / P01
-- **Soft source-line target:** 4,500
-- **Agent instructions:** [AGENTS.md](AGENTS.md)
+Status and executed evidence belong to the [registry](../../../docs/audit/ANALYSIS_REGISTRY.md#evidence-status).

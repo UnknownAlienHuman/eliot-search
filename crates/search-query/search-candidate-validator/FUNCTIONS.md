@@ -1,60 +1,106 @@
-# Function contract — `search-candidate-validator`
+# Evidence resolution — pinned truth, real bytes, explicit domains
 
-**Status:** W4/P08 source-backed validation contract; security hardening continues in W7/P13.
+This file owns excerpt truth and evidence failure scope. [Windowing](../search-continuation/FUNCTIONS.md) owns
+page progress and item lifetime. The replacement is not connected in the normal product path yet.
 
-A nomination can become evidence only after exact source readback and live-fence validation. Qdrant
-payload text, cached snippets and current-path bytes are never evidence substitutes.
+## Inspected current behavior
 
-## Operations
+At `44d7416c`, `search-candidate-validator` accepts public nominations and expected digest/profile/residency/
+assurance fields, copies those expectations into a readback request and compares them with metadata returned
+beside `SourceReadback.bytes`. It does not establish the relation between those bytes and the digest claims by
+using the real immutable-object format. Every reader error becomes `SourceUnreadable`, and `validate` turns it
+into a candidate gap.
 
-### `precheck(nomination, plan, live_state, overlay_state) -> ValidationPrecheck`
+The daemon's separate result-handle path compounds this:
 
-Checks request/plan binding, projection membership, collection/profile identity, epoch validity,
-overlay shadow, current grant/live deny/purge and candidate budget before any source read.
-`CONTAMINATED_LEG` is returned when the scoring population changed restrictively.
+- handle creation and expansion list/hash the entire current source catalogue;
+- expansion rejects an old result when the latest source is inactive or has another revision;
+- the record contains raw revision identity/length but not the emitted representation, logical occurrence or
+  original evidence range;
+- callers may request arbitrary absolute offsets anywhere in the revision.
 
-### `build_readback_request(nomination, plan) -> Result<ExactRevisionReadbackRequest, ValidationError>`
+The raw-slice validator also requires `bytes.len() == source_end - source_start` and an `exact` map Boolean.
+That can validate raw bytes, but not transformed text. UTF-16LE `41 00` becoming UTF-8 `41` has a two-byte raw
+span and a one-byte represented span. This is a contract counterexample, not a reproduced application failure.
 
-Requests the exact source revision, representation/unit, native anchor, excerpt digest, profile and
-assurance expected by the nomination. It cannot substitute the latest path/revision.
+Keep useful range, literal and completeness checks where they apply. Remove caller-created proof authority.
 
-### `reopen_and_verify(request, readback_port, context) -> Result<VerifiedSourceSlice, ValidationError>`
-
-Verifies source/revision IDs, content digest, byte length, residency authorization, coordinate/loss map,
-anchor bounds, unit/extractor/profile identity and requested disclosure ceiling.
-
-### `recheck_before_emission(verified, plan, live_state) -> Result<EmissionPermit, ValidationError>`
-
-Revalidates binding, grant, owner generation, source/workspace view, live deny, purge, shadow and
-residency immediately before projection.
-
-### `validate(nomination, context, ports) -> ValidationOutcome`
-
-Returns exactly one tagged outcome:
+## Direct operation
 
 ```text
-Validated(ValidatedSearchCandidate)
-Gap(CandidateValidationGap)
-ContaminatedLeg(ReplanSignal)
+resolve_evidence(
+    RankedHit,
+    pinned PublishedView,
+    ResolvedScope,
+    retained/prepared reader,
+    RequestContext
+) -> VerifiedEvidenceItem | ItemGap | BackendResultFailure | RequestStop
 ```
 
-A gap contains reason/scope/freshness metadata only: no excerpt, source handle or evidence-bearing
-payload. Invalid outcomes cannot be inserted into the validated candidate type.
+1. Validate route, generation, profile, selected scope and stable point identity against the pinned view.
+2. Point-read the exact authoritative `(source_id, point_id)` row from that view's redb snapshot. The source ID
+   in Qdrant is only a routing hint. On a miss, do not search another source or the latest view.
+3. Obtain the exact retained source/prepared `ObjectRef`, revision, representation, occurrence and ranges from
+   that row.
+4. Reserve the shared request's remaining read/item/output allowance before I/O. Use the original absolute
+   deadline and cancellation; no per-candidate reset.
+5. Read through the real immutable-object/prepared-representation owner. Verify content/address/integrity under
+   the format actually stored, not echoed metadata. Group selected reads by object when useful; do not rehash a
+   multi-megabyte object once per excerpt merely to create another receipt.
+6. Validate the range in its own coordinate domain and return actual excerpt bytes/text with final rank and
+   contribution metadata.
 
-### `material_coverage_change(before, after, plan) -> CoverageChange`
+A current source-head change does not invalidate an old pinned view. The result remains valid while the exact
+retained object/representation and view binding exist. Freshness is reported separately; current-state scans or
+catalogue digests do not authorize evidence.
 
-Determines whether lost nominations require bounded refill/replan or explicit incomplete coverage. It
-never relabels remaining top-k as complete.
+## Coordinate domains
 
-## Cancellation, retry and failure
+Use the existing preparation maps and transform records; do not create another universal mapping platform.
 
-Readback is bounded and cancellable. Cancellation/timeout/unreadable/mismatch yields a gap, never a
-partially validated candidate. Retrying identical captured inputs is read-only and safe. Concrete
-revision/CAS/Qdrant types remain behind ports.
+- **Raw source bytes:** validate against the retained raw object and raw-byte bounds. Equal excerpt/source span
+  lengths are meaningful only here.
+- **Decoded/normalized text:** validate against the exact retained prepared representation. Map its clipped
+  character-safe range back through the coordinate/loss records; do not add displayed UTF-8 lengths to raw
+  offsets.
+- **Extracted document text:** bind page/region/representation coordinates and declared gaps/loss. Do not claim
+  exact original bytes or one contiguous source range when the mapping is approximate or non-contiguous.
 
-## Required fixtures
+A `VerifiedEvidenceItem` carries its domain, representation, exact retained references, truthful location,
+actual excerpt and rank metadata. Expansion reuses this binding through `(window_id, item_index)`; it never
+opens arbitrary revision offsets or re-resolves against latest source state.
 
-Stale payload cannot be cited; exact digest/length/anchor/profile mismatch; overlay shadow; unreadable
-revision gap has no evidence; revocation/purge at precheck/readback/emission; contaminated-leg signal;
-loss-triggered bounded refill versus explicit gap; lossy coordinate map never claims raw exactness; fake
-readback proves adapter independence.
+## Preserve failure scope
+
+| Observation | Meaning |
+|---|---|
+| Foreign route/generation/scope, absent or contradictory pinned point row, malformed/duplicate backend identity | Backend/view inconsistency. Fail or contaminate that backend result; do not silently skip and claim a clean ranked set. |
+| Pinned row exists but selected retained object/representation/range is genuinely missing or unsupported | Item-local gap with the actual cause. It may advance the page only when represented in the delivered response. |
+| Object digest/address mismatch, invalid map or impossible range | Corruption/integrity failure; emit no excerpt and preserve the cause. |
+| Cancellation, restricted-session revocation, absolute deadline, aggregate read/output exhaustion | Request/page stop at the unhandled item. Not evidence that the item is absent and not permission to refill indefinitely. |
+| Temporary storage/system failure | Request/backend failure or finite retry according to the real owner; do not flatten it into permanent missing evidence. |
+
+Charge work already performed. A bounded partial response may contain earlier handled cards/gaps plus a request
+stop reason; the untouched tail remains unprocessed. Candidate loss, bounded top-k and window exhaustion never
+become exhaustive-negative evidence.
+
+Projection receives final-order `VerifiedEvidenceItem`s and bounded gap summaries. It does not re-sort raw
+scores, mint handles, accept caller coverage Booleans or create fallback candidate IDs. If formatting is small,
+inline it into query/protocol composition.
+
+## Remove and verify
+
+Change actual executor/view/reader/result consumers together, then remove:
+
+- public nomination/context/expected-readback structs;
+- echoed digest/profile/residency/coordinate/assurance fields;
+- request/plan/grant/checkpoint permits fixed by the view/session;
+- per-call ordinal/read-budget resets;
+- count-only refill/completeness and validation receipts;
+- leg/profile-derived fallback identities;
+- current-source fences, arbitrary result handles and latest-source expansion checks.
+
+After implementation and minimal pinned compiler/Clippy, check correct raw evidence, UTF-16/newline-normalized
+and extracted excerpts, clipped mapped locations, unrelated current-source mutation, foreign composite keys,
+wrong bytes with matching echoed metadata, missing versus corrupt versus cancelled reads, temporary failures,
+aggregate limits and same-view expansion. The named source was inspected; no runtime success is claimed.

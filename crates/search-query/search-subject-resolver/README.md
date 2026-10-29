@@ -1,24 +1,41 @@
-# search-subject-resolver
+# search-subject-resolver — real locations and material ambiguity
 
-**C21 — Subject resolution.**
+Resolve a user's selected entity to useful source locations and show ambiguity. Follow the
+[architecture](../../../docs/architecture/README.md),
+[implementation](../../../docs/implementation/README.md) and [query cutover](../README.md). A fixed recipe ladder
+is not the product.
 
-**Status:** `SOURCE_PRESENT`; deterministic resolution/ambiguity source exists, while accepted orientation/retrieval recipe integration and product qualification remain incomplete. See [central package status](../../../docs/product/PACKAGE_STATUS.toml). Current owners: #213/#232.
+## Revision-specific evidence
 
-Resolve an entity under an explicit source view using a deterministic ladder and return ambiguity instead of guessing.
+At the established audit revision, `resolve_subject` was called by package unit tests. Callers supplied candidate
+steps and completeness; the package ordered them but read no cursor, index, manifest or retained bytes. Receipt
+and revalidation helpers maintained supplied context/fence metadata rather than producing missing evidence. This
+is historical caller evidence, not permanent current-branch truth.
 
-## Owns
+Before deletion, merging or connection, search current manifests, Rust imports/constructors/path inclusion,
+non-Rust tooling, features, targets, tests and workflows. Name every surviving consumer and replace only its real
+behavior in the same cut.
 
-- cursor/handle/qualified-name resolution ladder
-- exact name and signature compatibility
-- bounded `SubjectAmbiguitySet`
-- resolution evidence and assurance
+## Minimal connected behavior
 
-## Must not own
+1. Resolve an explicit source/revision/range through the pinned manifest and retained-byte lookup. A missing,
+   stale or ambiguous explicit location stays visible and is never silently replaced.
+2. For a cursor, use an actual containing prepared/syntax definition only when exact mapped ranges exist.
+3. When a selected semantic producer exists, use its occurrences in the same published snapshot. A local symbol
+   also needs document identity; names are not global identity across repositories/configurations.
+4. Otherwise use bounded lexical/name retrieval to nominate possible definitions and preserve the match basis,
+   qualifiers/signatures, truncation and ambiguity.
 
-- normative selection among materially different definitions
-- online repository discovery
-- final comparison or ranking verdict
+A mention is not necessarily a definition. Same names, supplied equivalence receipts or rename hypotheses do not
+establish identity. A truncated candidate set cannot prove uniqueness; missing coverage cannot prove absence.
 
-- **Delivery wave:** W6 / P11
-- **Soft source-line target:** 6,000
-- **Agent instructions:** [AGENTS.md](AGENTS.md)
+Keep useful selection/order/ambiguity logic in query composition or a small helper. Remove mandatory ladder
+materialization, equivalence/receipt/revalidation machinery and duplicate candidate copies with their last
+callers. Reuse ordinary evidence validation and the existing `QueryWindow`.
+
+## Completion
+
+Explicit locations resolve exactly or fail truthfully; same-named definitions remain ambiguous unless real
+context disambiguates; lexical nomination does not become semantic identity. If no substantial independent
+algorithm remains, inline the helpers and delete the package. After code, run minimal Rust 1.98 check/Clippy for
+actual query/preparation/source/protocol consumers.

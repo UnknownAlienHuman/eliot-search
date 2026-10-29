@@ -1,18 +1,41 @@
-# search-model-provider
+# search-model-provider — design note, not a package
 
-**C12 — Optional model profile and scoring boundary.**
+This directory contains documentation only. There is no Cargo package, implementation or runtime owner.
+That is the correct baseline state.
 
-**Status:** documentation-only W10/P16 contract; no Cargo package or runtime API exists. The unused provider scaffold was removed under #528. No model/runtime/provider is selected or qualified.
+The remaining `eliot-search-model-worker` is only an always-unavailable workspace binary and must be deleted.
+Do not recreate `ModelProviderPort`, a generic provider registry or a disabled pseudo-capability around it.
+Qdrant native BM25 supplies the first working lexical path; syntax, headings, links and imported code
+locations need no language model.
 
-Owns versioned dense/multivector/rerank profiles, bounded input/output validation, provider-neutral
-worker requests, content-free receipts, migration classification and removal validation.
+## When model code is justified
 
-Does not own worker lifecycle, stores/index, query/access authority, source evidence, generative answers,
-network/download/update/training/cache behavior or G6 acceptance.
+Add one concrete integration only after:
 
-- **Delivery:** W10/P16 only after exact accepted P15 + ADR + qualification.
-- **Default:** absent/disabled.
-- **Soft source target:** 6,500 lines.
-- **Functions:** [FUNCTIONS.md](FUNCTIONS.md)
-- **Agent instructions:** [AGENTS.md](AGENTS.md)
-- **Cross-contract:** [`../../docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md`](../../docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md)
+- the source → Qdrant → retained-excerpt product path works;
+- a declared evaluation set demonstrates a material need beyond lexical/structural retrieval;
+- one exact model, tokenizer, document/query/rerank role, options and packaged artifact are selected;
+- preparation/query/publication consumers are updated in the same implementation slice.
+
+Prefer a direct bounded library in the existing owner. Use a child process only for demonstrated dependency,
+crash or resource isolation. Do not require both a provider abstraction and worker.
+
+## Narrow responsibilities
+
+A selected model owner may:
+
+- encode bounded prepared retrieval inputs in finite batches;
+- encode one bounded query with the matching published query role/options;
+- rerank a finite list of already source-backed candidate snippets;
+- validate output count, dimensions, finite values and candidate IDs;
+- report explicit optional failure.
+
+It may not discover sources, widen scope, write Qdrant independently, create evidence, persist raw queries,
+generate answers, rewrite questions, build a graph or schedule research.
+
+Reuse expensive document outputs by exact input/context/role/model/options. A reused vector never supplies the
+current source occurrence, revision or range; publication rebuilds those bindings normally. A model/profile
+change is ordinary retrieval-profile/generation rebuild, not migration compatibility.
+
+No runtime model, donor library or version is selected by this documentation. A later issue must name the
+exact candidate and measured reason before adding code.

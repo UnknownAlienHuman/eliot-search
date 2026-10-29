@@ -1,50 +1,29 @@
-# Primary DIRECT development smoke
+# Quickstart status
 
-This uses the primary daemon, not the old snapshot/BM25 program. It is a
-source-backed development smoke, **not a production or Qdrant deployment guide**.
-Rust 1.98.0 is required. Compilation and native tests must pass first.
+There is no verified persistent-product command sequence yet. Publishing the new documentation does not install
+its target behavior. In particular, diagnostic scan examples from the unmerged source branch are not a verified
+`main` interface. Do not substitute old help text, receipts or self-tests for an executable path.
 
-```powershell
-cargo +1.98.0 build --release --locked -p eliot-searchd -p eliot-search --bins
-if ($LASTEXITCODE -ne 0) { throw "Build failed" }
+## First persistent path
 
-# Use a fresh disposable data root. Keep source files outside it.
-$DataRoot = Join-Path $env:TEMP ("eliot-smoke-" + [guid]::NewGuid().ToString("N"))
-$Source = Join-Path $env:TEMP ("eliot-source-" + [guid]::NewGuid().ToString("N") + ".txt")
-New-Item -ItemType Directory -Path $DataRoot -ErrorAction Stop | Out-Null
-[System.IO.File]::WriteAllText($Source, "alpha needle omega", [System.Text.UTF8Encoding]::new($false))
-$Daemon = ".\target\release\eliot-searchd.exe"
+Follow [Foundation](docs/implementation/README.md#1-foundation--invocation-settings-and-root), then the
+[one-file path](docs/implementation/README.md#2-walking-skeleton--one-file-to-one-cli-result) under
+[#264](https://github.com/UnknownAlienHuman/eliot-search/issues/264):
 
-& $Daemon --index-file $DataRoot $Source
-if ($LASTEXITCODE -ne 0) { throw "Index failed; inspect state before retrying" }
-& $Daemon --search-root $DataRoot needle
-if ($LASTEXITCODE -ne 0) { throw "Search failed" }
-
-# A separate process reopens the retained revision. Live source loss does not
-# silently replace that revision with current-path bytes.
-Remove-Item -LiteralPath $Source -ErrorAction Stop
-& $Daemon --search-root $DataRoot needle
-if ($LASTEXITCODE -ne 0) { throw "Retained revision read failed" }
+```text
+plain root + one explicit supported file
+→ stable read + immutable retained bytes
+→ preparation + bounded retrieval text
+→ real Qdrant index and readback
+→ published view + pinned evidence
+→ verified excerpt in the CLI
 ```
 
-One-shot commands acquire the data-root owner themselves. Do not run them against
-a root already held by `--serve-data-root` or another daemon. Live root management
-through the final provider protocol remains unfinished.
+The Qdrant 1.20 integration and replacement settings/protocol are selected targets, not working interfaces.
+Implement their exact versions, fields and failure behavior with the actual consumers, using the owning recipes.
+Do not invent a command sequence or silently fall back to the legacy local index.
 
-For the current internal line-protocol service:
-
-```powershell
-& $Daemon --serve-data-root $DataRoot
-```
-
-Enter `version`, `health`, or `shutdown`, one per line. This is a diagnostic stdio
-surface, not the final authenticated provider protocol. After a mutation failure
-with `SERVICE_MUTATION_OUTCOME_UNKNOWN`, do not resend the mutation automatically.
-The service exits; investigate and verify storage before restarting. No automated
-repair or rollback is implied.
-
-Legacy snapshot and sealed CLIs are no longer runnable Cargo binary/example
-targets. Their regression harnesses remain available via `cargo test --test`,
-including `cargo +1.98.0 test --locked -p eliot-searchd --test eliot-search-sealed-recover`.
-Keep this disposable smoke directory until its results have been inspected; this
-guide deliberately performs no automatic recursive data deletion.
+After production changes run minimal locked compiler/Clippy checks for affected owners and real binaries.
+Replace this status page with exact executed installation/ingestion/search commands when the connected path
+works. Record the tested commit, platform, dependency versions and remaining limitations in the
+[registry](docs/audit/ANALYSIS_REGISTRY.md#evidence-status).

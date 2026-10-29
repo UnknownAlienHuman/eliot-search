@@ -1,168 +1,74 @@
 # Qdrant adapter boundary
 
-Qdrant is the only vector/index database, but it is a replaceable external
-backend. The service must depend on Eliot-owned contracts, not on a particular
-`qdrant-client` release.
+Completed source-removal observations below refer to the named refactor commits, not this docs-only main landing.
+Inspect the actual checkout before changing or deleting callers.
 
-## Dependency direction
+Qdrant Server/Rust client **1.20.x** is the selected indexed backend for the first connected product. The repository
+lock still contains client 1.19.0; upgrade client, lock, schema builders and actual publication/query consumers in
+one code cut. `search-qdrant-bridge` is the only package allowed to depend directly on `qdrant-client`; vendor types
+remain private.
+
+## Selected runtime boundary
+
+Daemon composition supplies one configured endpoint, actual optional API key, bounded transport settings and one
+absolute deadline/cancellation. One daemon-owned client/runtime serves publication and query. Startup observes live
+server capabilities and verifies the exact selected physical collection/schema; build hashes and probe reports are
+development/release evidence, not constructor credentials.
+
+The baseline Qdrant 1.20 retrieval profile is:
 
 ```text
-daemon / publication / retrieval / reclaim
-                    |
-                    v
-       search-qdrant-bridge public API
-                    |
-                    v
-        private qdrant-client transport
-                    |
-                    v
-          qualified Qdrant server
+one retrieval-text payload field
++ scoring full-text payload index
++ explicit code tokenizer/text-processing settings
++ TextQuery with query-time k/b
++ payload scope filter and independent idf.corpus base population
 ```
 
-The boundary is strict:
+Do not generate baseline sparse BM25 vectors, query vectors or local fixed `avg_len`. Exact punctuated identifier
+search remains independent of tokenized BM25.
 
-- only `search-qdrant-bridge` may depend on `qdrant-client`;
-- raw `qdrant_client::*` types stay inside that package;
-- public bridge signatures use Eliot-owned records and errors;
-- collection names, protobuf messages, gRPC status text and vendor filters do
-  not cross the package boundary;
-- the supervisor owns process lifecycle and supplies a qualified endpoint;
-- the daemon composes the bridge but does not construct vendor requests.
+## Physical view identity
 
-Run the structural gate from the repository root:
+`PublishedView` names the exact physical collection and matching redb snapshot. Query addresses that collection
+directly. Qdrant aliases are not serving, recovery or cleanup authority because alias mutation cannot atomically
+install ELIOT evidence or preserve old pinned views.
 
-```powershell
-cargo run --locked -p xtask -- validate qdrant-boundary --json
-cargo test --locked -p xtask --lib qdrant_boundary::source
-cargo test --locked -p xtask --test qdrant_boundary_regressions
-cargo test --locked -p xtask --test qdrant_cross_file_boundary
-cargo test --locked -p xtask --test qdrant_qualified_path_boundary
-cargo test --locked -p xtask --test qdrant_qualification_module_ownership
-```
+Stage 2/3A visible collections are immutable. Any selected-state difference builds another never-reused physical
+collection. Point-level mutation and stable occurrence identity exist only in Stage 3B when Stage 3A fails declared
+release budgets.
 
-The manifest guard checks both dependency keys and Cargo's `package` rename
-field, including target/dev/build/workspace declarations. A renamed SDK
-workspace dependency cannot create another allowed consumer. Qdrant `patch`
-and `replace` entries are rejected, as are alternate source selectors on the
-workspace pin and source/feature overrides on bridge inheritance.
+## Scope and sharding
 
-The source guard masks comments and string/character literals before matching
-complete reference tokens. Spaces, newlines, intervening comments, grouped
-imports and raw identifiers do not hide a direct SDK reference; similarly named
-modules such as `qdrant_client_helpers` are not the vendor crate. The file-local
-public-surface check follows direct imports and private type aliases and checks
-multiline signatures, public trait contracts, enum variants, split
-visibility/qualifier layouts and exported macro definitions. Both
-`#[macro_export] macro_rules!` and `pub macro` token trees are bounded by their
-balanced delimiters; private macros remain adapter internals.
+BM25/full-text statistics are physical-shard-local. `idf.corpus` changes the statistics population on each shard;
+it cannot reach data in another shard. Do not split a general portfolio by root/source custom shard key or merge
+independently scored shard lists locally. Custom sharding is considered only for a scope always queried as one
+partition and only after measurement.
 
-Public-surface extraction uses the same streaming tokens as direct-reference
-checking, with original byte offsets and line numbers. Tabs, comments, split
-keywords, leading attributes and multiple declarations on one line do not
-change signature or field boundaries. Grouped public imports and multiline
-named-field types are checked through their balanced delimiters; nested generic
-commas, function arrows and const-generic groups cannot prematurely end them.
-Function bodies, constant initializers and private named fields are not treated
-as public signatures merely because they share a line with `pub`. Nested
-exported macro definitions are still inspected. Trait/enum bodies and tuple-
-struct signatures (including trailing `where` clauses) remain conservatively
-checked as a whole. Traversal is iterative and borrows the masked source rather
-than collecting another token vector or copying each surface. The source-test
-command above includes the surface regression module; these lexical fixtures do
-not compile the synthetic vendor programs or qualify a live backend.
+## Current code debt
 
-The local and cross-file passes share one token-delimited import/alias owner.
-`use`, `extern crate` and `type` declarations retain exact visibility and source
-lines even with tabs, comments, attributes or adjacent declarations. Grouped
-imports taint only their vendor-derived leaves; unrelated siblings and similarly
-named modules are not vendor bindings. Unicode tokens and raw keyword aliases
-are matched as identifiers, not substrings or language keywords. Generic alias
-defaults/bounds and array/const groups remain in the checked declaration.
+The former `QualifiedGate` constructor input was removed at `7d92fb8b`; do not recreate it. Current
+`RealDataPlane::connect` still requires supervisor binding and an API-key lease, checks an exact server build and
+uses fixed nested timeouts. Other qualification/auth-binding wrappers, operation receipts and duplicated
+point/payload models remain. Normal daemon publication/query is not connected.
 
-Declaration storage is capped at 65,536 borrowed slices per file. Use trees are
-limited to 64 nested groups and 256 path segments; all imports in one file share
-65,536 expanded leaves and a 16 MiB logical expansion budget covering duplicated
-strings and record storage (not allocator overhead or a measured RSS ceiling).
-Limits are charged before leaf allocation. A dependency work list propagates
-local import/type aliases without repeatedly rescanning reversed chains; its
-262,144 distinct-edge ceiling is checked before insertion. Cycles terminate
-without inventing vendor bindings. Malformed/incomplete imports and exhausted
-budgets yield source-located failures, never a successful prefix. The existing
-source-test command includes these import and resource-bound regressions.
+The #263 cutover preserves real auth, transport, schema, bounded response and exact readback while deleting
+qualification/binding/receipt authority and unused SDK wrappers after current callers move.
 
-A bounded module-graph pass resolves canonical `lib.rs`, `mod.rs` and nested
-`*.rs` layouts, direct literal `include!` edges and direct literal `#[path] mod`
-overrides. Included source inherits the including module identity while keeping
-its canonical identity for conservative checking. Vendor taint therefore cannot
-hide in a split transport file and reappear in an including file's public
-signature. Active directives are distinguished from comments and string
-lookalikes. Literal targets must resolve inside the retained bridge inventory;
-missing targets, direct computed targets, include cycles, excessive semantic
-identity growth, excessive module depth and malformed or oversized import trees
-fail closed rather than producing a partial PASS.
+## Optional process and Edge boundaries
 
-The cross-file pass resolves `crate`, `self`, repeated `super` and Rust-2018
-crate-root paths. It follows renamed/grouped item imports, renamed vendor-crate
-roots, chained public re-exports, private imports used by public signatures,
-local type-alias chains, public glob re-exports and private glob imports. It
-also inspects direct qualified paths in accumulated public signatures,
-trait/enum bodies and exported macros, including paths split across lines and
-`$crate` macro roots. Public globs propagate only publicly exportable tainted
-names; an internal-only vendor binding does not create a false public leak.
-Direct vendor-SDK glob imports are rejected because a lexical validator cannot
-enumerate their introduced names. Taint keys include full semantic module path
-and item name, so an unrelated Eliot-owned type with the same leaf name remains
-valid.
+External endpoint mode is baseline. A later managed-child profile may own one actual process handle, private
+resources, real platform child-tree guard and bounded startup/shutdown. It uses this same bridge for readiness.
 
-The gate also requires the workspace client pin, exactly one `qdrant-client`
-record in `Cargo.lock`, `qualified.rs` and `qualification/qdrant/artifact.toml`
-to name the same client version, and requires the qualified server version to
-match the artifact manifest. Version extraction ignores commented/quoted
-lookalike declarations and rejects duplicate active canonical declarations.
-The version constants retain their canonical single-line `pub const` string
-literal format; unsupported forms fail the comparison instead of being guessed.
+Qdrant Edge is a separate embedded-backend replacement candidate, not a managed child or fallback. Evaluate a
+newer released Edge line only after the server path works; it must replace this bridge cleanly after persistence,
+Windows, BM25/filter, restart and size/latency evidence.
 
-The repository walk is deterministic and fail-closed. It rejects observed
-symbolic links and unsupported entry types, stops above 64 directory levels or
-200,000 entries, and reads at most 16 MiB from one source file and 256 MiB in
-total. `.git`, `target`, `.venv`, `__pycache__` and `node_modules` are explicitly
-outside the scan. Exceeding a limit is a validation failure, never a partial
-`PASS`; the validator does not follow a link or continue after exhausting an
-aggregate limit.
+## Verification
 
-This remains a lexical structural check, not complete Rust name resolution,
-Cargo compilation or live qualification. Direct computed `include!`/`#[path]`
-forms are rejected rather than interpreted. Macro-generated directives,
-`cfg_attr`-selected module paths, conditional-compilation truth, module aliases
-used as path roots, lexical shadowing, Unicode normalization and compiler-derived
-visibility still require complementary
-compiled checks and independent review. A structural PASS alone must not be
-represented as complete boundary or product acceptance.
+Run 39872058276 passed Rust 1.98 locked check/strict Clippy for `search-qdrant-bridge --lib` at `7d92fb8b` only.
+It covers neither current consumers nor Qdrant 1.20.
 
-`qualified.rs` is the single upgrade identity facade: server version/build,
-artifact digest/size/platform and client version/checksum/VCS identity remain
-there together. Bounded `qualified/{artifact,client,error,gate,idf}.rs` modules
-verify those identities and admission rules but may not duplicate or own the
-pins. This keeps both human updates and the structural validator pointed at one
-file while preventing the qualification gate from becoming another monolith.
-
-## Upgrade procedure
-
-A Qdrant upgrade is an adapter qualification change, not a service rewrite.
-
-1. Change the single exact `qdrant-client` pin in the root
-   `[workspace.dependencies]`.
-2. Update `Cargo.lock` with that exact client release.
-3. Update the qualified client/server identities in
-   `search-qdrant-bridge/src/qualified.rs` and
-   `qualification/qdrant/artifact.toml`.
-4. Adapt only private translation code under `search-qdrant-bridge` when the
-   vendor protobuf/API changed.
-5. Run `xtask validate qdrant-boundary`, the qualification module-ownership
-   test, bridge unit/contract tests and the live disposable-server
-   qualification.
-6. Update the qualification receipt only from executed evidence.
-
-No daemon, query, publication or control-store module may be changed merely to
-accommodate a vendor SDK type or method rename. Such a required change means
-the adapter boundary leaked and must be repaired before qualification.
+For the real cut run bridge + publication/query/daemon check/Clippy, then live 1.20 scoring-full-text schema,
+code-tokenizer, TextQuery, scope/IDF, insert-only readback, physical-generation restart, cancellation and
+collection-delete/absence cases. Record exact server/client/profile and raw results in the registry/PR.

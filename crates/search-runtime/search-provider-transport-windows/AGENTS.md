@@ -1,15 +1,21 @@
-# Concrete Windows provider byte transport
+# Working on the old Windows provider transport
 
-Own only one non-Clone local client pipe handle and synchronous byte I/O.
-The selected name comes from NativeEndpointNameV1. No arbitrary File/handle,
-path, host, discovery, fallback, listener, parser, credential or grant API.
+Read the [current protocol](../../search-provider-protocol/README.md),
+[client map](../../search-provider-client/FUNCTIONS.md), [CLI issue #332](https://github.com/UnknownAlienHuman/eliot-search/issues/332), package [README](README.md) and local [source map](FUNCTIONS.md).
 
-Only src/windows.rs may allow unsafe for checked synchronous Kernel32 calls.
-Callers do not inherit that exception. The private handle has no clones,
-extraction API, background operations or outstanding overlapped I/O.
+The baseline local product uses owned child stdio. Historical audits found this client-only `PIPE_NOWAIT`
+adapter coupled to the old typed provider/pairing path and no selected child-stdio consumer. Treat that as
+revision-specific evidence. Immediately before removal, search current manifests, Rust and non-Rust callers,
+constructors, features, targets, tests and workflows.
 
-Connection/type/locality are not authentication. Pairing and policy remain in
-the provider/client and daemon owners. Deadline checks observe the caller's
-original Instant; no native hard real-time guarantee or async I/O claim.
+When the current search confirms no real persistent-daemon consumer, remove the package/workspace/dependency
+entries and old client callers together. If a consumer exists, name it and retain only the smallest truthful
+unavailable seam while migrating it; do not harden legacy endpoint, pairing, grant or session APIs.
 
-Focused fixtures belong here. Native/installed qualification remains #332/#215.
+A future selected persistent-daemon profile may implement one actual owner-only Windows pipe server/client using
+the current framed protocol, real ACL/peer-owner validation and one bounded I/O context. Do not preserve
+`NativeEndpointNameV1`, endpoint files, pairing keys, grants, capability digests, TCP fallbacks, discovery or
+reconnect platforms.
+
+After deletion or replacement, run minimal Rust 1.98 check/Clippy for actual protocol/client/CLI consumers.
+Native pipe runtime cases are required only when that optional profile is selected.

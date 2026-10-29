@@ -1,22 +1,21 @@
-# Source records ownership — #569
+# Working on search-source-records
 
-Own pure source entity/value models, versioned source metadata schemas/codecs
-and owner-governed rehydration boundaries. This is the shared data/schema leaf
-of C03, not another registry, state owner, database or task controller.
+This 332 KiB package is a legacy schema/codec bundle scheduled for deletion. Read [README.md](README.md),
+the [source registry map](../search-source-registry/FUNCTIONS.md) and
+[current admission map](../search-source-admission/FUNCTIONS.md).
 
-The initial exact relocation is the frozen legacy DIRECT codec, source-root
-catalog codec and pure bounded root observation/currentness model. Keep their
-bytes, formulas and causal fixtures exact. Currentness records do not establish
-native access, source readback or current ownership.
+Do not add batch/snapshot/operation/currentness/portfolio/namespace/provenance records, compatibility codecs,
+canonical identities, receipts or forwarding reexports. Do not migrate old formats into new tables.
 
-No filesystem/process/clock/network/storage I/O, current-policy decisions,
-identity allocation, caller verified flags, source bodies, search or access
-authority belongs here. Semantic SourceRegistry orchestration and concrete
-redb/native operations remain separate owners. Do not create a forwarding shell
-or move fixtures without their owning implementation.
+When changing a caller:
 
-Read root instructions, Architecture Part I and the exact #569 split scope.
-Root integrates manifests/lock; one writer per overlapping scope. Run Rust1.98
-locked/offline production check/strict and applicable existing causal cases.
-Count all physical handwritten Rust including fixtures: split review before
-8500, hard10000. Source presence/compilation is not product qualification.
+1. identify the few current `RootRecord`, `SourceRecord` or `RevisionRef` fields it actually needs;
+2. move those fields/codecs to the concrete source/control/object owner;
+3. point-read or bounded-iterate typed current redb state;
+4. delete the old record import, batch/restore adapter and exclusive fixtures in the same cutover.
+
+`PublishedView`, not registry history, owns immutable query membership/evidence. Unsupported old roots fail
+before writes and remain intact. Preserve #598's active private work; no competing retained-source writer.
+
+After code, run minimal Rust 1.98 compiler/Clippy for changed source/control/daemon consumers. Old byte
+goldens, package maps and replay matrices are removed with the APIs.
