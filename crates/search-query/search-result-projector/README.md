@@ -1,23 +1,62 @@
-# search-result-projector
+# search-result-projector — format verified evidence or disappear
 
-**C26 — Result Projector.**
+This package is not a ranking, authorization, evidence or handle owner. It may format already ordered,
+already verified evidence into bounded public cards. If that transformation remains small, fold it into the
+query handler and delete the package.
 
-**Status:** `SOURCE_PRESENT`; bounded candidate/card, coverage and ranking-trace projection source exists, while canonical provider response, handle and recipe integration remain incomplete and unqualified. See [central package status](../../../docs/product/PACKAGE_STATUS.toml). Current owners: #125/#133/#213/#221.
+Read the [query cutover](../README.md), [evidence map](../search-candidate-validator/FUNCTIONS.md) and
+[query-window map](../search-continuation/FUNCTIONS.md).
 
-Project validated candidates into bounded evidence-oriented responses and request opaque handles from `search-handles`.
+## Verified current source
 
-## Owns
+`src/lib.rs` is 10,337 bytes. `project_candidate_set` receives a complete vector, re-sorts it by raw score,
+receives already verified source bytes and an already minted `SearchSourceHandle`, applies limits only after
+that work and returns the old handle-oriented result family. `verify_handle_target_binding` compares three
+supplied IDs but resolves no handle or evidence.
 
-- SearchCandidateSet/card assembly
-- coverage, freshness and gap semantics
-- bounded ranking trace and response budgets
-- deterministic handle-subject selection
+Repository search finds the projector in its own source, an old swarm assignment and the indexed process
+fixture; no normal product query caller was found.
 
-## Must not own
+## Target
 
-- raw full files, vendor details or client admission
-- handle storage, expansion or authorization
+Input is final-order `VerifiedEvidenceItem` values selected before retained-source I/O:
 
-- **Delivery wave:** W4 / P08
-- **Soft source-line target:** 7,000
-- **Agent instructions:** [AGENTS.md](AGENTS.md)
+```text
+VerifiedEvidenceItem {
+  stable point/evidence identity
+  source/revision/representation/location
+  verified excerpt
+  final rank and optional branch contributions
+  useful candidate gap metadata
+}
+```
+
+Projection may:
+
+- preserve input order exactly;
+- enforce remaining item/encoded-byte limits before retaining output;
+- truncate excerpts according to the explicit response contract;
+- format `EvidenceCard` values;
+- sample bounded gap details while reporting aggregate omitted counts;
+- attach optional `WindowItemRef(window_id, item_index)` supplied by the query-window owner.
+
+Projection may not:
+
+- compare or sort raw backend scores;
+- resolve scope, manifests, handles or retained objects;
+- mint tokens or lifecycle records;
+- accept caller coverage/proof Booleans as authority;
+- manufacture complete-negative coverage from top-k;
+- rebuild another result identity or plan digest.
+
+## Removal
+
+Delete `CandidatePublicMetadata`, mandatory `SearchSourceHandle`, handle-binding helpers, raw-score sorting,
+old candidate-set envelopes and one-omission-record-per-rejection behavior with their callers. Change the
+current protocol/result types directly; do not add a V3 projector family or forwarding adapter.
+
+## Completion
+
+Final Qdrant/rank order reaches output unchanged, output limits are charged before allocation/retention,
+source-backed cards contain the actual verified excerpt/location and paging/item locators are owned by the
+single `QueryWindow`.

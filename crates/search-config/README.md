@@ -1,61 +1,13 @@
 # search-config
 
-**Deterministic, I/O-free typed configuration and reload planning.**
+Replace the legacy parser/registry/receipt stack with small typed settings consumed by real owners. The typed
+replacement is a target, not a working configuration interface or a reason to expose dormant settings.
 
-This package owns finite typed documents, registry/layer semantics, section equality identities,
-effective snapshot fingerprints, redaction, deltas and plans. Capability packages own section
-meaning and runtime application. Configuration equality never proves validation or applied effects.
+[FUNCTIONS.md](FUNCTIONS.md) owns capture, precedence, paths, validation, redaction and status. Start with
+[Foundation fields](FUNCTIONS.md#foundation-fields-shipped-with-root-work); later fields arrive with consumers.
+Use the [layer rules](FUNCTIONS.md#layer-semantics), [path rules](FUNCTIONS.md#target-capture) and
+[future verification cases](FUNCTIONS.md#focused-checks-after-code), not historical configuration catalogues.
 
-New snapshots compute BLAKE3 over shared deterministic CBOR under
-`eliot/cbor/config-snapshot/v2`. The config owner computes each section digest from exact typed
-fields, requested/selected profiles and supplied source/reset provenance; callers supply no digest.
-Private snapshot compute consumes its existing ordered bounded map, without another sort, full
-preimage or public arbitrary iterator.
-
-This is VERSIONED_REBUILD. The sole current file format is schema 2, `eliot-config-toml@2`,
-implemented through maintained `toml_parser` events. Schema-1 files return
-`UnsupportedSchemaVersion` and require migration. See [TOML_PROFILE_2.md](TOML_PROFILE_2.md).
-SHA-v1 bytes can be
-restored only with `ConfigFingerprint::restore_legacy_v1` for migration/comparison. They cannot
-construct a current effective snapshot. Equality preserves algorithm/profile/revision even if raw
-bytes coincide. The immediate daemon status emits the full tag under its explicit v2 schema and
-rejects report/snapshot identity mismatch. Runtime application/readback remains #333.
-
-Borrowed identifier, value and list extents plus fixed scalar/digest payload are checked before
-temporary canonical rows. Assembly also charges names/owners before map clones and insertion.
-One shared encoder decides exact domain-inclusive CBOR bytes under the 8 MiB hard ceiling.
-Logical payload budgets are not measured allocator residency or serialized JSON/Debug size.
-
-File/env/CLI documents retain the shared builder, descriptor/secret/precedence rules and admission
-ceilings: W1 identifiers 1 MiB, values 4 MiB, total list items 8,192. Captured document Debug emits
-fixed primitive metadata. Redacted views charge complete tagged header and entry payload before
-copies/hashing and omit over-budget entries whole. Bounded redacted path digests retain exact
-standard SHA-256 through the shared owner; no production legacy fingerprint encoder remains.
-
-File parsing and typed entry admission share one private document builder. Lexer tokens are
-charged before storage growth; donor strings are counted, charged and then filled. The W1 lexer
-ceilings are 131,072 tokens and 4 MiB logical token storage, independently of decoded payload
-budgets. No handwritten TOML grammar, dynamic donor document tree or second parser remains.
-
-Identity, compatibility, parser and diagnostic fixtures are AUTHORED_NOT_RUN under #352.
-Integrated/native/installed/scale/release qualification remains #215; runtime application/readback
-remains #333. Logical limits do not establish measured allocator residency or corpus compatibility.
-
-## Owns
-
-- config source/layer identity and deterministic merge semantics
-- top-level section registry and unknown-section rejection
-- fixed/security-floor/override classification
-- effective snapshot fingerprint and redacted diagnostic projection
-- change classification: live, security barrier, restart, new generation or reject
-
-## Must not own
-
-- reading files/environment/process arguments
-- package-specific runtime state or vendor configuration objects
-- plaintext secrets or permissive fallback on unknown settings
-- silently applying restart/rebuild/security changes as live updates
-
-- **Delivery wave:** W1 / P01
-- **Soft source-line target:** 5,500
-- **Agent instructions:** [AGENTS.md](AGENTS.md)
+Coordinate [#333](https://github.com/UnknownAlienHuman/eliot-search/issues/333) with actual daemon callers.
+No runtime readiness follows from accepting a config file. Remove this package if the remaining typed merge
+fits more simply in daemon composition.

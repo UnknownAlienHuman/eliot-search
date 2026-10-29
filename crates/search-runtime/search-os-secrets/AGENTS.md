@@ -1,37 +1,31 @@
-# Agent contract — search-os-secrets
+# Working on search-os-secrets
 
-Own only `crates/search-runtime/search-os-secrets/`. Do not edit the root workspace, shared contracts,
-architecture or another package. Missing fields use the contract-change process.
+Read the [runtime direction](../README.md), [package audit](FUNCTIONS.md), package [README](README.md),
+[implementation guide](../../../docs/implementation/README.md) and
+[storage-profile note](../../../docs/implementation/revision-encryption.md).
 
-The bounded implementation packet is `swarm/assignments/search-os-secrets.md`.
+Do not extend or repair the generic `SecretCatalog`, leases, rotation/revocation, operation receipts,
+configuration fingerprints or provider-neutral backend model. #307/#308/#309 are closed `not_planned`.
+Historical size/caller findings are revision-specific. Before deleting or moving this package, recheck current
+manifests, Rust/non-Rust callers, constructors, features, targets, tests and workflows, then change all actual
+consumers in the same cut.
 
-## Ownership
+Concrete ownership:
 
-- opaque `SecretRef` lifecycle and purpose separation
-- OS-user/installation/incarnation binding
-- guarded short-lived plaintext access inside the adapter boundary
-- creation, rotation and deletion receipts without secret material
-- pure finite byte-layout and binding validation for the legacy protected-revision compatibility envelope
-- pure domain separation and ordered transcript for legacy platform-key/DPAPI-entropy derivation
+- Qdrant owns one optional actual key in its composition;
+- trusted local protocol has no pairing secret, grant or per-frame MAC;
+- a restricted-client adapter owns its selected credential/session;
+- encrypted immutable storage owns one concrete OS-protected key path and object codec;
+- plain immutable storage has no secret.
 
-## Forbidden ownership
+Preserve #598's active private work and consume only its accepted handoff. Do not implement a competing revision
+key/object writer or infer its final format. After handoff, retain only exact metadata/helpers directly used by
+the selected current profile and delete unconsumed candidate/selection/lifecycle code.
 
-- Qdrant/provider process supervision
-- source grants, sessions or policy decisions
-- filesystem, Credential Manager, DPAPI, RNG, concrete hash implementation or other platform I/O
-- source identity, catalog currentness or plaintext-admission authority
-- plaintext through public serialization, Debug, logs, argv, config or telemetry
-- cross-user or cross-incarnation reuse
-- unproved hardware-backed or secure-erasure claims
+Keep an old-format reader only while explicit user-data access/export needs it. It must not create new legacy
+objects, migrate on open or constrain the current format. Change direct daemon/config/protocol/object consumers
+together; do not add a V2 secret platform or forwarding facade.
 
-## Dependencies
-
-Only `search-contracts`, `search-domain`, `search-ports` and `search-config`. Platform credential
-dependencies remain in qualified adapters and require exact version, license review and Windows
-qualification.
-
-## Size
-
-Target `src/` ≤ 3,500 lines; split review before 8,500 total; hard stop at 10,000 hand-written Rust lines.
-The public `lib.rs` is a thin assembly facade; lifecycle and legacy compatibility contracts remain
-separate owners inside this package.
+After code, run minimal Rust 1.98 check/Clippy for actual retained profile and direct consumers, then focused
+fresh/existing/restart/wrong-key/corruption/no-secret-output cases. Historical catalogue/rotation/grant matrices
+are removed with their APIs.

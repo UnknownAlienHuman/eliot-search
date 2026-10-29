@@ -1,72 +1,26 @@
-# Agent contract — search-comparator
+# Working on implementation comparison
 
-You own only `crates/search-query/search-comparator/`. Do not edit another package, the root workspace, or shared contracts.
-When a missing contract blocks correct work, open a contract-change issue with the exact field,
-invariant, producer, consumer and compatibility impact; do not patch around it.
+Read the [architecture](../../../docs/architecture/README.md),
+[implementation](../../../docs/implementation/README.md), [query cutover](../README.md), package
+[README](README.md) and local [source map](FUNCTIONS.md).
 
-The Architecture 8.4 master does not need to be loaded for ordinary work. This file contains the
-package slice. Traceability only: S20.1, S22, P11.
+The established audit found pure comparison kernels with package-test callers and supplied observations at the
+inspected revision. Treat this as revision-specific evidence. Before deletion, inlining or connection, search
+current manifests, Rust/non-Rust callers, constructors, module inclusion, features, targets, tests and workflows.
+Move every surviving consumer in the same cut.
 
-## Mission
+Connect ordinary retrieval, exact source readback and compact comparison output together. Preserve each
+candidate's match basis and selected repository/configuration. Use known provenance for fork grouping. Matching
+names, text, scores or digests do not prove semantic equivalence, contradiction or independent lineage. Missing
+provenance and requested observations remain unknown.
 
-Align validated implementations by lineage, evidence role and behavior observations without declaring a normative winner.
+Show signatures, implementation excerpts and available tests/docs/references. Syntax and semantic indexers
+supply only their actual facts; they do not infer every error, side effect or runtime property. Different
+observation digests are not conflicts without incompatible property/value evidence.
 
-## Ownership
+Use the existing evidence validator and `QueryWindow`. Remove unconsumed behavior-signature, predicate-receipt,
+assurance and revalidation machinery with their last callers. If only small grouping/reading-order helpers remain,
+inline them into query composition and delete the package.
 
-- analogue ladder output interpretation
-- fork/mirror/copy lineage collapse
-- behavior signature and matrix
-- shared/variant/outlier/conflict/unknown observations
-- recommended reading handles
-
-## Forbidden ownership
-
-- claiming correct implementation
-- counting forks as independent evidence
-- using inaccessible lineages
-- treating tests/docs as automatic truth
-
-## Allowed dependencies
-
-`search-contracts`, `search-domain`, `search-subject-resolver`. Additional internal or external dependencies require an explicit boundary review. Public
-APIs may expose only `search-contracts` or package-owned opaque types; vendor types stay private.
-
-## Required logical surface
-
-These are behavior contracts, not mandated Rust syntax. Preserve the semantics even if the concrete API
-is improved:
-
-- `compare_implementations(local, candidates, portfolio) -> CrossRepositoryBehaviorSet`
-- `collapse_lineages(candidates, policy) -> Vec<LineageGroup>`
-- `align_evidence_roles(group) -> BehaviorSignature`
-- `classify_observations(signatures) -> ComparisonMatrix`
-
-## Failure surface
-
-Use typed errors/reason codes. Relevant public reasons: `AMBIGUOUS_SUBJECT`, `INCOMPLETE_COVERAGE`, `REFERENCE_SCOPE_EMPTY`. Never turn a degraded or partial
-state into an apparent success.
-
-## Test seams and exit evidence
-
-- `renamed true analogue is retained`
-- `same-name false positive is rejected or marked weak`
-- `fork/mirror copies count as one lineage`
-- `decisive tests and cfg variants remain explicit`
-- `unknowns and coverage gaps are preserved`
-
-Property/fault tests belong beside the owning behavior. Shared control-corpus fixtures may be requested,
-but the writer does not edit another package opportunistically.
-
-## Size and split guard
-
-- Delivery wave: **W6 / P11**
-- Soft `src/` target: **8,000 lines**
-- Hard review threshold: **10,000 total hand-written Rust lines**
-- Split on a real security, runtime, replacement, test or dependency boundary; never create a forwarding
-  wrapper or crate-per-type shell.
-
-## Definition of done
-
-The package has a vendor-neutral public contract, deterministic tests for its invariants, explicit
-degradation behavior, no forbidden dependency, and a handoff reporting commands and raw outcomes.
-Compilation alone is insufficient.
+After code, run minimal Rust 1.98 check/Clippy for actual query/source/preparation/protocol consumers. Package
+self-tests of supplied data are not product delivery.

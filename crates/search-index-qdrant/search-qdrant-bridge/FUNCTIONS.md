@@ -1,79 +1,175 @@
-# Function contract — `search-qdrant-bridge`
+# Qdrant bridge — exact 1.20 vectorless scoring-text boundary
 
-**Status:** W3/P05 data-plane contract; no server/client pair is accepted yet.
+`search-qdrant-bridge` is the only package allowed to depend directly on `qdrant-client`. Vendor schema/request/
+response/filter/point types remain private. Publication and query share one daemon-owned client/runtime.
 
-Vendor types remain private. Every public operation consumes/returns Search contract or port-support
-types and binds an accepted `QdrantCapabilityReceipt`.
+## Dependency cut
 
-## Connection and admission
+The repository still locks client 1.19.0. Upgrade Rust client, Qdrant Server, Cargo.lock, schema builders and real
+publication/query consumers together to one exact **1.20.x** patch. Startup observes live server capabilities and
+refuses an incompatible selected profile.
 
-### `connect(endpoint, auth_lease, supervisor_receipt) -> Result<QdrantBridge, BridgeError>`
+Official Rust tag `v1.20.0` provides the selected surface:
 
-Requires exact supervisor process identity, installation incarnation, loopback endpoint and bounded
-secret lease. It never discovers or starts a process.
+- vectorless `CreateCollectionBuilder`; optional `PointStruct.vectors`;
+- `TextIndexParamsBuilder`, `KeywordIndexParamsBuilder`, `Memory`;
+- `CreateFieldIndexCollectionBuilder`;
+- `TextQueryBuilder`, `Query::new_text`, `QueryPointsBuilder`;
+- `SearchParamsBuilder::idf`;
+- `UpsertPointsBuilder::update_mode(UpdateMode::InsertOnly)`;
+- explicit payload/vector response selectors.
 
-### `probe_capabilities(disposable_route, probe_manifest, context) -> Result<QdrantCapabilityReceipt, BridgeError>`
+Compile the exact pinned patch with real consumers. Source inspection is not build evidence.
 
-Executes every probe in `qualification/qdrant/probes.toml`: build/auth identity, one shard, signed-i64
-range behavior, missing upper bound under `must_not`, sparse IDF, independent `idf.corpus`, strict mode,
-payload indexes, `wait=true`, strong ordering, exact count/readback and named sparse vectors.
-Any missing probe rejects indexed admission.
+The Rust client connects over gRPC: the ordinary local endpoint is `http://127.0.0.1:6334`, not the REST/health
+port 6333. Keep the configured transport/port explicit; no protocol probing/fallback. See the
+[official Rust quickstart](https://qdrant.tech/documentation/quickstart/) and
+[port definitions](https://qdrant.tech/documentation/installation/#networking). Connect/publication use
+ExecutionContext even before any published view exists; only Search adds BM25 scoring.
 
-### `create_candidate_collection(schema, context) -> Result<CollectionCreateReceipt, BridgeError>`
+## Physical profile V1
 
-Creates one new opaque physical generation only. It creates mandatory payload indexes before ingest,
-then enables the exact strict-mode restrictions and verifies the resulting schema digest.
+Stage 2 creates one vectorless one-shard collection and one scoring text field. Use exact builder semantics:
 
-### `verify_collection_schema(route, expected) -> Result<SchemaReceipt, BridgeError>`
+```rust
+let text = TextIndexParamsBuilder::new(TokenizerType::Code)
+    .lowercase(true)
+    .ascii_folding(false)
+    .phrase_matching(false)
+    .disabled_stemmer()
+    .enable_hnsw(false)
+    .memory(Memory::Pinned)
+    .bm25_scoring()
+    .build();
 
-Reads back topology, named vectors, payload indexes, strict-mode limits and schema identity. Version
-strings alone are insufficient.
+CreateFieldIndexCollectionBuilder::new(collection, "retrieval_text", FieldType::Text)
+    .field_index_params(text)
+    .wait(true)
+```
 
-## Exact mutation operations
+Verify readback shows:
 
-### `upsert_exact(batch, mutation, context) -> Result<MutationReceipt, BridgeError>`
+```text
+tokenizer=Code
+lowercase=true
+ascii_folding=false
+phrase_matching=false
+stemmer=Disabled
+stopwords=None
+min/max token length=None
+nested=None
+scoring=BM25
+enable_hnsw=false
+memory=Pinned (Stage 2)
+```
 
-Uses explicit point IDs, `wait=true` and strong ordering. Same mutation identity plus same canonical
-batch is idempotent. Same identity plus different input is rejected.
+Text/keyword payload indexes default HNSW to true and memory to Pinned; omission is not accepted as a profile.
+Stage 3A may select `Pinned`, `Cached` or `Cold` per declared corpus class, but it sets and measures the choice
+explicitly. A physical schema/resource-profile change creates a fresh generation.
 
-### `close_exact(ids, valid_until_epoch, mutation, context) -> Result<MutationReceipt, BridgeError>`
+Stage 2 has one file and no candidate filter, so it creates no ceremonial source/access indexes. Stage 3A creates
+only filter indexes used by real scope clauses. Exact keyword indexes use `KeywordIndexParamsBuilder` with
+`enable_hnsw(false)`, explicit memory and no prefix/tenant optimization unless a concrete query shape requires it.
 
-Updates only the exact ID list. Broad-filter closure is absent from the correctness API.
+Do not use deprecated `on_disk`, dummy vectors, sparse vector schema, custom shards or aliases.
 
-### `delete_exact(ids, mutation, context) -> Result<MutationReceipt, BridgeError>`
+## Private operations
 
-Deletes only exact IDs for ordinary reclaim/compensation. It does not create a security-purge receipt.
+```text
+connect(endpoint, optional actual key, bounded transport, ExecutionContext)
+create_vectorless_generation(name, exact physical profile)
+create_scoring_text_index(field, exact params)
+create_required_filter_indexes(exact params)
+insert_only_points(name, fixed bounded batch, wait=true)
+retrieve_exact_points(name, ids)
+query_text(name, TextQuery, candidate_filter, idf_corpus, response_projection, limit)
+collection_info/exists(name)
+delete_collection_terminal(name)
+```
 
-### `readback_exact(ids, context) -> Result<BoundedPointReadback, BridgeError>`
+No generic data-plane trait, provider registry, qualification token, alias manager or bridge mutation ledger.
 
-Returns exact identity/payload/vector digests and explicit missing/unexpected IDs.
+## Point and response shape
 
-### `count_exact(filter, context) -> Result<ExactCount, BridgeError>`
+Each point contains generation-bound ID plus bounded payload:
 
-Permitted only for the closed accepted filter AST and indexed fields.
+```text
+retrieval_text
+source_id
+other real scope/evidence-routing fields only
+```
 
-## Query operations
+Query explicitly requests:
 
-### `query_filtered(request, context) -> Result<BoundedCandidateStream, BridgeError>`
+```rust
+.with_vectors(false)
+.with_payload(vec!["source_id" /* plus only required routing keys */])
+```
 
-Compiles the accepted vendor-neutral eligibility AST privately. Retrieval and `idf.corpus` receive the
-same canonical base eligibility plan; unindexed or capability-unsupported filters fail rather than
-scan. Results are bounded nominations, never evidence.
+Do not return vectors or `retrieval_text`; retained evidence/object reads supply excerpts. Bound response points and
+payload bytes before allocation/output.
 
-## Timeout, cancellation and recovery
+## Query-scoring profile
 
-Cancellation is checked before dispatch and between bounded pages/batches. A timeout after a mutation
-may have committed; callers receive `OUTCOME_UNKNOWN` and must resolve through exact readback and the
-same mutation identity. The bridge never converts timeout into a definite rollback claim.
+Index schema and query BM25 parameters are distinct. Stage 2 fixes query-time:
 
-## Configuration operations
+```text
+k=1.2
+b=0.75
+```
 
-Implements `config/sections/qdrant_data.md`. Transport batch/time settings may change live only within
-accepted capability limits. Strict mode, wait-for-mutations and strong ordering are fixed correctness
-floors.
+Client validates finite `k >= 0` and finite `0 <= b <= 1` before building `TextQuery`. Changing only k/b does not
+rebuild the collection; capture the query profile in `RequestContext`. Do not set a baseline score threshold.
 
-## Required fixtures
+`TextQuery` ranks documents containing any query token. A full-text `MatchText` filter requires all filter-query
+subwords in any order. With Code tokenizer, ranking queries also receive joined camel/snake tokens while filters
+receive subwords only. Therefore typed required/excluded text filters are not exact identifiers or phrases.
 
-Disposable full capability suite; strict unindexed retrieve/update rejection; payload indexes before
-ingest; signed-i64/missing-field filter; filtered-IDF noninterference; wait/strong/readback; exact
-delete; timeout unknown-outcome recovery; vendor-type API guard; no process lifecycle duplication.
+## Scope and IDF
+
+```text
+base population = selected sources ∩ actual access/session restriction
+candidate filter = base population + request-only narrowing
+idf.corpus       = base population
+```
+
+Source/access clauses appear in both candidate filter and IDF corpus. Request-only clauses do not. If base is the
+entire physical collection, omit `idf`. Explicit empty returns without RPC; unknown/incomplete never widens.
+Every filter field is indexed. One ordinary shard keeps one BM25 statistics population.
+
+## Stage 2/3A immutable generation
+
+```text
+create exact vectorless collection
+→ create/verify scoring text index
+→ create/verify only required filter indexes
+→ InsertOnly fixed point batches with wait=true
+→ exact point/payload/count/schema readback
+→ deterministic TextQuery canary with expected order
+→ return settled generation observation
+```
+
+Readback alone does not prove scorer/index wiring. Once visible, the collection is immutable. A selected-state
+change creates a new never-reused collection. Generation-bound IDs suffice; no sequence/closure/stable occurrence
+identity. Retry repeats identical InsertOnly input and accepts only exact matching readback. Failed/uncertain
+collections are never served or name-reused.
+
+Qdrant text statistics can include stale updated/deleted data until segment optimization. Stage 3B, if selected,
+qualifies scoring convergence in addition to mutation readback.
+
+## Cleanup and process boundary
+
+Delete a retired collection only after publication proves no durable/current/pending/future target, live guard or
+unresolved attempt can use it. Delete terminally, verify exact absence, never reuse name and retain cleanup row on
+uncertainty. Logical absence is not physical erase proof.
+
+External endpoint is baseline. Managed child is an optional later small owner. Qdrant Edge is an isolated
+replacement experiment, never fallback/dual backend.
+
+## Verification
+
+Run locked Rust 1.98 check/Clippy for bridge plus real publication/query/daemon consumers. Execute vectorless
+creation; complete explicit schema/readback; HNSW disabled; Pinned/Cached/Cold profiles; minimal payload/no vectors;
+InsertOnly replay/conflict; Code tokenizer document/ranking/filter behavior; k/b validation; any-token TextQuery;
+all-token filters; whole/scoped IDF; deterministic canary; cancellation; old-view use; delete/absence; and measured
+cold/warm memory/cache/disk cost. R052 changes docs only.

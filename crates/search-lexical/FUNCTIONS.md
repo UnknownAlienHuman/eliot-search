@@ -1,133 +1,139 @@
-# Function contract — `search-lexical`
+# Lexical retrieval — explicit Qdrant 1.20 physical and query profiles
 
-**Status:** legacy analyzer/sparse source and additive code_identifiers@1 source are present. The
-code-identifiers owner executes its frozen runtime qualification fixtures before issuing an
-`AcceptedCodeIdentifiersProfile`; source presence or identity matching alone is not qualification.
-Runtime qualification is distinct from configured-profile state and `ReleaseQualified` evidence.
+This owner defines the concrete lexical meaning consumed by preparation, publication and query. It does not own
+source identity, publication state, scope, evidence or Exact. R052 removes hidden Qdrant defaults and separates
+physical index schema from query-time BM25 scoring.
 
-The crate owns deterministic local sparse-vector encoding only. It stores no corpus and implements no
-inverted index. One collection generation selects one accepted lexical provider path and profile.
+## Physical text-index profile V1
 
-## code_identifiers@1 source operations
+The first product uses one vectorless physical collection and one payload field:
 
-- `CodeIdentifiersProfile::new`: immutable internally computed complete shared CBOR/BLAKE3 identity;
-  separately pinned XID18/NFC17 and the exact tinyvec closure. No caller fingerprint/donor override.
-- `CodeIdentifierLimits::new`: positive lower operation ceilings within the identity-bound hard maxima.
-- `CodeIdentifiersProfile::analyze`: bounded maximal XID continuation runs, valid underscore/XID starts,
-  whole then proper snake/adjacent-ASCII camel/acronym spans, token-local NFC and exact original ranges.
-  Invalid parent runs are discarded whole; invalid-start components are filtered after attempt charge.
-  Parent positions/counts and raw expansion counts are separate; dedup is per parent only.
-- `accept_code_identifiers_profile`: compare profile/artifact-set/fixture-definition identities and the
-  existing qualification contract; matching alone is not execution or release evidence.
-- `qualify_code_identifiers_profile`: run every frozen compatibility case, the exact document/query
-  index and weighting fixture, and the complete collision corpus under one caller-owned absolute
-  deadline/checkpoint. It compares token normalization/spans, sparse indices and values, feature
-  mapping, and collision report against frozen owner outputs. It returns the opaque accepted profile
-  only after all checks pass; it does not issue configured-profile or `ReleaseQualified` state.
-- `encode_code_document` / `encode_code_query`: same borrowed input and immutable accepted profile,
-  one private new route and shared private numerical bodies, Raw document/Binary query/Qdrant IDF.
-  `encode_code_document_with_checkpoint` adds a caller-owned absolute deadline and live observer to
-  that same kernel. No new local-statistics/BM25 mode. Old legacy numerical options and public APIs
-  remain unchanged.
-- `validate_code_identifiers_pair`: compare owner-produced new document/query kinds and profile identity.
-  Collection-generation selection/authorization remains with the projection owner.
+```text
+retrieval_text
+```
 
-Artifact-set identity hashes an exact canonical descriptor of published SHA256 release/table facts;
-it is not a relabelled BLAKE3 archive checksum. Compatibility/collision identities bind the frozen
-definitions, while `qualify_code_identifiers_profile` separately executes and checks their owner
-outputs. The operational bootstrap is not #215 product, scale, external acceptance or
-`ReleaseQualified` evidence. New profile adoption requires VERSIONED_REBUILD; real legacy
-daemon/frozen consumers remain separate.
+Build the text index with every behavior/resource field explicit:
 
-## Profile operations
+```rust
+TextIndexParamsBuilder::new(TokenizerType::Code)
+    .lowercase(true)
+    .ascii_folding(false)
+    .phrase_matching(false)
+    .disabled_stemmer()
+    .enable_hnsw(false)
+    .memory(Memory::Pinned) // Stage-2 one-file profile
+    .bm25_scoring()
+```
 
-### `describe_profile() -> LexicalProfileDescriptor`
+Leave `stopwords`, `min_token_len`, `max_token_len` and `nested` absent and verify they read back absent. Do not use
+the deprecated `on_disk` field.
 
-Returns the complete immutable behavior identity: provider artifact/version/digest, tokenizer,
-Unicode normalization, identifier expansion, term-index mapping, collision strategy, weighting/BM25
-parameters, Qdrant sparse modifier/schema and compatibility-fixture digest.
+Why every field is explicit:
 
-### `validate_profile(profile, qualification) -> Result<AcceptedLexicalProfile, LexicalError>`
+- text and keyword payload indexes default `enable_hnsw` to true; the vectorless lexical baseline needs no
+  payload-aware vector HNSW links;
+- index memory defaults to `Pinned`; Stage 2 selects that deliberately for one file instead of inheriting it;
+- phrase matching would add a positional capability the baseline does not expose;
+- stemming, stopwords, token-length clipping and ASCII folding can silently change identifier meaning;
+- one-character identifiers and Unicode distinctions must not disappear through an implicit limit/normalization.
 
-Requires an accepted P06 qualification receipt and golden document/query fixtures. `latest`, implicit
-defaults and partially specified profiles are rejected.
+The physical profile includes field names, tokenizer/normalization/index parameters, text composition, point
+payload/filter schema, ordinary shard count and index residency. Any physical-profile change creates a fresh
+never-reused generation; an old collection is never reinterpreted.
 
-### `qualify_code_identifiers_profile(profile, lexical_limits, sparse_limits, deadline, checkpoint)`
+### Stage 3A resource profile
 
-Runs the code-identifiers owner's frozen runtime cases through the same analyzer, mapping, numerical
-weighting and collision implementations used for ordinary document/query encoding. The expected
-normalization, sparse index, document/query weight, and collision outputs are owner-frozen data; the
-qualifier does not derive its expectations from the values it is checking. Cancellation, deadline,
-limit failure or any expected-output mismatch returns no accepted profile. This is operational runtime
-qualification only; configuration admission, `ReleaseQualified`, independent scale evidence and release
-acceptance remain separate.
+For declared corpus classes, choose text/filter index memory explicitly from `Pinned | Cached | Cold` before
+measurement. Do not let the server default choose. A different residency choice creates a new physical generation
+under the selected profile. The release matrix records build/query latency, RAM/cache pressure and disk.
 
-### `profile_digest(profile) -> LexicalProfileId`
+Stage 2 has one file and no candidate filter, so it creates only the text index. Stage 3A adds exact keyword/filter
+indexes only for fields used by real source/access/path-kind filters. Those indexes also set
+`enable_hnsw(false)` and explicit memory. Prefix or tenant optimization is enabled only for an actual query shape.
 
-Hashes canonical profile bytes under the lexical-profile domain. Any behavior change yields a different
-profile ID and requires a new collection generation.
+## Retrieval text: no alias inflation
 
-## Encoding operations
+Each unit supplies one bounded `retrieval_text`: actual unit text plus finite selected structural context once.
+Do not append snake/camel/acronym aliases.
 
-### `normalize_input(input, profile, budget) -> Result<NormalizedLexicalInput, LexicalError>`
+Qdrant's 1.20 Code tokenizer:
 
-Applies NFC and the profile's exact case rules. It never guesses language, applies ASCII folding,
-stopwords or stemming unless the accepted profile explicitly says so.
+- splits snake_case, SCREAMING_CASE, camelCase, PascalCase and acronym transitions;
+- keeps letter+digit identifiers such as `utf8`, `sha256` and `x86` together where specified;
+- indexes document subwords plus detached joined camel/snake identifier tokens;
+- gives ranking queries both subwords and joined tokens when lowercase is enabled;
+- gives full-text filter queries subwords only.
 
-### `expand_identifier(token, profile) -> BoundedTokenSet`
+Therefore local aliases duplicate index terms, alter TF/document length and can degrade ranking. A measured
+alternative text composition is a new physical retrieval profile and fresh generation.
 
-For the code profile emits the raw identifier plus configured snake, camel/Pascal, qualified-name and
-path components. Expansion is deterministic, duplicate-free and bounded.
+Punctuation-sensitive identifiers/operators/strings remain retained-source Exact. Code tokenization does not make
+`C++`, `C#`, `::`, quoted text or exact byte/location predicates exact.
 
-### `tokenize_document(input, profile, budget) -> Result<TokenSequence, LexicalError>`
+## Query-scoring profile V1
 
-### `tokenize_query(input, profile, budget) -> Result<TokenSequence, LexicalError>`
+BM25 `k` and `b` are request-time parameters, not index schema. The first query profile fixes:
 
-Document and query tokenization may differ only where the profile and compatibility fixture explicitly
-define it. Unsupported modality/encoding returns a typed failure.
+```text
+k = 1.2
+b = 0.75
+```
 
-### `map_terms(tokens, profile) -> Result<SparseFeatureSet, LexicalError>`
+Validate client-side before dispatch:
 
-Maps terms to stable sparse indexes using the accepted vocabulary/hash policy. Collisions follow the
-declared strategy and are measurable; they never establish exact identity or absence.
+```text
+k is finite and k >= 0
+b is finite and 0 <= b <= 1
+```
 
-### `weight_document(features, statistics, profile) -> Result<SparseVector, LexicalError>`
+Changing only `k`/`b` does **not** rebuild the collection. Capture the exact scoring profile in the admitted request
+and any resulting live window/diagnostics. Do not expose tuning fields until a real consumer/measurement requires
+them. No baseline `score_threshold`: use bounded top-k because absolute BM25 scores vary by corpus/profile.
 
-### `weight_query(features, profile) -> Result<SparseVector, LexicalError>`
+## Ranking and filter semantics
 
-The profile declares which TF/length factors are local and which IDF factor is delegated to Qdrant's
-accepted sparse modifier. Applying corpus IDF twice is forbidden.
+`TextQuery` is any-token BM25 nomination. Free query text is not parsed as Boolean, phrase or negation syntax.
 
-### `encode_document(input, profile, budget) -> Result<LexicalEncoding, LexicalError>`
+If the product later exposes typed required/excluded text clauses, Qdrant full-text filters use **all query
+subwords in any order**. With Code tokenizer they do not use joined identifier tokens and are not exact identifier
+or phrase predicates. Phrase filters require a separately selected positional profile; exact identifiers remain
+Exact or an explicit exact keyword producer.
 
-### `encode_query(input, profile, budget) -> Result<LexicalEncoding, LexicalError>`
+## Scope and IDF
 
-Return sorted, unique sparse indexes, finite numeric values, profile ID, input digest, token/feature
-counts and a bounded non-content receipt. Outputs are deterministic and size-bounded.
+For a scoped query:
 
-### `measure_collision_corpus(corpus, profile, budget) -> Result<CollisionReport, LexicalError>`
+```text
+base population = selected sources ∩ actual access/session restriction
+candidate filter = base population + request-only narrowing
+idf.corpus       = base population
+```
 
-Produces measured collision rates and threshold verdicts without exposing corpus content in ordinary
-telemetry.
+If base population is the whole physical collection, omit `idf`. Explicit empty returns without RPC; unknown or
+incomplete selection never widens. All real filter fields are payload-indexed. BM25 statistics are shard-local, so
+the baseline uses one ordinary shard and no per-source custom-shard portfolio.
 
-## Configuration operations
+## Visibility and response economy
 
-`section_descriptor`, `compiled_defaults`, `validate_section`, `section_digest` and
-`plan_section_change` implement `config/sections/lexical.md`. No lexical profile change is live; it
-requires an accepted profile plus new collection generation.
+Create/verify the text index before point ingestion. Build with explicit `InsertOnly` and `wait`, then verify schema,
+point payload/count and an actual deterministic `TextQuery` canary before publication commits the view.
 
-## Cancellation, retry and failure
+Query requests explicitly return no vectors and only the routing payload required for evidence lookup (normally
+`source_id`; point ID comes from the result). Do not return `retrieval_text` or duplicate excerpts over the Qdrant
+response; the retained object supplies evidence.
 
-Encoding is pure and retry-safe. Budget or cancellation returns no partial vector advertised as valid.
-The live code-document entry point polls after at most 64 tracked analysis, mapping, weighting,
-validation or fingerprint work units, and at aggregate allocation/result boundaries. Its absolute
-`Instant` deadline is fixed for the call; deadline expiry returns `SPARSE_ENCODING_CANCELLED`, while
-observer errors propagate unchanged.
-Failures include profile mismatch/unqualified provider, unsupported input, collision threshold failure,
-non-finite weight and budget exhaustion.
+Stage 2/3A visible collections are immutable. Qdrant notes that text statistics can remain stale after point
+updates/deletes until segment optimization; Stage 3B must measure that behavior if activated.
 
-## Required fixtures
+## Remove with callers
 
-Code/neutral golden tokens and vectors, Unicode/identifier/path cases, no implicit stopword/stemmer,
-document/query compatibility, collision corpus, deterministic ordering, no double IDF, and
-provider-path change requiring a new generation.
+Remove local postings/numerical BM25, sparse `qdrant/bm25` inference, fixed local `avg_len`, alias expansion,
+frozen analyzer/qualification receipts, score-normalization profiles and duplicate encoders. Keep only a small
+retrieval-text composer if real callers justify it; inline it otherwise.
+
+## Focused verification
+
+After code and minimal Rust 1.98 check/Clippy, verify exact schema readback including disabled stemmer/phrase/HNSW,
+absent stopwords/length/nested, explicit memory, vectorless points, Code tokenizer subword/joined behavior,
+all-token filter behavior, k/b validation, no score threshold, minimal payload/no vectors, whole/scoped IDF,
+punctuation Exact separation, deterministic readiness query and cold/warm resource cost. R052 changes docs only.

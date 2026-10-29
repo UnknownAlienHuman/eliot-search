@@ -1,25 +1,13 @@
-# search-retention
+# Former retention package — implementation notes only
 
-**C28 — Retention, purge and restore lifecycle.**
+R017 removed the generic lease/purge/sweep/restore implementation. R020 removes its empty crate, workspace
+membership, daemon dependency, lockfile record and `wave7-lifecycle`/`full-baseline` features. This directory now
+contains documentation only; it is not a Cargo package or a placeholder for another service.
 
-**Status:** `SOURCE_PRESENT`; retention, purge and sweep lifecycle source exists, while real owner-store integration, backup/restore cutover and installed fault qualification remain incomplete. See [central package status](../../../docs/product/PACKAGE_STATUS.toml). Current owners: #134 → #135 → #136.
+[FUNCTIONS.md](FUNCTIONS.md) retains the single recipe for stopped-root local-object collection, completed
+archives and fresh-destination import. Existing links remain valid. These operations are still unimplemented;
+removing the old platform does not deliver them. Implement them with the actual store/control/publication owners.
+[Publication](../../search-index-qdrant/search-publication/FUNCTIONS.md) owns live Qdrant cleanup.
 
-Coordinate crash-safe CAS mark-and-sweep, monotonic purge and restore quarantine through vendor-neutral ports.
-
-## Owns
-
-- retention roots/leases and resumable CAS sweep
-- purge fences, tombstones and truthful receipts
-- restore revalidation/quarantine
-- non-resurrection semantics
-
-## Must not own
-
-- ordinary retired-point reclamation
-- handle storage/authorization
-- concrete redb/Qdrant/revision-store access
-- physical secure-erasure claims beyond evidence
-
-- **Delivery wave:** W7 / P13
-- **Soft source-line target:** 7,500
-- **Agent instructions:** [AGENTS.md](AGENTS.md)
+Do not recreate a crate, public compatibility types or a lifecycle registry here. Preserve original files,
+archives and sole retained copies.

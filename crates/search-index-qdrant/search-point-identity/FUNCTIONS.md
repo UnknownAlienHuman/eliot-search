@@ -1,52 +1,78 @@
-# Function contract — `search-point-identity`
+# Point identity — generation-bound baseline, stable occurrence identity only in Stage 3B
 
-**Status:** #256 exposes the stateless `s11` API. Its exact public names, domains,
-limits and generation handoff are frozen in [S11_PROFILE.md](S11_PROFILE.md).
-Existing root exports remain unchanged legacy APIs until #329 retirement.
+This package owns deterministic Qdrant address derivation and collision evidence only when that responsibility is
+not simpler inside projection/publication. It owns no registry, source lifecycle, publication state or vendor I/O.
 
-The operation names below describe the logical S11 behavior; they are not
-forwarding aliases. The old `eliot-search/point-identity/v1` domain in this
-historical surface is superseded for the new profile by
-`eliot/cbor/point-identity/v1`, with address domain `eliot/raw/point-address/v1`.
+## Existing source
 
-## Operations
+Current `s11` hashes a revision/coordinate-bearing eight-field key, projects a full BLAKE3 digest to a 128-bit
+address and compares full identity evidence on readback. Useful mechanics are deterministic bounded encoding, a
+complete identity distinct from the Qdrant locator and collision refusal. The current key shape/public names are
+not compatibility contracts.
 
-### `encode_canonical_key(key) -> Result<CanonicalPointKeyBytes, PointIdentityError>`
+## Stage 2 / 3A baseline
 
-Encodes `ProjectionPointKey` as versioned deterministic CBOR under explicit bounds. Ad-hoc strings,
-JSON serialization, map iteration order and omitted load-bearing fields are forbidden.
+Each physical Qdrant collection name is never reused. Point IDs only need deterministic uniqueness and collision
+checking **within that generation**. A small key may bind:
 
-### `full_digest(bytes) -> PointIdentityDigest`
+```text
+identity schema version
+physical generation
+source/prepared identity
+unit occurrence within that complete prepared outcome
+retrieval profile/role
+```
 
-Computes BLAKE3-256 through the shared canonical helper under the frozen S11 CBOR domain.
+Absolute citation range lives in the pinned evidence row. Cross-generation continuity, occurrence incarnation and
+fixed closure are absent. A later generation may remint every point. This keeps #264 and restart-convergent Stage
+3A independent of duplicate matching and stable identity design.
 
-### `derive_qdrant_uuid(digest) -> QdrantPointUuid`
+The address is a locator, not complete identity. Publication stores/readbacks enough evidence to reject an
+occupied address with conflicting meaning. Do not build a mutable point registry or compatibility migration.
 
-Projects the full digest into a namespace-separated UUID representation. The UUID is an address, not
-the complete identity.
+If the Stage 2/3A key is trivial, implement it privately in projection/publication and delete this package after
+callers move. Package existence is not a reason to preserve S11.
 
-### `derive_point_identity(key) -> Result<PointIdentity, PointIdentityError>`
+## Stage 3B identity — conditional on failed budgets
 
-Returns canonical-key digest, projected UUID, schema version and the exact identity payload fields that
-must be stored and read back.
+Only when Stage 3A fails #215's predeclared budgets and #259 is activated, define a stable intra-generation key:
 
-### `compare_existing_identity(expected, observed) -> CollisionDecision`
+```text
+key schema version
+physical generation / incremental profile
+stable source/projection grouping
+occurrence incarnation
+retrieval profile and role
+exact retrieval-input identity
+```
 
-`VACANT` permits creation. `SAME_FULL_IDENTITY` permits idempotent replay. Any UUID match with a
-different full digest or canonical identity field is `COLLISION_BLOCK`, never overwrite.
+Unitizer/projection assigns `occurrence_incarnation`. Reuse only one-old/one-new unambiguous occurrence with the
+same retrieval input/context. Equal text or duplicate ordinal is not continuity. Ambiguous/unmatched units receive
+operation-fixed births persisted in the pending delta. Disappear/reappear gets a new birth and never reopens a
+closed interval.
 
-### `validate_identity_payload(expected, payload) -> Result<(), PointIdentityError>`
+Full identity remains distinct from the 128-bit Qdrant address; collision blocks mutation. Exact revision,
+representation and range remain in pinned evidence metadata.
 
-Checks the full 256-bit digest and every load-bearing identity field before publication or recovery.
+## Cutover
 
-## Semantics
+For Stage 2/3A, delete revision-bound S11/legacy FNV registries and mint only the simple generation-bound profile in
+a fresh collection.
 
-All functions are pure, deterministic, bounded and retry-safe. Cancellation is optional budget
-checkpointing only. No source identity, membership policy, Qdrant transport or mutable registry state
-is owned here.
+If Stage 3B is selected later, change together:
 
-## Required fixtures
+- identity key/decoder/comparator;
+- unitizer occurrence matching and projection assignment;
+- Qdrant payload conversion/readback;
+- publication delta/closure;
+- evidence lookup.
 
-Canonical byte/digest goldens; same key/same identity; profile/generation/membership changes alter
-identity; simulated truncated UUID collision never overwrites; JSON/string hashing guard; full-digest
-payload readback; unknown schema version rejection.
+Transition by building a fresh incremental-profile generation. Never dual-mint or reinterpret existing points.
+
+## Checks
+
+Baseline: deterministic generation-bound identity, distinct equal occurrences, collision refusal, exact evidence
+lookup and old physical-view behavior.
+
+Stage 3B if selected: unchanged unique occurrence reuse, ambiguous duplicates, changed input/profile/incarnation,
+pending birth replay, disappear/reappear and measured work reduction versus Stage 3A.

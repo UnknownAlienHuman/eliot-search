@@ -1,198 +1,93 @@
-# Function contract — `search-code-enricher`
+# search-code-enricher — source and removal map
 
-**Status:** W5/P10 logical contract; no Rust parser provider or artifact is selected.
+## Current API and callers
 
-The baseline profile extracts tolerant Rust syntax facts and relations. It does not type-check, execute
-repository code, expand procedural macros, run build scripts or claim compiler truth.
+| Current symbol/area | Actual behavior / caller reality |
+|---|---|
+| `parse_rust_no_execute` | Prefix/brace line scanner; not a Rust grammar. |
+| `extract_configuration_predicate` | Parses a small local cfg subset; does not evaluate target/build configuration. |
+| `extract_structural_facts` | Builds hand-written fact kinds and assigns units by node ordinal/clamping. |
+| `extract_structural_relations` | Emits only a subset of the public relation vocabulary. |
+| `validate_fact_anchor` | Compares supplied revision/range fields; does not reopen the retained object or recompute the supplied fact digest. |
+| `build_enrichment_manifest` / `enrich_code` | Builds tree/facts/relations/receipt structures. External production caller was not found. |
+| parser profile / qualification | Validates caller metadata; loads no actual donor parser. |
 
-## State and profile ownership
+Production source is one 63,638-byte `lib.rs`; the qualification integration test is another 38,737 bytes.
+Do not refactor the file into many modules while preserving the disconnected system.
 
-The package owns:
+## Baseline action
 
-- one immutable qualified Rust parser/enrichment profile;
-- bounded parser input/output and malformed-input policy;
-- structural facts, relations, evidence roles and configuration predicates;
-- provider assurance and explicit enrichment gaps;
-- deterministic enrichment manifests and fixture corpus.
+Remove the package if no connected outline/navigation consumer is selected. Existing project orientation uses
+source paths, prepared headings/sections/code blocks and exact ranges. Text retrieval remains available for
+all languages.
 
-It owns no source bytes, source identity, query ranking, Qdrant transport, compiler/LSP process or
-multi-language runtime.
+Delete:
 
-## `validate_parser_profile`
+- line/brace Rust parser;
+- profile qualification/receipt model;
+- generic fact/relation/assurance manifest;
+- ordinal/clamped UnitSet mapping;
+- unused relation kinds and fact digests;
+- qualification fixtures/status/coverage/package-map entries;
+- open donor-program dependencies which have no product consumer.
 
-```text
-validate_parser_profile(candidate, qualification_receipt)
-    -> Result<QualifiedRustParserProfile, EnrichError>
-```
+## Optional syntax outline
 
-Requires exact parser/grammar package name, version, source checksum, license evidence, node/query schema
-identity, Rust edition/dialect coverage, normalization rules, resource limits, malformed-input policy,
-no-execute declaration and golden-fixture digest.
-
-`latest`, semver ranges, floating Git revisions, undocumented defaults and a successful parse alone are
-not qualification. Any behavior-affecting change yields a new profile digest and requires re-enrichment/
-projection generation as classified by the integration plan.
-
-## `parse_rust_no_execute`
-
-```text
-parse_rust_no_execute(representation, profile, budget, cancel)
-    -> Result<RustSyntaxTree, EnrichError>
-```
-
-**Preconditions**
-
-- exact immutable representation and coordinate map are available;
-- input encoding/size is supported and bounded;
-- profile digest matches the accepted qualification receipt;
-- no external parser process, repository build action or network access is permitted unless separately
-  admitted by a future profile.
-
-**Postconditions**
-
-- syntax nodes are bounded, deterministic and anchored to exact representation coordinates;
-- parser diagnostics and recovery nodes are preserved as explicit degraded state;
-- source text is not copied into ordinary telemetry/receipts;
-- cancellation/deadline returns no manifest claiming complete parse.
-
-Parser callbacks, injections or queries cannot execute repository code, build scripts, macros, shell
-commands, credential prompts or remote resources.
-
-## `extract_structural_facts`
+If selected after base search, implement one direct owner beside preparation/project orientation:
 
 ```text
-extract_structural_facts(tree, representation, units, profile, budget, cancel)
-    -> Result<StructuralFactSet, EnrichError>
+extract_outline(
+  retained representation,
+  selected extractor profile,
+  RequestContext / preparation context
+) -> Vec<OutlineItem> + gaps
 ```
 
-Extracts only profile-registered fact kinds such as module, function, method, type, trait, impl, field,
-constant, static, macro invocation, test, documentation section and configuration item.
+`OutlineItem` contains source/revision/representation, exact byte range, name, kind, bounded signature and
+optional parent range. It does not carry a generic assurance receipt, fact-generation ID, canonical batch
+digest or UnitSet ordinal.
 
-Every fact carries:
+### ast-grep option
 
-- deterministic fact identity;
-- source revision/representation/unit identity;
-- native anchor and fact digest;
-- parser profile digest;
-- assurance class (`tolerant_syntax` baseline);
-- evidence role;
-- configuration predicate reference;
-- bounded attributes from a closed registry;
-- degradation/gap reasons.
+Use an exact packaged `ast-grep outline` artifact for bounded explicit inputs. Invoke one process for a finite
+batch or stdin blob, with no shell/default directory crawl/user rules/network. Bound every input before launch
+and bound streamed JSON output. Match every result to the exact input and verify its range. This command may
+skip read errors/empty files and uses an unbounded internal channel, so omissions/failures remain gaps.
 
-A syntax node does not become a definition/reference solely because its display text resembles one; the
-profile owns explicit extraction rules.
+### Tree-sitter option
 
-## `extract_structural_relations`
+Use one exact runtime+grammar+query profile in-process only when packaging/process constraints justify it.
+Compile the fixed ELIOT-owned query once, parse exact retained bytes and map exact byte ranges. Do not build a
+language framework or accept repository-provided grammars/queries.
 
-```text
-extract_structural_relations(tree, facts, profile, budget, cancel)
-    -> Result<StructuralRelationSet, EnrichError>
-```
+Choose one syntax owner. Do not keep both in production.
 
-Produces bounded descriptive relations such as contains, declares, implements_syntactically,
-invokes_syntactically, references_name, tests_subject, documents_subject and guarded_by_cfg.
+## Optional semantic import
 
-Relations are not compiler-resolved call graphs, trait resolution, type identity or proof of runtime
-behavior. Unknown/ambiguous targets remain explicit and cannot be silently bound by name alone.
+A concrete producer may later supply bounded SCIP/LSP locations for one selected source view. The importer:
 
-## `classify_evidence_role`
+1. validates exact producer/source-view identity;
+2. maps document paths only through the frozen view;
+3. converts producer positions to exact retained byte ranges;
+4. emits the few location records consumed by a real navigation handler;
+5. reports missing/incomplete/unsupported relationships explicitly.
 
-```text
-classify_evidence_role(node, ancestry, attributes, profile) -> EvidenceRoleDecision
-```
+Do not create a provider-neutral graph/fact database. Rust-analyzer SCIP document text may be empty and its
+relationship fields may be unpopulated; producer presence does not establish capability.
 
-Returns a closed role and reasons: definition, reference, test, documentation, caller, configuration or
-unknown. Tests/docs/callers are evidence categories, not automatic truth or ranking authority.
+## Deferred profiles
 
-## `extract_configuration_predicate`
+Universal Ctags, SARIF, CodeQL, Semgrep and other analyzers remain separate optional integrations. They are
+not dependencies of syntax outline, baseline search or orientation. Reopen a narrow issue only with one
+selected producer, corpus, expected output and user-facing consumer.
 
-```text
-extract_configuration_predicate(node, representation, profile)
-    -> Result<ConfigurationPredicate, EnrichError>
-```
+## Verification if selected
 
-Preserves a canonical bounded AST for `cfg`, `cfg_attr` and relevant feature/target predicates:
-`all`, `any`, `not`, key and key-value. It does not evaluate a predicate without an explicit target/
-feature environment. Unsupported macro-generated or malformed predicates return `unknown` plus exact
-anchor/reason, never unconditional applicability.
-
-Configuration variants remain separate in facts, relations, manifests and comparison inputs.
-
-## `validate_fact_anchor`
-
-```text
-validate_fact_anchor(fact, representation, coordinate_map)
-    -> Result<AnchorValidationReceipt, EnrichError>
-```
-
-Reopens/uses the exact representation, checks revision/profile/fact digests and maps the native anchor.
-Lossy or ambiguous mapping lowers assurance or rejects the fact; raw-byte exactness is never fabricated.
-
-## `build_enrichment_manifest`
-
-```text
-build_enrichment_manifest(request, facts, relations, gaps, limits)
-    -> Result<EnrichmentManifest, EnrichError>
-```
-
-Produces canonical deterministic ordering, exact counts/digests, profile/representation/unit identities,
-assurance summary, configuration-predicate registry and explicit incomplete/degraded gaps.
-
-A manifest with parse recovery or budget omissions cannot claim compiler-complete structure. No vendor
-syntax node type crosses the package boundary.
-
-## `compare_profile_change`
-
-```text
-compare_profile_change(old, new) -> EnrichmentProfileChange
-```
-
-Returns `NOOP`, `RE_ENRICH_AND_REPROJECT`, `GATE_REQUIRED` or `REJECT`. Parser/grammar/query schema,
-Rust dialect, extraction rules, assurance semantics, predicate parsing, coordinate behavior or bounds
-changes require a new profile identity and re-enrichment. No live reinterpretation of old facts is
-allowed.
-
-## Cancellation, deadlines and crash semantics
-
-Parsing/extraction/manifest creation are pure over immutable inputs. Equal inputs/profile yield equal
-outputs. Cancellation or budget exhaustion returns no successful complete manifest; a caller may accept
-a separately typed degraded manifest only when the recipe/assurance contract permits it and gaps are
-preserved.
-
-The package owns no durable mutation and no unknown external commit outcome. Rebuild after crash uses
-immutable representation/unit inputs and the exact accepted profile digest.
-
-## Typed failures
-
-- `PARSER_PROFILE_INVALID`
-- `PARSER_NOT_QUALIFIED`
-- `PARSER_UNAVAILABLE`
-- `RUST_INPUT_UNSUPPORTED`
-- `RUST_INPUT_TOO_LARGE`
-- `PARSE_DEGRADED`
-- `PARSE_CANCELLED`
-- `PARSE_BUDGET_EXHAUSTED`
-- `STRUCTURAL_FACT_UNMAPPED`
-- `STRUCTURAL_RELATION_AMBIGUOUS`
-- `CONFIGURATION_AMBIGUOUS`
-- `ANCHOR_MAPPING_FAILED`
-- `ENRICHMENT_MANIFEST_INVALID`
-- `ENRICHMENT_PROFILE_MISMATCH`
-
-## Required tests / qualification evidence
-
-- exact parser/grammar/source/license/profile identity and golden digest;
-- deterministic parse/fact/relation/manifest bytes;
-- malformed and incomplete Rust produces bounded degraded facts/gaps, never compiler truth;
-- Rust editions, modules, functions, traits, impls, methods, fields, constants, macros and tests corpus;
-- `cfg`/`cfg_attr` all/any/not/key/value and malformed/unknown variant separation;
-- definitions, references, callers, tests, docs and configuration evidence-role fixtures;
-- proc-macro/build-script/LSP/shell/network execution is structurally absent and runtime-probed;
-- macro invocation is not silently expanded or compiler-resolved;
-- non-UTF8/invalid coordinate behavior explicit;
-- anchor/digest/profile mismatch rejection;
-- cancellation and node/depth/byte/time limits;
-- profile change requires re-enrichment/reprojection;
-- public API contains no parser/vendor node type;
-- default telemetry contains no source bytes, query text, secrets or unrestricted paths.
+- exact retained source/range mapping;
+- malformed/incomplete input yields gaps without false completeness;
+- no repository code/network/config execution;
+- finite process/input/output/deadline/cancellation bounds;
+- unchanged revision/extractor settings reuse the prepared outline;
+- changed source/profile regenerates it;
+- actual project-guide/navigation consumer uses the result;
+- no old heuristic parser or generic fact platform remains reachable.

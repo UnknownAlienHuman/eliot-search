@@ -1,58 +1,23 @@
-# Agent contract — search-source-admission
+# Working on search-source-admission
 
-Own only `crates/search-source/search-source-admission/`. Do not edit the root workspace, shared
-contracts, architecture or another package. Missing fields use the contract-change process.
+Read the [architecture](../../../docs/architecture/README.md),
+[implementation guide](../../../docs/implementation/README.md), [README](README.md) and
+[source map](FUNCTIONS.md).
 
-The bounded implementation packet is `swarm/assignments/search-source-admission.md`.
+Do not preserve the 367 KiB v1/v2 receipt/original-input/batch framework. Keep only one small pure current
+policy compiler plus pre-read and post-read decision functions.
 
-## Ownership
+The native source owner supplies bounded facts, performs containment/no-follow/stable identity and owns the
+single body read. Admission may deny before read and narrow after read; it never owns native handles, source
+identity, immutable storage, registry/currentness, access grants or durable history.
 
-- pure canonical `SourceAdmissionPolicy` evaluation
-- deny-by-default source/path/metadata/format/sensitivity rules
-- deterministic decisions and legacy v1 receipts bound to policy and observation digests
-- v2 receipt issuance/verification belongs to the permanent `search-source-admission-receipt` leaf; do not restore a forwarding module or reverse dependency
+Change the daemon/source consumer directly so the exact owned body passes to the object writer. Remove
+`OriginalAdmissionV2`, receipt/provenance archives, canonical observation/decision identities, v4 registry
+restore and batch codecs with their last callers. Do not add V3 wrappers or forwarding packages.
 
-## Forbidden ownership
+Persist only a useful policy revision, closed outcome/reason and final classification in current source state.
+Unsupported old roots fail before writes and remain intact.
 
-- opening files or Git objects
-- root, identity or membership mutation
-- post-admission authorization or ranking
-- unknown-field allow behavior
-
-## Dependencies
-
-Only `search-contracts` and `search-domain`. The evaluator performs no filesystem, clock, database,
-process or network I/O.
-
-## Size
-
-Target `src/` ≤ 4,500 lines; split review before 8,500 total; hard stop at 10,000 hand-written Rust lines.
-
-## #430 corrective ownership and size boundary
-
-The evaluator owns `EvaluationMeterV2` and its private subtraction helper.
-Its owner-internal `pub(super)` constructor accepts four admitted `usize` maxima;
-it does not depend on `BatchLimitsV2`. Batch validates its existing limits before
-constructing that meter and calling the sole evaluator. Keep the module dependency
-one-way: batch → evaluator. Public APIs, field/method charging bodies, probes,
-errors, profiles and the 1024-occurrence multiset contract remain unchanged.
-
-Remove only the eleven newly added batch fixture bodies and their local helpers
-and fixture-only prose/imports. Do not move those bodies to another source owner
-or test directory to hide size. Retain historical evaluator, observation, policy
-and v1 fixtures. Preserve the exact deferred case/assertion inventory under
-#427/#215 and in [BATCH_V2.md](BATCH_V2.md); removed bodies are absent from this
-corrective candidate, not passing tests. Historical authored bodies were not run.
-
-The complete corrected owner is 8,672 physical handwritten Rust lines TOTAL,
-including every retained fixture: batch 308 + evaluator 1,723 + lib 4,442 +
-policy 1,303 + observation 896. It removes 858 lines from accepted TOTAL 9,530.
-This still exceeds the 8,500 split-review threshold. Independent split review and manager pre-edit acceptance under #430 bind this
-exact owner to a new 8,700-line ceiling for this correction only. Final recount
-is required; the 10,000 hard stop stays.
-The prior batch allowance is obsolete and does not transfer; no new blanket
-growth grant, fixture exclusion or receipt/contracts allowance is implied.
-
-Reuse the measured shared producer; no sizing formula, second encode, duplicate
-evaluator, forwarding split or partial-success fallback. Original probes and
-all-refusal cleanup stay unchanged. Source gates and qualification remain separate.
+After code, run minimal Rust 1.98 compiler/Clippy for changed admission/source/daemon consumers. Verify deny
+before read, same-body retention, post-read narrowing, cancellation and content-free errors through the real
+ingestion path. Old byte/golden/batch fixtures are deleted with their APIs.

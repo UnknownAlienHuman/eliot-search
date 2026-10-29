@@ -1,24 +1,11 @@
 # eliot-search
 
-**Status:** `SOURCE_PRESENT`; canonical client extraction and supported product CLI integration remain incomplete and unqualified. See [central package status](../../docs/product/PACKAGE_STATUS.toml). Current owners: #235 → #116.
+The CLI captures native arguments/settings, uses one owned local client session and renders typed source-backed
+results. It does not open redb/object/Qdrant state or own scope, planning or another process manager.
 
-Expose standalone commands strictly through the generic provider protocol.
+Read [FUNCTIONS.md](FUNCTIONS.md) for invocation, modes, presentation, cleanup and removal boundaries;
+[AGENTS.md](AGENTS.md) for editing constraints. Load protocol/client recipes only when those interfaces change.
 
-## Owns
-
-- argument parsing
-- local binding/bootstrap UX
-- request construction
-- bounded result rendering
-- doctor command transport
-
-## Must not own
-
-- opening redb, CAS or Qdrant
-- reimplementing query/access logic
-- minting unbounded grants
-- rendering hidden raw payloads
-
-- **Delivery:** W1 shell, commands added by owning packages
-- **Soft source-line target:** 4,500
-- **Agent instructions:** [AGENTS.md](AGENTS.md)
+The connected retained-source → Qdrant → excerpt path remains implementation work under #264/#332.
+[Evidence status](../../docs/audit/ANALYSIS_REGISTRY.md#evidence-status) distinguishes inspected source from executed
+commands. Command names, help output and compiled dependencies alone do not establish a working CLI.
