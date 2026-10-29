@@ -26,7 +26,8 @@ owned initialization debris. Root metadata binds format/root identity, plain pro
 |---|---|
 | Absent or empty target without a final manifest/owned marker | Uninitialized |
 | Exact current marker and recognized unfinished empty layout, no final manifest | IncompleteInitialization |
-| Final manifest with exact compatible layout | Current |
+| Final manifest with exact compatible layout, no incomplete-import marker | Current |
+| Final manifest plus recognized current-format incomplete-import marker (Stage 5) | IncompleteImport; normal open refuses before backend effects |
 | Final manifest with missing/conflicting required layout | Corrupt |
 | Unknown, foreign, unsafe or unsupported pre-release layout | Unsupported |
 | Actual exclusive owner present | Busy |
@@ -94,9 +95,26 @@ control/object layout and owned stages, no source/prepared/published/pending/imp
 inspected/opened identities. Unknown entries, conflicting bytes, replacement or uncertain deletion refuse.
 No baseline resume, initialization journal, operation digest, owner epoch or quarantine platform.
 
+<a id="archive-and-import-boundary"></a>
+## Archive and import boundary
+
+[Maintenance](../search-retention/FUNCTIONS.md#backup-is-a-completed-archive-not-a-runnable-clone) owns archive
+layout and completion. Neither a complete nor partial archive has a runnable root manifest. Ordinary root open
+must refuse it before pending/cleanup recovery or backend access; archive readers never use normal root open.
+
+When Stage 5 import is implemented, its empty destination is initialized normally under the exclusive guard.
+Before importing data or issuing RPCs, persist one current-format incomplete-import marker bound to this root.
+Normal open refuses it before backend work. Unknown/conflicting markers also refuse; absence is not enough if
+layout validation fails. Explicit import retry uses the same private lock primitive, validates the marker under
+exclusion, then opens destination-only owners; it does not bypass the refusal in normal open.
+Clear it durably only after verified complete destination current/evidence state; an uncertain clear is resolved
+by exact readback under the guard. This is not a phase journal, baseline-init resume or permission to discard
+nonempty state. Add the marker and its open checks together with import, not as a Foundation prerequisite.
+
 ## Open and shutdown
 
-Open retains required handles, acquires one actual exclusive guard, rereads current metadata, then opens stores.
+Open retains required handles, acquires one actual exclusive guard, rereads/classifies current metadata, then
+opens normal stores. Reject archives/incomplete imports before executing recovery or any external effect.
 Shutdown stops admission, drains/cancels finite work, drops windows/views, stops publication/backend users, closes
 stores, then drops the guard. No DRAINING/RELEASED record or per-request borrowing of the guard as a global mutex.
 

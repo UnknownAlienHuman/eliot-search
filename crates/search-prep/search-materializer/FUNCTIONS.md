@@ -100,13 +100,17 @@ valid empty view. Missing metadata/collection and failed initial build are not e
 
 ## Markdown donor correction
 
-R031 changes the existing Markdown adapter to pinned `pulldown-cmark 0.13.5` with empty options and `OffsetIter`.
+R031 changed the Markdown adapter to `pulldown-cmark 0.13.5` on the unmerged refactor branch. Main at
+`623160a7` still pins and locks `0.13.1`; publishing this recipe did not upgrade it. The
+[donor register](../../../docs/audit/DONOR_VERIFICATION_REGISTER_2026-10-09.md#installed-selected-and-optional)
+separates main from that branch. Port the connected dependency/identity change with actual consumers.
 The printable whitespace case recorded in the [donor register](../../../docs/audit/DONOR_VERIFICATION_REGISTER_2026-10-09.md#markdown-offset-iterator-released-fix-not-yet-adopted)
 passes raw control preflight under sufficient limits and reaches the synchronous donor. The register traces
 the maintained correction and exact crate checksum. This dependency/identity cut does not claim an Eliot
 runtime reproduction or successful materialize/replay execution.
 
-R031 updates the root pin, exact lock entry, parser declaration and `markdown/identity.rs::donor_row` together.
+The code cut must update root pin, exact lock entry, parser declaration and `markdown/identity.rs::donor_row`
+together, retaining empty options and `OffsetIter`.
 The release changes parsing behavior, so its version/checksum remains part of preparation identity; old output
 must not be relabelled as 0.13.5 output. Preserve exact source/range and complete event semantics, apply the
 reuse rule above, and retain original source bytes for fresh preparation. Do not add old-format compatibility,
@@ -116,8 +120,9 @@ Exercise the printable reference-definition/list case and bounded list/blockquot
 options. Fully exhaust offset iteration, check balanced events and valid UTF-8 byte ranges, and exercise
 actual `materialize_markdown` plus the current owning replay path. A no-panic count alone misses premature
 end-of-stream. The NUL reproducer belongs to donor diagnostics; Eliot should keep its existing raw refusal.
-Rust 1.98 check and Clippy for `search-materializer` plus `search-unitizer` passed in [Actions run 40084893130](https://github.com/UnknownAlienHuman/eliot-search/actions/runs/40084893130).
-Focused parser/materialize/replay cases remain unrun; no broad qualification programme precedes them.
+The R031 branch's materializer/unitizer check and Clippy are recorded in
+[run 40084893130](https://github.com/UnknownAlienHuman/eliot-search/actions/runs/40084893130), not a build of current
+main. Focused parser/materialize/replay cases remain unrun; no broad qualification programme precedes them.
 
 Keep `OffsetIter`; do not substitute plain iteration, drop events, fabricate offsets or blacklist a spelling.
 A maintained parser fix is preferred to a local fork or catch wrapper. Any remaining isolation requirement

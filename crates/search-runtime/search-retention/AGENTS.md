@@ -1,12 +1,12 @@
 # Maintenance implementation notes
 
-This is a documentation-only directory. The old retention crate, lifecycle implementation and Cargo/feature
-entries are removed. Do not add a new package, compatibility API or placeholder state machine here.
+[FUNCTIONS.md](FUNCTIONS.md) owns offline collection/archive/import. Implement these operations through the
+actual store/control/root owners; [publication](../../search-index-qdrant/search-publication/FUNCTIONS.md)
+owns live Qdrant cleanup. Do not add another lifecycle service or compatibility facade.
 
-[FUNCTIONS.md](FUNCTIONS.md) owns the selected offline collection/archive/import behavior. Implement it through
-the actual store/control owners; [publication](../../search-index-qdrant/search-publication/FUNCTIONS.md) owns
-live Qdrant cleanup. Deletion of the old platform is not evidence that these operations exist.
+The old crate still exists on the inspected main; its removal belongs to the unmerged refactor.
+Read the [source boundary](FUNCTIONS.md#historical-findings-and-remaining-legacy-code), inspect actual callers,
+and remove displaced code with its consumers. Neither its continued presence nor its deletion implements the target.
 
-Preserve original files, archives and sole retained copies. Run minimal pinned check/Clippy on changed production
-owners and immediate consumers when implementing them. Record unavailable execution honestly; do not turn an
-old library check, source inspection or archive marker into runtime qualification.
+Preserve original files, archives and sole retained copies. After production changes run minimal pinned
+check/Clippy for the changed owners and immediate consumers; record only execution that actually ran.

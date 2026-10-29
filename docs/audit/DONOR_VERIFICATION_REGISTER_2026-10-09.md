@@ -5,17 +5,19 @@ or candidate selection is not runtime qualification. Algorithms live in the owni
 
 R055 rechecks Windows references on 2026-10-28. Other dependency observations below are carried from the
 [R054 register](https://github.com/UnknownAlienHuman/eliot-search/blob/45ddf887c9e84861b1302334a1f5ecabb263f7f3/docs/audit/DONOR_VERIFICATION_REGISTER_2026-10-09.md)
-and unchanged lock at inspected ELIOT head `45ddf887`; they are not a new upstream-wide version/advisory audit.
+and the refactor lock at inspected ELIOT head `45ddf887`; they are not a new upstream-wide version/advisory audit.
+R059 checked main `623160a7`'s manifest and Markdown lock entry: the branch's parser upgrade has not landed.
+Except for that explicit main comparison, the table records the earlier inspected branch, not automatic main adoption.
 
 <a id="installed-selected-and-optional"></a>
 ## Installed versus selected
 
-| Dependency | Installed/selected state | Owner |
+| Dependency | Recorded state / revision boundary | Owner |
 |---|---|---|
 | qdrant-client | Locked 1.19.0; exact 1.20.x server/client upgrade selected, not implemented | Bridge |
 | redb | Locked 2.6.3 | Typed metadata and read snapshots |
 | Tokio | Locked 1.53.1 | Actual async I/O/process consumers |
-| pulldown-cmark | Locked 0.13.5, defaults disabled | Markdown OffsetIter |
+| pulldown-cmark | Main `623160a7`: locked 0.13.1; unmerged `ce441f78`: 0.13.5. Defaults disabled; main upgrade remains work | Markdown OffsetIter |
 | quick-xml | Locked 0.42.0 | XML/JATS preparation |
 | toml_parser | Locked 1.1.4+spec-1.1.0; legacy, not the typed replacement | Config |
 | aho-corasick | Locked 1.1.5 | Literal Exact primitive |
@@ -101,9 +103,12 @@ output, not total backend work; measure actual narrow/broad and cold/warm costs.
 <a id="markdown-offset-iterator-released-fix-not-yet-adopted"></a>
 ## Markdown OffsetIter
 
-R031 adopted pulldown-cmark 0.13.5 with exact lock and transform identity. Its materializer/unitizer compiler run
-is historical evidence; connected parser/materialize/replay behavior remains unrun. The stable anchor is retained
-for incoming links; its old wording does not mean the dependency upgrade is still pending.
+R031 adopted pulldown-cmark 0.13.5 on the unmerged refactor branch with exact lock and transform identity.
+Main `623160a7` still locks 0.13.1 (checksum `83c41efbf8f90ac44de7f3a868f0867851d261b56291732d0cbf7cceaaeb55a6`).
+The branch compiler run is historical evidence, not current-main adoption or execution. Connected
+parser/materialize/replay behavior remains unrun. Keep the stable anchor; the
+[materializer recipe](../../crates/search-prep/search-materializer/FUNCTIONS.md#markdown-donor-correction)
+owns the connected version/identity cut.
 
 <a id="typed-configuration-donor-boundaries"></a>
 ## Typed configuration

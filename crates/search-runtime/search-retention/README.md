@@ -1,13 +1,11 @@
-# Former retention package — implementation notes only
+# Maintenance — target and legacy source
 
-R017 removed the generic lease/purge/sweep/restore implementation. R020 removes its empty crate, workspace
-membership, daemon dependency, lockfile record and `wave7-lifecycle`/`full-baseline` features. This directory now
-contains documentation only; it is not a Cargo package or a placeholder for another service.
+[FUNCTIONS.md](FUNCTIONS.md) owns stopped-root local collection, non-runnable archives and fresh-destination
+import. These are target operations, not capabilities established by the old generic retention crate.
+[Publication](../../search-index-qdrant/search-publication/FUNCTIONS.md) owns online Qdrant generation cleanup.
 
-[FUNCTIONS.md](FUNCTIONS.md) retains the single recipe for stopped-root local-object collection, completed
-archives and fresh-destination import. Existing links remain valid. These operations are still unimplemented;
-removing the old platform does not deliver them. Implement them with the actual store/control/publication owners.
-[Publication](../../search-index-qdrant/search-publication/FUNCTIONS.md) owns live Qdrant cleanup.
+At main `623160a7`, `search-retention` still appears in Cargo. R017/R020 removed it only on the unmerged
+refactor branch. Follow the recipe's source boundary and actual callers; do not treat this directory as empty
+or preserve its lease/purge/restore platform when implementing the replacement.
 
-Do not recreate a crate, public compatibility types or a lifecycle registry here. Preserve original files,
-archives and sole retained copies.
+Keep useful behavior with real store/control/root consumers. Preserve original files, archives and sole copies.
