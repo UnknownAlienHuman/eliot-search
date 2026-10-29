@@ -1,15 +1,16 @@
 # Local maintenance, backup and restore/import
 
 This file owns offline local-object collection and current-format archive/import. Qdrant retirement remains
-[publication cleanup](../../search-index-qdrant/search-publication/FUNCTIONS.md). This is now a documentation-only
-location, not a Cargo package. The selected operations below are not implemented by removing their predecessors.
+[publication cleanup](../../search-index-qdrant/search-publication/FUNCTIONS.md). These are target operations,
+not implemented capabilities or a reason to retain the old generic package.
 
 ## Historical findings and remaining legacy code
 
 At `2b37f5ef`, `search-retention` contained generic leases, purge planes, graph sweep, receipts and restore phases.
 The daemon's `restore_composition` required the destination root/incarnation/epoch and physical root to match the
-export, carried copied collection/purge/key authority and supported sole-copy deletion. R017 removed both
-implementations; R020 removes the empty crate and its Cargo/lock/feature entries. Do not adapt or reconstruct them.
+export, carried copied collection/purge/key authority and supported sole-copy deletion. R017/R020 removed that
+machinery on the unmerged refactor branch only. At main `623160a7`, Cargo still includes `search-retention`.
+Inspect current callers and remove the displaced platform with them; do not infer deletion from this recipe.
 
 The legacy DIRECT collector remains a separate removal target. `collect_orphan_revisions`:
 
@@ -79,33 +80,38 @@ Qdrant cleanup is separate online work constrained by readers and possible late 
 ## Backup is a completed archive, not a runnable clone
 
 Stop the source daemon, close database writers/readers and hold its exclusive root guard. Create a new staging
-archive outside the source root. Copy only supported committed control data and required final objects:
+archive outside the source root. From the first write, use a distinct archive layout: archived control data and
+objects are data for the importer, never stores opened by the normal daemon. Do not copy a runnable root manifest
+or place the root-format signature at any normal-open location. Missing completion metadata must leave an invalid
+archive, not an apparently ordinary installation. Copy only supported committed data and required final objects:
 
 - current source/preparation state;
 - the last committed published inventory/evidence needed to reproduce the served baseline;
 - pending/cleanup records and their referenced objects as non-executable evidence of unresolved source state;
 - format/storage profile metadata required to read the copied objects.
 
-Qdrant collections, process locks, sockets, scratch marks, caches and store-owned transient stages are not
-portable authority and are excluded by default. If unresolved state references a final artifact, copy that
-artifact even though the destination will not execute the old operation.
+Qdrant collections, runnable root manifests, process locks, sockets, scratch marks, caches and store-owned
+transient stages are excluded. Record needed format/profile information as archive metadata, not a live-root
+identity. If unresolved state references a final artifact, copy it without executing its old operation.
 
 Verify the copied control snapshot and every referenced copied object from the staging archive itself. Sync
 copied files/directories where the selected platform provides a real durability primitive. Only after complete
 verification write the small archive-complete marker last (or atomically publish the staged directory). A
 partial directory has no complete marker and is never accepted as backup.
 
-The archive marker names the supported archive/root format and source installation for diagnostics; it is not
-a second object graph or receipt system. Normal daemon open checks/refuses the marker before any external effect.
-A raw OS clone lacking this supported archive protocol remains unsafe and is not automatically adopted.
-Keep the source and archive intact.
+The completion marker names the archive format and source installation for diagnostics; it is not a runnable
+root manifest, second graph or receipt system. Ordinary open refuses complete AND incomplete archive layouts
+before replaying pending/cleanup state or contacting Qdrant. Removing the marker must not turn an archive into a
+valid root. A raw OS clone is outside this protocol and is not automatically adopted. Keep source and archive intact.
 
 ## Explicit restore/import into a fresh destination
 
 1. Open the complete archive read-only. Validate format, source/prepared/published references, object identities,
    gaps and required storage material. Missing/unsupported data leaves the destination uncommitted.
-2. Initialize an empty destination through the normal root owner. Allocate new installation/control identity and
-   a fresh never-conflicting Qdrant generation. Do not copy process locks, owner epochs or generation counters.
+2. Initialize an empty destination with new root identity and keep its exclusive guard. Before importing rows,
+   objects or issuing backend effects, durably set the current-format incomplete-import marker defined by the
+   [root owner](../search-runtime-owner/FUNCTIONS.md#archive-and-import-boundary). Allocate fresh destination-only
+   collection names; do not copy process locks, owner epochs or generation counters.
 3. Import exact retained source/prepared objects through the destination object owner and create destination-
    local current rows. Never reread changed live paths as a substitute for archive bytes.
 4. Treat copied pending/cleanup/routes/cursors as archive evidence only. They authorize no RPC, compensation,
@@ -114,12 +120,17 @@ Keep the source and archive intact.
    - the fully validated archived published inventory, preserving the last served view before later catch-up; or
    - the fully validated desired current source/preparation inventory.
    Do not mix portions of both. Newer desired state remains a following ordinary reconciliation.
-6. Install the destination view only after real Qdrant readback and one destination-local metadata commit.
-   Destination cleanup may name only generations created by this destination.
+6. After real backend readiness, commit complete destination-local current/evidence state. Resolve uncertain
+   commits by readback before clearing the import marker durably; then install the view. Destination cleanup
+   may name only generations created by this destination.
 
-Failed/interrupted import leaves an explicitly incomplete destination that normal serving refuses. Retry may
-restart from validated archive data; no generic restore state machine, quarantine generation or copied authority
-is required. Restore never deletes the archive/source automatically.
+Ordinary open of an incomplete import refuses before backend recovery/cleanup, not merely before query serving.
+A crash before the marker is installed leaves only a newly initialized empty root; no imported rows or RPCs exist.
+A crash after it is cleared uses ordinary committed-view startup. Explicit import retry revalidates the archive
+and destination, retaining any unresolved destination-only effects under the
+[publication recovery rule](../../search-index-qdrant/search-publication/FUNCTIONS.md#small-conservative-recovery-boundary).
+One incomplete marker is enough: no phase journal or copied authority. Never use empty-init discard for a populated
+import, or delete source/archive automatically. Implement this boundary with import in Stage 5, not as a Foundation gate.
 
 ## Protected storage
 
@@ -132,9 +143,9 @@ migration receipt system.
 
 ## Remaining implementation and verification
 
-The generic package, daemon restore composition and exclusive lifecycle fixtures are removed. Replace the still-
-existing legacy DIRECT GC/status hot-path consumers with concrete maintenance/import operations; do not revive
-the removed package. Keep useful filesystem safety checks and causal cases, not old types.
+Replace legacy retention/restore and DIRECT GC/status consumers with concrete maintenance/import operations,
+then remove their displaced APIs and exclusive fixtures. Main and the unmerged branch have different removal
+status; use the actual checked-out callers. Keep filesystem safety checks, not obsolete public types.
 
 After implementation and minimal pinned compiler/Clippy, check:
 
@@ -142,9 +153,10 @@ After implementation and minimal pinned compiler/Clippy, check:
 - complete typed-root coverage, superseded revision reclamation and current/published/pending roots;
 - malformed/unknown metadata, scratch exhaustion, cancellation and crash before/during sweep;
 - foreign files and store-owned temporary cleanup;
-- archive marker written last, partial-copy refusal and copied-object verification;
+- complete/partial/marker-stripped archives refused by normal open before any RPC; copied-object verification;
 - original and restored installations sharing one Qdrant endpoint with zero original mutations/deletes;
-- archived-published baseline versus newer current state, interrupted import and distinct destination generation;
+- archived-published versus desired baseline; crashes before/after import marker and current commit;
+- ordinary open refusing an incomplete import before recovery; distinct destination generation;
 - missing secret and protected writable-copy refusal.
 
 These are required causal cases, not executed results.

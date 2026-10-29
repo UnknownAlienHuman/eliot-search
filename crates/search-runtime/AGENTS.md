@@ -1,36 +1,21 @@
 # Runtime family rules
 
-Read the root [architecture](../../docs/architecture/README.md),
-[implementation](../../docs/implementation/README.md), family [README](README.md) and
-[storage-profile note](../../docs/implementation/revision-encryption.md).
+Read the affected owner's recipe, not every runtime package. Keep a package only for a real process, OS or
+storage effect; do not create a general lease, secret, retention, migration or effect platform.
 
-A runtime package exists only for a real process, OS or storage effect with a distinct owner/failure boundary.
-Use concrete owner APIs; do not create a generic secret, lease, retention, migration or effect platform.
+[Root](search-runtime-owner/FUNCTIONS.md) owns process-lifetime exclusion and root classification.
+[Maintenance](search-retention/FUNCTIONS.md) owns stopped-root local collection/archive/import;
+[publication](../search-index-qdrant/search-publication/FUNCTIONS.md) owns online whole-generation Qdrant cleanup.
+Plain storage needs no secret subsystem. Read the [encrypted-profile note](../../docs/implementation/revision-encryption.md)
+only for an actual accepted encrypted-storage consumer; preserve unpublished #598 work.
 
-## Current ownership
+Package removal status is branch-specific; the [workspace map](../../docs/audit/WORKSPACE_MEMBER_DISPOSITION_2026-10-21.md#corrections-to-the-historical-map)
+distinguishes the unmerged refactor from main. Before deleting code, inspect current manifests, Rust/non-Rust
+callers, features, tests and workflows. Move useful behavior and remove displaced implementations together.
 
-- `search-runtime-owner` retains the real data-root/process guard while current stores are open. Remove
-  owner-epoch/lease/receipt ceremony that no direct consumer needs.
-- `search-retention` is already removed as a Cargo package. Its remaining documentation owns **stopped-root
-  local-object collection and archive/import behavior only**.
-- Qdrant point/generation retirement is online publication cleanup; it does not belong to local-object
-  maintenance or a restored generic retention package.
-- Current/pending/published/cleanup references determine what offline maintenance must mark, but they do not
-  make hot-path local object sweeping safe.
-- `search-provider-transport-windows` survives only if a selected persistent owner-only pipe remains after
-  child-stdio integration; otherwise remove it with callers.
-- Secret/key code is profile-specific. Qdrant, restricted clients and encrypted storage do not share a
-  universal catalogue/lifecycle.
-- Plain local storage is a valid current-format profile. An encrypted profile keeps one concrete OS-protected
-  key owner and authenticated object codec inside the immutable-object boundary.
+Keep real root handles through store lifetime. Query output must not trigger recursive storage inventory.
+Archives and incomplete imports follow the root/maintenance recipes; they never inherit external write authority.
+Do not copy these algorithms into local READMEs or preserve a package solely for its historical name.
 
-Historical no-caller/package-size findings are revision-specific. Before deleting `search-revision-crypto`,
-transport or secret packages, recheck exact current manifests, Rust/non-Rust callers, features, tests and
-workflows, then coordinate actual #598 overlap. Do not inspect or compete with its private object/key writer.
-
-Remove unconnected pairing composition, secret leases, operation receipts, migration codecs and compatibility
-consumers with their last real callers. Do not rebuild current/candidate/retiring key roles or cross-root
-re-encryption without a concrete selected operation.
-
-After code, run minimal Rust 1.98 compiler/Clippy for changed direct owners/consumers. Old lifecycle, pairing,
-rotation, receipt and compatibility matrices leave with the APIs they protected.
+After code, run minimal pinned compiler/Clippy for changed owners and real consumers. Old lifecycle, pairing,
+rotation and receipt fixtures leave with their APIs. Documentation or a prior branch build is not runtime evidence.
