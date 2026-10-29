@@ -42,9 +42,35 @@ Decode and validate the entire terminal frame before displaying cards or locator
 rendering with proper serialization. Preserve final order, source/revision/representation/location and truthful
 gaps. Optional progress contains no uncommitted result cards.
 
-Service captured stderr alongside stdout with a finite diagnostic bound. Inherited/discarded stderr is a separate
-policy, not bounded capture. Do not wait for exit/stdout with unread piped stderr or use Command::output followed
-by a late size check. Output failure ends the owned session instead of leaving child work alive.
+Service captured stderr alongside stdout with a finite diagnostic bound. Exhaustion must not stop draining a
+live child's pipe: discard further diagnostic bytes with a bounded truncation indication, or terminate and reap
+the owned child. Do not wait for exit/stdout with unread piped stderr or use Command::output followed by a late
+size check. Normal interactive mode captures and safely renders diagnostics or discards them; raw inherited
+child stderr is not safe presentation. Output failure ends owned work instead of leaving a child alive.
+
+## Untrusted display text
+
+Verified provenance does not make excerpts, paths, labels or child diagnostics safe terminal instructions.
+Treat them as data at the final output boundary, including error paths and progress:
+
+- Human output visibly escapes ESC, C0/C1 controls, DEL and Unicode bidi controls. Only the renderer emits
+  layout newlines/tabs or fixed styling; multiline excerpts receive trusted line boundaries/prefixes. Source
+  text cannot inject cursor movement, terminal commands, hyperlinks or a forged diagnostic line.
+- JSON/NDJSON uses a real serializer and preserves decoded field values. Escape terminal-control/bidi characters
+  through its string-escaping/formatter seam, not quote replacement or a second JSON encoder. Embedded source
+  newlines remain inside the serialized string; NDJSON adds exactly its own record delimiter. Never mix raw
+  child stdout/stderr or debug text into the structured result stream.
+- Display escaping is not normalization of stored evidence. Keep retained bytes, source ranges, identity and
+  expansion locators unchanged; never use an escaped/lossy display label as a filesystem path or locator.
+- Bound the rendered/serialized bytes, including escape expansion and diagnostic prefixes, before displaying
+  cards. Do not allocate an unbounded escaped copy or silently shorten a verified excerpt to fit. Rendering
+  failure closes the owned session; it cannot roll back a daemon cursor already committed after wire output.
+
+Use a small renderer in the existing CLI, not a sanitizer service or a blanket non-ASCII ban. The
+[Microsoft terminal reference](https://learn.microsoft.com/en-us/windows/console/console-virtual-terminal-sequences)
+documents that output control sequences act on the console; checked 2026-10-29. Source-boundary inspection found
+raw line forwarding in `src/public_client.rs::drain_until_terminal` at `46258450`; that is a removal seam,
+not a reproduced source-to-terminal exploit or a claim that the replacement renderer exists.
 
 ## Cleanup and expansion
 
@@ -64,4 +90,6 @@ revision-key owners and #598 when removing pairing-only code.
 
 After production changes run minimal locked Rust 1.98 check/Clippy selecting actual binaries, not libraries only.
 Later execution covers terminal-before-display, live cancellation/EOF, two-request paging/expansion, backpressure,
-output failure, cleanup, busy root and independent-invocation locator rejection. Record unrun cases explicitly.
+output failure, cleanup, busy root and independent-invocation locator rejection. Include control/bidi characters
+in excerpts/paths/stderr, newline-bearing fields, escape-expansion limits, stderr after its capture limit and
+unchanged evidence coordinates. Record unrun cases explicitly.

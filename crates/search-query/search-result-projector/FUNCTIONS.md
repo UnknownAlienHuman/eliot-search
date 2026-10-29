@@ -38,6 +38,11 @@ Rules:
 6. ordinary ranked top-k remains explicitly non-exhaustive;
 7. output failure does not advance the query-window cursor.
 
+This boundary builds structured evidence, not terminal-ready strings. Preserve exact excerpt values and source
+coordinates; the [CLI renderer](../../../bins/eliot-search/FUNCTIONS.md#untrusted-display-text) owns safe display
+escaping and its expanded-byte limit. JSON escaping preserves the decoded value; lossy display text never becomes
+stored evidence or an expansion locator. A verified digest does not authorize terminal control sequences.
+
 If these operations are simple response encoding, inline them into the daemon/protocol owner and delete this
 crate.
 
