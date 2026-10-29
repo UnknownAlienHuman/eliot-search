@@ -1,105 +1,35 @@
-# search-source-registry — collapse to typed current rows
+# Source registry — typed current rows
 
-Current root, source and source-head state belongs in short typed redb operations. Retained bytes live in the
-immutable object store; immutable query membership/evidence lives in `PublishedView`. The registry is not a
-second database, replay engine, corpus, access authority or history.
+Source/control owns current registrations and source heads; the object store owns bytes; PublishedView owns
+served evidence. This package must not become another database, replay engine or history service.
 
-Read the [architecture](../../../docs/architecture/README.md),
-[implementation guide](../../../docs/implementation/README.md), [source map](FUNCTIONS.md),
-[control-state map](../../search-control-redb/FUNCTIONS.md) and
-[current identity map](../search-source-identity/FUNCTIONS.md).
+<a id="current-records"></a>
+<a id="current-operations"></a>
+## Current-state mutation
 
-## Verified current source
+[FUNCTIONS.md](FUNCTIONS.md#current-state-and-conditional-application) is the single definition of row mutation
+and stale-work rejection. A content head alone is not the expected-state guard: use the captured non-reset row
+and registration/settings state required there. Do not reconstruct record layouts or commit signatures from an
+abbreviated README example.
 
-Production files total about **214.4 KiB** before more than 137 KiB of inline/external tests:
-
-```text
-api / batch / recovery / restore       ~83.8 KiB
-cutover / membership / portfolio       ~37.2 KiB
-root / source / source-v2 / view       ~69.1 KiB
-error / lib / IDs                      ~21.3 KiB
-```
-
-The normal daemon does not read a small current registry. It binds `RegistryJournal` through v4 original-
-input restore, reconstructs complete `SourceRegistry`, replays a batch/operation, mutates one item, reads
-batch targets back and rebuilds a complete control snapshot. Source admission still returns no retained
-revision.
-
-`registry_snapshot` separately clones roots, sources, memberships, portfolios, portfolio history, active
-generations, namespace ownership and namespace state before resolving a view.
-
-## Current records
-
-```text
-RootRecord {
-  RootId
-  current locator/view and policy revision
-  availability
-}
-
-SourceRecord {
-  SourceId
-  RootId
-  current locator
-  optional current physical key
-  current RevisionRef
-  availability
-  optional current admission outcome/reason/classification
-}
-
-RevisionRef {
-  revision/content identity
-  byte length
-  immutable ObjectRef
-}
-
-optional SavedSelection {
-  name
-  ordered SourceId[]
-}
-```
-
-The root/source/control owner may store these directly in typed redb tables. A separate in-memory
-`SourceRegistry` is optional only as a read-through cache while the daemon owns the root; it is never rebuilt
-from operation history before every command and never becomes durable authority.
-
-## Current operations
-
-```text
-register / update / unbind root
-get root/source and bounded list pages
-commit_source_head(source, expected_head, RevisionRef, locator, physical_key, availability)
-retire_source_head(source, expected_head, reason)
-read one consistent current source snapshot for inventory/publication
-resolve explicit/default selected SourceId subset without widening
-```
-
-The immutable object exists and is read back before the short source-head transaction. A known abort is a
-known failure. A genuinely uncertain commit is resolved by point-reading the source row. Failure before the
-head leaves a safe unreferenced object for bounded GC.
-
-Source identity matching is current-state logic: same locator, optional proven rename by exact physical key,
-new source or explicit conflict. No permanent path/lineage history.
+The [connected operation](FUNCTIONS.md#connected-source-operation) defines the acquired-body handoff, object-before-
+metadata order, uncertain commits and lost wake-ups. The [view boundary](FUNCTIONS.md#published-view-versus-source-state)
+separates mutable desired state from the served snapshot. Source-head commit does not itself make data searchable.
 
 ## Remove with callers
 
-- package-wide `SourceRegistry` restore/replay and generic operations;
-- batch, source-v2, recovery and registry-restore paths;
-- namespace owner cutover and membership/portfolio/history machinery;
-- cloned aggregate `registry_snapshot` and old query views;
-- receipt/currentness/original-input/provenance fields;
-- `search-source-records` and `search-source-history` forwarding packages;
-- old identity binding/history/lineage framework;
-- legacy DIRECT/root-catalog authority and fixtures.
-
-If the remaining operations are naturally methods of typed redb/source composition, delete this crate rather
-than retain another repository layer.
-
-Unsupported pre-release roots fail before writes and remain intact. Preserve #598's active private work and
-consume only its accepted retained revision/head result.
+Follow the [source/caller removal map](FUNCTIONS.md#remove-after-cutover). Move real consumers and useful current
+values before deleting forwarding history/records packages. Plain ingestion does not wait for optional #598;
+only actual unpublished object/key overlap needs coordination. Unsupported roots and sole retained copies stay intact.
 
 ## Completion
 
-One acquired body becomes one immutable object and one current source head. Restart point-reads current rows
-without operation replay. Inventory/publication obtains one consistent bounded current snapshot. Old query
-evidence remains exact through its pinned `PublishedView`, not registry history.
+Use the [owner's checks](FUNCTIONS.md#checks-after-code) and the current
+[delivery stage](../../../docs/implementation/README.md#delivery-sequence). No new cache, public repository trait
+or compatibility layer is required to preserve this package.
+
+<a id="verified-current-source"></a>
+## Historical inventory
+
+The [earlier inventory](https://github.com/UnknownAlienHuman/eliot-search/blob/4cb8dc4d61924ee0a1a2f3ce056b7086ac45c332/crates/search-source/search-source-registry/README.md#verified-current-source)
+is a source-inspection aid, not a current count or replacement specification. Inspect actual callers before a code cut.

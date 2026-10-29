@@ -1,8 +1,9 @@
 # Working on search-revision-store
 
-Read the root [architecture](../../../docs/architecture/README.md) and
-[implementation](../../../docs/implementation/README.md). This package has a concrete byte-storage role;
-it is not a separate lifecycle or transaction platform.
+Read [FUNCTIONS.md](FUNCTIONS.md) and the affected source/preparation/query consumers. It owns object I/O;
+the linked root recipe owns platform finalization. Do not derive a competing algorithm from README or old code.
+Plain storage proceeds without #598 encryption; preserve its actual unpublished overlap and consume only an
+accepted encrypted-profile handoff. This is not a separate lifecycle or transaction platform.
 
 ## Change the real path
 
