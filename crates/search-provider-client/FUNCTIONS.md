@@ -38,8 +38,11 @@ cannot run write-all/read-until-terminal while preventing control. Do not hold a
 Use already pinned **Tokio 1.53.1** for the parent's spawned-child I/O and process waiting. Add only the direct
 features needed by that real caller during Cargo cutover; no version upgrade or second runtime per command.
 Take ChildStdin/ChildStdout/optional ChildStderr into the one session owner. Service both directions and captured
-diagnostics concurrently, with finite application buffers. Command::output/wait_with_output remain collecting
-APIs, not bounded-capture shortcuts.
+diagnostics concurrently, with finite application buffers. When diagnostic retention fills, keep draining and
+discard excess bytes or terminate/reap the owned child; a full diagnostic buffer must not block the child on
+stderr while its parent waits for stdout/exit. Captured bytes remain untrusted and go through the
+[CLI display boundary](../../bins/eliot-search/FUNCTIONS.md#untrusted-display-text), never raw terminal forwarding.
+Command::output/wait_with_output remain collecting APIs, not bounded-capture shortcuts.
 
 Keep prefix/body positions and outbound byte position in the session, outside disposable futures. In a select
 loop use cancellation-safe read/write calls and advance by their returned count. Do not recreate read_exact or

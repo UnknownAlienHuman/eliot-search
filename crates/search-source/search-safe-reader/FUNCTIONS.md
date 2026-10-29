@@ -45,10 +45,9 @@ Run builtins with direct argument arrays for the selected repository, without a 
   handles finite batches of `info <OID>` and `contents <OID>`. Check kind/size from `info` before requesting
   contents; issue `flush` for each finite batch. Read the framed length into the existing byte writer.
 
-Use `--no-replace-objects`, `--no-lazy-fetch` and `--no-optional-locks` with the selected local commands;
-omit filters, textconv and repository-controlled external commands. The process has the operation's
-cancellation/deadline. This permits a trusted Git executable without executing indexed scripts or
-silently fetching content. Do not create a long-lived process/supervisor for every registered root.
+Every command uses the [controlled child boundary](#git-child-boundary) below. Direct argv and a read-only
+builtin name alone do not prevent Git from executing configured helpers. Do not create a long-lived
+process/supervisor for every registered root.
 
 Raw blobs may be LFS pointer text, symlink contents or different bytes from a worktree after attribute/EOL
 conversion. Preserve that view distinction. Treat submodules as separately selected repositories.
@@ -68,6 +67,55 @@ skips matching OID/mode entries. See the same revision's
 [command options](https://github.com/git/git/blob/c44beea485f0f2feaf460e2ac87fdd5608d63cf0/Documentation/git.adoc)
 and [batch framing](https://github.com/git/git/blob/c44beea485f0f2feaf460e2ac87fdd5608d63cf0/Documentation/git-cat-file.adoc).
 This pin is inspected evidence, not a promise that any installed Git supports every option.
+
+## Git child boundary
+
+Resolve one trusted installed executable outside indexed content; do not search an indexed working directory
+for `git`. Pass fixed builtin arguments, selected native repository paths and validated OIDs, never a shell
+string or request-supplied Git options. Ref resolution must separate user input from options.
+
+Apply this prefix to every selected builtin, including index enumeration:
+
+```text
+git --no-pager --no-replace-objects --no-lazy-fetch --no-optional-locks -c core.fsmonitor=false ...
+```
+
+Keep external diff/textconv disabled on diff commands and omit filters, checkout and submodule recursion.
+An unsupported required option fails explicitly; never retry with protections removed. These flags are a
+selected command policy, not a sandbox or permission to run arbitrary Git commands.
+
+Build a child-specific environment from approved OS necessities. Do not blindly inherit `GIT_CONFIG_*`,
+`GIT_DIR`, `GIT_WORK_TREE`, `GIT_COMMON_DIR`, `GIT_INDEX_FILE`, object-directory/alternate, tracing, pager or
+executable-search overrides. Set required routing explicitly from the admitted repository. Disable system/
+global configuration for this child (`GIT_CONFIG_NOSYSTEM=1`, `GIT_CONFIG_GLOBAL` set to the platform null file),
+terminal prompting and unintended pager/helper behavior. Repository/worktree config and referenced metadata
+still need the selected admission policy; never bypass ownership checks with `safe.directory=*` or modify the
+user's config. Linked worktrees, common directories and alternates outside admitted roots require explicit
+admission or an unsupported result, not silent source-scope expansion.
+
+The existing acquisition owner keeps the child, finite queues, stderr drain and execution deadline/cancellation
+until exit is observed. Diagnostic bytes are untrusted: use the
+[CLI display boundary](../../../bins/eliot-search/FUNCTIONS.md#untrusted-display-text), not raw passthrough.
+Git acquisition receives execution-only state, not a Search view/scoring context. No generic runner is needed.
+
+### Evidence and checks
+
+At Git 2.51.0 revision `c44beea485f0f2feaf460e2ac87fdd5608d63cf0`,
+[`ls-files`](https://github.com/git/git/blob/c44beea485f0f2feaf460e2ac87fdd5608d63cf0/builtin/ls-files.c)
+reads the index; [`post_read_index_from`](https://github.com/git/git/blob/c44beea485f0f2feaf460e2ac87fdd5608d63cf0/read-cache.c)
+invokes fsmonitor; [`query_fsmonitor_hook`](https://github.com/git/git/blob/c44beea485f0f2feaf460e2ac87fdd5608d63cf0/fsmonitor.c)
+launches the configured hook with `use_shell = 1`. A direct argv call by Eliot does not change that internal path.
+[Git configuration documentation](https://git-scm.com/docs/git-config) describes environment overrides and
+command-line precedence. These sources were checked on 2026-10-29; this is not a latest-version/security audit.
+
+A disposable Linux fixture on that date used Git 2.47.3 and a harmless marker-writing fsmonitor hook.
+`ls-files --stage -z` with the previously specified three `--no-*` flags exited 0 and invoked the hook once;
+adding `-c core.fsmonitor=false` exited 0, returned identical entries and invoked it zero times. This is a donor
+counterexample, not execution of an Eliot adapter or qualification of Git 2.51/Windows.
+
+When implementing #335, check hook suppression, hostile inherited routing/config, unsupported flags, admitted
+metadata roots, missing objects without fetch, bounded stderr and cancellation/reaping through actual consumers.
+The corrected recipe introduces no new prerequisite for Foundation or plain-file Search.
 
 ## Native alternative, when packaging needs it
 
