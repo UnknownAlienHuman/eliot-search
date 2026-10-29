@@ -1,20 +1,16 @@
-# Working on search-source-history
+# Working on source-history removal
 
-This package is a 70 KiB forwarding restore/history layer scheduled for deletion. Read [README.md](README.md),
-[search-source-records](../search-source-records/README.md) and the
-[source registry map](../search-source-registry/FUNCTIONS.md).
+Read [README.md](README.md) for the removal boundary and the linked source/object owner recipes.
+Do not add history, namespace transitions, registry replay, receipts, compatibility codecs or new callers.
 
-Do not add revision history, namespace cutover, registry replay, receipts, compatibility codecs or new
-callers. Do not preserve the package merely to reexport moved value types.
+Relocate only values required by actual current consumers, then remove displaced wrappers, exclusive fixtures
+and dependencies together. Recheck current manifests, imports, module inclusion, features, targets and non-Rust
+callers before deleting a package. Do not retain a facade merely to reexport moved types.
 
-After #598's accepted handoff and #270/#271 current-state cutover:
+Plain source/head work does not wait for optional #598. Preserve its actual unpublished object/key overlap;
+coordinate that overlap without blocking unrelated current-state cutover or creating a second encrypted writer.
+Unsupported roots, user originals and sole retained copies remain intact. Source/object/maintenance owners,
+not this forwarding package, define current-state guards and retention.
 
-- move the small current `RevisionRef` fields/validation to the object/source owner;
-- use typed redb current source-head reads/writes;
-- keep old revisions through current/pending/cleanup/live-view references;
-- delete restore/cutover/history code, tests and dependencies.
-
-Unsupported old roots remain intact. No automatic migration or universal history replay.
-
-Run minimal Rust 1.98 compiler/Clippy for actual source/object/control/daemon consumers after production
-changes. Registry replay fixtures and old byte compatibility are removed with their APIs.
+After production changes run minimal locked compiler/Clippy for the actual changed consumers. No broad tests
+or compatibility matrix is required to qualify a documentation-only change.

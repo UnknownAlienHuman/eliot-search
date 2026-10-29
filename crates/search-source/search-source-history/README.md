@@ -1,50 +1,29 @@
-# search-source-history — forwarding restore/history package scheduled for deletion
+# Source history — forwarding layer to remove with callers
 
-This package owns no source body, database or current source state. It forwards/implements old revision
-registration, namespace cutover and full registry restoration over `search-source-records`.
-
-## Verified source inventory
-
-Production files total about **70.1 KiB** before tests:
-
-```text
-registry_restore.rs   28,379 B
-revision.rs           35,816 B
-namespace_adapter.rs   4,989 B
-lib.rs                   930 B
-```
-
-Tests add about 27.4 KiB. The package exists because the old architecture separated schema records from
-history/replay adapters, not because the current application needs a history subsystem.
+This legacy package forwards revision registration, namespace cutover and registry restoration over
+`search-source-records`. The replacement uses the existing object/source/control owners, not another history service.
 
 ## Replacement
 
-Current source lifetime is:
+The [source-row recipe](../search-source-registry/FUNCTIONS.md#current-state-and-conditional-application) owns
+current references and guarded updates. The [object recipe](../search-revision-store/FUNCTIONS.md) owns retained
+bytes. Keep the useful values with those consumers; do not move old operation replay or compatibility codecs.
 
-```text
-immutable ObjectRef / RevisionRef
-+ one current SourceRecord head in typed redb
-+ PublishedView manifest entries while current/pending/pinned
-```
+Plain current-state work does not wait for optional #598 encryption. Protect actual unpublished object/key
+changes and coordinate only that overlap. A future encrypted profile does not gate unrelated type relocation.
 
-A source update compare/sets the current head. Old immutable revisions remain reachable only while current,
-pending, cleanup or live views refer to them. Object GC deletes unreferenced artifacts later. No universal
-revision-registration history, namespace ownership transition or full registry restore is required.
+<a id="delete-after-270271-cutover"></a>
+## Delete after current consumers move
 
-Move a genuinely useful `RevisionRef`/validation field to the object/source owner after #598's accepted
-handoff. Move no operation replay or old codec.
+Trace actual current callers; move required value fields/validation, then delete displaced restore/history/
+namespace wrappers, reexports and exclusive fixtures with their dependencies. Do not infer that main already
+contains the removals from an unmerged branch. Unsupported roots and sole retained copies remain intact.
 
-## Delete after #270/#271 cutover
+[Stopped-root maintenance](../../search-runtime/search-retention/FUNCTIONS.md#stopped-root-local-object-collection)
+owns complete reachability and final-object deletion. This forwarding package has no separate GC or retention policy.
 
-- registry restore and v4 original-input resolver;
-- namespace owner/cutover adapter;
-- historical revision registration/receipts/currentness;
-- forwarding exports to `search-source-records`;
-- package tests/goldens and workspace/dependency/status entries.
+<a id="verified-source-inventory"></a>
+## Historical inventory
 
-Unsupported old roots remain untouched. Normal restart reads typed current root/source/head rows and validates
-their immutable object references; it never replays a universal source history.
-
-See [search-source-records](../search-source-records/README.md),
-[source registry](../search-source-registry/FUNCTIONS.md) and issue
-[#270](https://github.com/UnknownAlienHuman/eliot-search/issues/270).
+[Earlier source inventory](https://github.com/UnknownAlienHuman/eliot-search/blob/4cb8dc4d61924ee0a1a2f3ce056b7086ac45c332/crates/search-source/search-source-history/README.md#verified-source-inventory)
+retains the old file sizes and source families. They are not a fresh recount or a required package topology.
