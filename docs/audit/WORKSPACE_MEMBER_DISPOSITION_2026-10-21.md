@@ -1,44 +1,31 @@
-# Workspace disposition — current rules
+# Workspace disposition
 
-The original 52-row table was a baseline audit, not a package-count target. R030 removed `search-eval` on the unmerged
-refactor branch; R045 counted 49 explicit members there. Main still has its older source/manifests. Before any deletion, recheck the current branch's manifests,
-Rust/non-Rust callers, module inclusion, features, targets, tests and workflows.
-
-Git history preserves the full historical table. This file records only current implementation rules so an agent
-does not treat old counts or receiving owners as mandatory topology.
+Package count is not an architecture target. Main still contains source removed on unmerged #610; inspect actual
+Cargo/module/feature/target and non-Rust callers before deleting anything. [Code map](../implementation/CODE_MAP.md)
+locates entrypoints; [working guide](../implementation/WORKING_GUIDE.md) gives the check procedure.
 
 ## Keep a boundary only when it isolates
 
-- durable state or transaction ownership;
-- an external/OS effect;
-- a substantial reusable algorithm;
-- a real optional adapter with a current consumer.
-
-Otherwise move useful code to its consumer and delete the forwarding package and exclusive fixtures.
+Durable state, an actual external/OS effect, a substantial algorithm or a real optional adapter. Otherwise move
+useful code to its consumer and delete the forwarding crate plus exclusive fixtures. No second service is needed.
 
 ## Current family direction
 
-| Family | Direction |
+| Family | Keep / simplify |
 |---|---|
-| Root/config/control | keep one root guard, small incremental typed settings and typed redb methods; remove lifecycle/receipt/registry platforms |
-| Source | keep stable reader, one immutable object owner and reconciliation; fold admission/identity/current-row helpers into concrete owners |
-| Preparation | keep materialization/unitization behavior; remove duplicate writers, adjacent reparse and receipt formats |
-| Qdrant/publication | keep one SDK bridge and publication owner; fold view manager and whole-generation cleanup into publication; remove projection/proof/reclaimer scaffolds when callers move |
-| Query | keep Exact and connected query/evidence/window behavior; remove public planner, executor, validator, handle and continuation authorities after useful code moves |
-| Protocol/client/CLI | keep one framed protocol, owned child client, one daemon and one CLI; remove pairing/loopback/duplicate sessions |
-| Optional workers/adapters | delete unless a selected source-backed consumer exists |
+| Root/config/control | One process lock, plain root, small settings and typed redb operations |
+| Source/preparation | One acquired-body writer, guarded current rows, exact transformations/ranges |
+| Qdrant/publication | One SDK bridge, publisher and view lifetime; remove proof/reclaimer scaffolds after callers move |
+| Query | Local source selection, Exact, evidence and bounded windows; no grants/checkpoints/revocation framework |
+| Client/CLI | One owned child connection and serializer; remove pairing, endpoint discovery and duplicate sessions |
+| Crypto/OS-secrets | Not selected; remove public legacy wiring after real consumers move, without deleting user keys/data |
+| Windows listener/transport | Not part of the owned-child baseline; do not implement a second transport first |
+| Retention/evaluation | Concrete stopped-root maintenance and later actual product measurements, not generic lifecycle/evidence platforms |
+| Optional adapters/workers | Only with an explicit useful consumer; do not block the local lexical path |
 
 ## Corrections to the historical map
 
-- `search-retention` is **not a Cargo package on the inspected refactor branch**; main has not received that removal. Its documentation owns stopped-root local-object
-  collection and archive/import. Online Qdrant cleanup belongs to publication.
-- `search-revision-crypto` and Windows key code are optional encrypted-profile components only after #598's
-  accepted handoff. They do not block the plain baseline.
-- `search-os-secrets` does not become another general secret platform.
-- `search-projection-planner` may be merged into publication/preparation if only bounded page construction
-  remains.
-- `search-epoch-pins` and `search-index-reclaimer` are removal targets after the small current-view manager and
-  whole-generation cleanup move.
-- optional document/model/MCP/overlay/enrichment packages cannot block the connected lexical product.
-
-No row authorizes touching #598 private files. Coordinate only exact public overlap.
+Earlier R017/R020/R030 removals and the 49-member count describe the refactor branch, not main. The older
+310-KiB security-family count is historical inventory, not promised deletion. New instructions select
+[plain local scope](../architecture/LOCAL_SCOPE.md), not an optional encrypted handoff. Preserve unpublished work;
+recheck actual main consumers, then remove the unused public code with its dependency/fixture closure.

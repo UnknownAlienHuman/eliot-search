@@ -21,15 +21,9 @@ after the end-to-end Search path works.
 
 ## Storage profiles
 
-`Plain` is the baseline current-format profile and has no secret dependency. It must implement the complete
-immutable-object contract now.
-
-An encrypted profile is optional. #598 owns only that profile and may be integrated after an accepted public
-handoff. It does not block plain retention, preparation, Qdrant publication, evidence, Exact or CLI work. Do not
-inspect or modify #598's private branch/worktrees.
-
-Both profiles, when present, produce the same Eliot-owned `ObjectRef` semantics. Do not create parallel source
-registries, preparation stores or query paths.
+There is one plain immutable-object format under [local scope](../../docs/architecture/LOCAL_SCOPE.md).
+No key, cipher, security-domain or storage-mode field is needed. Source/preparation/evidence use the same ObjectRef.
+Preserve unpublished #598 work without waiting for or importing it. Do not add parallel registries or query paths.
 
 ## Identity and current state
 

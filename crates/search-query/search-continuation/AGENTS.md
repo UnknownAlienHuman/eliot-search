@@ -1,24 +1,14 @@
-# Working on search-continuation
+# Working on query windows
 
-Read the [query cutover](../README.md), [daemon map](../../../bins/eliot-searchd/FUNCTIONS.md), package
-[README](README.md) and local [source map](FUNCTIONS.md).
+[FUNCTIONS.md](FUNCTIONS.md) owns the window algorithm; read it and the actual protocol/evidence/daemon callers.
+The local product has no restricted-client revocation or security-generation system.
 
-The established audit found a shared continuation lifecycle and a second daemon catalogue, neither owning the
-pinned `PublishedView`, at the inspected revision. Treat topology and caller findings as revision-specific
-evidence. Before deletion, search current manifests, Rust/non-Rust callers, constructors, module inclusion,
-features, targets, tests and workflows. Move actual protocol/result/daemon callers together.
+Keep one session-owned window with its pinned view and final EvidenceRefs. Emitted `(window_id, item_index)`
+locators are not the internal evidence vector. Reserve state before output; commit progress only after complete
+transport output. No mutable window/map borrow or mutex spans reads, encoding or writes. Cancellation/expiry
+remain serviced while the operation owns its pending state. Do not renew expiry or reuse IDs.
 
-Replace both models with one process-local `QueryWindow` in the real query/session owner. Keep only final ordered
-evidence references, direct cursor slicing, one `PublishedViewGuard`, finite TTL/item/metadata/read/output limits,
-optional bounded cached locators and prepared-page delivery that advances only after complete output.
-
-Do not keep durable replan descriptors, issued fingerprints, token digests, grants/security generations, cleanup
-effects, source-catalogue fences or terminal histories. Restart may expire ordinary interactive windows. A real
-restricted-client adapter binds/cancels its own windows directly.
-
-Expansion uses `(window_id, item_index)` and a bounded neighborhood around the exact pinned manifest range. It
-cannot request arbitrary revision bytes or mint another handle.
-
-Move useful slicing/output mechanics and delete the shared crate plus legacy daemon catalogue after caller
-cutover. After code, run minimal Rust 1.98 check/Clippy for actual query/window/protocol/daemon consumers;
-historical lifecycle fixtures disappear with their APIs.
+Move useful slicing and prepared-output behavior with real callers; remove both old catalogues, token minting,
+source-fence scans, durable replan/receipt histories and exclusive fixtures. Keep retained-range verification,
+spent-work accounting and bounded emitted-item expansion. Minimal locked check/Clippy follows code; behavioral
+tests follow the connected product. No forwarding window service or second transaction protocol is needed.

@@ -1,31 +1,16 @@
-# Working on search-os-secrets
+# search-os-secrets — legacy, not selected
 
-Read the [runtime direction](../README.md), [package audit](FUNCTIONS.md), package [README](README.md),
-[implementation guide](../../../docs/implementation/README.md) and
-[storage-profile note](../../../docs/implementation/revision-encryption.md).
+The local product uses plain storage and owned-child communication. Do not add key creation, encryption,
+rotation, pairing or a replacement secret service here. See [local scope](../../../docs/architecture/LOCAL_SCOPE.md).
 
-Do not extend or repair the generic `SecretCatalog`, leases, rotation/revocation, operation receipts,
-configuration fingerprints or provider-neutral backend model. #307/#308/#309 are closed `not_planned`.
-Historical size/caller findings are revision-specific. Before deleting or moving this package, recheck current
-manifests, Rust/non-Rust callers, constructors, features, targets, tests and workflows, then change all actual
-consumers in the same cut.
 
-Concrete ownership:
+## Removal boundary
 
-- Qdrant owns one optional actual key in its composition;
-- trusted local protocol has no pairing secret, grant or per-frame MAC;
-- a restricted-client adapter owns its selected credential/session;
-- encrypted immutable storage owns one concrete OS-protected key path and object codec;
-- plain immutable storage has no secret.
+This documentation does not delete the existing package. Follow the
+[caller cutover](../../../docs/architecture/LOCAL_SCOPE.md#remove-legacy-security-wiring): move actual CLI/daemon/
+store consumers to the plain path, then remove unused source, Cargo entries and exclusive fixtures together.
+Keep shared OS file/lock behavior where used. Do not delete credentials or old user data as cleanup.
 
-Preserve #598's active private work and consume only its accepted handoff. Do not implement a competing revision
-key/object writer or infer its final format. After handoff, retain only exact metadata/helpers directly used by
-the selected current profile and delete unconsumed candidate/selection/lifecycle code.
-
-Keep an old-format reader only while explicit user-data access/export needs it. It must not create new legacy
-objects, migrate on open or constrain the current format. Change direct daemon/config/protocol/object consumers
-together; do not add a V2 secret platform or forwarding facade.
-
-After code, run minimal Rust 1.98 check/Clippy for actual retained profile and direct consumers, then focused
-fresh/existing/restart/wrong-key/corruption/no-secret-output cases. Historical catalogue/rotation/grant matrices
-are removed with their APIs.
+[Prior inventory](https://github.com/UnknownAlienHuman/eliot-search/blob/6ae24197a1be8695ede5bb7d12dfaf97f5bca1fc/crates/search-runtime/search-os-secrets/AGENTS.md) records the previous design,
+not a future integration requirement. Preserve unpublished #598 work without waiting for or importing it.
+After source changes run minimal compiler/Clippy for actual consumers, including Windows targets where affected.

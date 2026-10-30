@@ -44,9 +44,9 @@ security system and may expire on disconnect/restart.
 **Availability is factual.** A handler works only when its real dependencies are constructed. A name, registry,
 digest, qualification receipt or advertisement does not create behavior or grant request authority.
 
-**Local and no-execute by default.** The baseline serves the owning OS account and explicitly selected sources.
-It never executes indexed material or silently widens scope. Restricted clients, remote adapters and encryption
-are separately selected needs, not mandatory infrastructure for ordinary local work.
+**Local single-user product.** [Local scope](LOCAL_SCOPE.md) selects one OS account, plain storage, same-host
+Qdrant and owned-child stdio. Application encryption, key lifecycles, restricted clients and remote/multi-user
+services are not planned features. Source input remains no-execute; selection never silently widens.
 
 **Complexity must serve a consumer.** Prefer direct calls and concrete values. A trait/package/worker earns its
 place through a real dependency, effect or substantial algorithm, not a hypothetical future backend. Reuse maintained

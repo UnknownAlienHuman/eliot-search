@@ -1,59 +1,48 @@
 # Documentation index
 
-ELIOT Search is a standalone source-backed search application. The target architecture is not a claim that the
-current binaries implement it. Start with the relevant row below; do not load every linked document.
-
-## Published documentation versus code
-
-These rules are published on `main` independently of PR #610's source refactor. Statements about inspected
-callers, removed code or previous compiler runs apply to their named revisions; they are not proof that those
-changes are present in `main`. Use the [registry](audit/ANALYSIS_REGISTRY.md#resume) and actual checked-out source.
-
-The current authority path is this index → architecture/delivery sequence → affected owner. Retained old
-Architecture 8.4, P00, wave, swarm and qualification packets outside that path are historical inputs to legacy
-tooling, not additional instructions. They cannot override the current owner or require restoring retired APIs.
+ELIOT Search is a local, source-backed search application. Target design is not implemented behavior.
+Choose one route; do not load the whole documentation tree.
 
 ## Read by task
 
-| Task | Short path |
+| Task | Read |
 |---|---|
-| Understand the product | [Architecture](architecture/README.md) |
-| Continue implementation | [Registry resume](audit/ANALYSIS_REGISTRY.md#resume) → current [delivery stage](implementation/README.md#delivery-sequence) → affected owner |
-| Find the owner of a rule | [Owner map](implementation/README.md#owners) |
+| Understand what to build | [Architecture](architecture/README.md), [local scope](architecture/LOCAL_SCOPE.md) |
+| Continue implementation | [Resume](audit/ANALYSIS_REGISTRY.md#resume) → current [stage](implementation/README.md#delivery-sequence) |
+| Find the actual files/callers | [Code map](implementation/CODE_MAP.md) |
+| Check a change / update documentation | [Working guide](implementation/WORKING_GUIDE.md) |
 | Change configuration | [Typed settings](../crates/search-config/FUNCTIONS.md) |
-| Change root initialization/platform publication | [Root recipe](../crates/search-runtime/search-runtime-owner/FUNCTIONS.md) |
-| Change stored source/prepared bytes | [Object recipe](../crates/search-source/search-revision-store/FUNCTIONS.md) |
-| Change lexical meaning or physical/query profiles | [Lexical profile](../crates/search-lexical/FUNCTIONS.md) |
-| Change Qdrant calls | [Bridge recipe](../crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md) |
-| Change publication, recovery or cleanup | [Publication recipe](../crates/search-index-qdrant/search-publication/FUNCTIONS.md) |
-| Change results or CLI | [Query](../crates/search-query/README.md) or [CLI recipe](../bins/eliot-search/FUNCTIONS.md) |
-| Change a dependency/platform assumption | Relevant [donor evidence](audit/DONOR_VERIFICATION_REGISTER_2026-10-09.md), then its actual consumer |
-| Remove obsolete tests | Relevant section of [test cutover](implementation/TEST_CUTOVER.md) |
+| Change root or file publication | [Root](../crates/search-runtime/search-runtime-owner/FUNCTIONS.md) |
+| Change retained objects | [Object store](../crates/search-source/search-revision-store/FUNCTIONS.md) |
+| Change source discovery/current state | [Source family](../crates/search-source/README.md) |
+| Change preparation | [Materializer](../crates/search-prep/search-materializer/FUNCTIONS.md), [unitizer](../crates/search-prep/search-unitizer/FUNCTIONS.md) |
+| Change retrieval/index | [Lexical profile](../crates/search-lexical/FUNCTIONS.md), [Qdrant bridge](../crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md) |
+| Change publication/recovery/cleanup | [Publisher](../crates/search-index-qdrant/search-publication/FUNCTIONS.md) |
+| Change query/session/output | [Query](../crates/search-query/README.md), [protocol](../crates/search-provider-protocol/FUNCTIONS.md), [CLI](../bins/eliot-search/FUNCTIONS.md) |
+| Check an upstream assumption | Affected [donor evidence](audit/DONOR_VERIFICATION_REGISTER_2026-10-09.md), then official API and actual caller |
+| Plan later behavioral verification | [Test cutover](implementation/TEST_CUTOVER.md) |
 
 ## Authority and maintenance
 
-| Document | Owns | Does not own |
-|---|---|---|
-| Architecture + product docs | Purpose, invariants and observable outcomes | Package layout, audit history |
-| Implementation | Delivery order, cross-owner values and owner map | Copies of local algorithms |
-| Owner `FUNCTIONS.md` | Concrete algorithm, failures, source seams and removal boundary | Another global architecture |
-| `AGENTS.md` | Working method and local editing constraints | Duplicate algorithm/profile specifications |
-| README/index | Purpose, status pointer and navigation | A competing rule set |
-| Registry | Inspected revision, changes, checks and remaining work | Permission or runtime readiness |
-| Donor register | Versioned upstream evidence and its limits | Installed capability or product qualification |
+Architecture/local scope own the product boundary. Implementation owns order and cross-owner meaning.
+Each owner's FUNCTIONS.md owns its algorithm and failure behavior. AGENTS.md owns editing constraints;
+READMEs route readers; the registry records current evidence and next work. Do not copy an algorithm into them.
 
-Resolve a conflict in the owning rule and update its references in the same change. Do not implement both versions.
-Keep product invariants; a local recipe cannot silently weaken them. Issues track responsibility and acceptance
-and link to the owner rather than reproducing the algorithm. Existing code shows what runs, not what must survive.
+[Update rules](implementation/WORKING_GUIDE.md#what-to-update) specify which files change with each kind of work.
+A code map is an inspection aid, not a mandatory crate graph. Fix conflicting text at its owner and incoming
+references in the same change. Keep useful section anchors or update callers of them.
 
-Keep important anchors stable. When moving a section, update incoming links or retain a meaningful anchor at its
-replacement. Put historical rationale in Git-linked evidence, not on every implementation reading path.
+## Published documentation versus code
+
+Main's source still includes legacy implementations. #610's source removals and dependency changes apply only
+to their named branch revisions. An absent caller in an old audit is not permission to delete current code.
+Read actual manifests, dispatch and consumers before acting.
+
+Old Architecture 8.4, P00, swarm, wave and qualification inputs are historical even when retained on disk for old
+tooling. They do not restore encryption, grants, compatibility promises or acceptance gates. Do not read them
+unless an actual deletion/caller investigation needs them.
 
 ## Supporting navigation
 
-[Product workflows](product/AGENT_ANALYSIS_FRAMEWORK.md) · [Configuration](config/README.md) ·
-[Dependency/lifetime graph](handoff/DEPENDENCY_GRAPH.md) · [ADRs](adr/README.md) ·
-[Audit records](audit/README.md) · [Windows Qdrant](runtime/QDRANT_NATIVE_WINDOWS.md)
-
-Historical material remains in Git history and, until its legacy consumers are removed, may also remain on disk.
-Remove those files with the consuming tooling; their presence does not make them current requirements.
+[Product workflows](product/AGENT_ANALYSIS_FRAMEWORK.md) · [Owner map](implementation/README.md#owners) ·
+[Dependency/lifetime graph](handoff/DEPENDENCY_GRAPH.md) · [ADRs](adr/README.md) · [Audit](audit/README.md)

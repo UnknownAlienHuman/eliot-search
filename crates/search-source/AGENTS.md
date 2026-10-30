@@ -4,7 +4,8 @@ Read the [architecture](../../docs/architecture/README.md),
 [implementation guide](../../docs/implementation/README.md) and [source map](README.md).
 
 Complete one path from selected root to immutable retained bytes and a typed current source head. Preserve
-#598's private work and consume only its accepted public handoff.
+user data and #598's private work. They are not a reason to wait for a crypto handoff; use
+[the selected plain path](../../docs/architecture/LOCAL_SCOPE.md).
 
 ## Historical-size boundary
 
@@ -29,5 +30,5 @@ APIs, fixtures and dependency edges.
 - no forwarding crates, compatibility families or generic source service locator.
 
 After production changes, run minimal Rust 1.98 compiler/Clippy for changed source/object/control/daemon
-consumers and focused stable-read/head/restart/rename/ABA cases. Package byte goldens and replay matrices leave
-with the APIs they protected.
+consumers. Later connected-product cases cover stable-read/head/restart/rename/ABA behavior. Package byte goldens
+and replay matrices leave with the APIs they protected.

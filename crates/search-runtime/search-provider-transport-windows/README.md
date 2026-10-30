@@ -1,38 +1,16 @@
-# Windows provider transport — remove the old client path unless a real consumer remains
+# Windows pipe transport — legacy boundary
 
-This package is a small synchronous client-side named-pipe adapter for the old provider protocol. It is not a
-server/listener and is not the selected baseline transport; the current local product starts with owned child
-stdin/stdout and one framed protocol.
+The selected [local product](../../../docs/architecture/LOCAL_SCOPE.md) uses one owned-child stdio connection,
+not a separately listening pipe service or restricted-client protocol. Do not add pairing, credentials, endpoint
+discovery, new transport variants or compatibility constructors here.
 
-## Revision-specific evidence
+<a id="revision-specific-evidence"></a>
+<a id="optional-future-persistent-transport"></a>
+## Cutover
 
-At the inspected public-main baseline, production source was about 8.4 KiB before tests and callers were the old
-typed provider client, an example and an unconnected CLI pairing path. No caller was found on the selected
-child-stdio path. These size and caller findings are historical evidence, not permanent current-branch truth.
-
-Before deletion, repeat an exact current search across manifests, Rust imports/constructors, non-Rust tooling,
-feature/target wiring, tests and workflows. If no real persistent-daemon consumer exists, remove this package,
-its workspace/dependency/feature entries and old client callers in the same cut. Do not retain it merely for a
-hypothetical future pipe.
-
-If a current consumer exists, keep only the smallest truthful unavailable boundary while it moves; do not
-harden legacy pairing/grant/session semantics.
-
-## Optional future persistent transport
-
-Only after a measured product need, implement one actual owner-only Windows named-pipe server and client against
-the current framed protocol:
-
-```text
-real server/listener with selected ACL and peer-owner checks
-+ one owned bounded client stream
-→ current u32-length + Serde messages
-```
-
-Transport reachability does not grant source scope. The daemon resolves every request against its pinned view
-and any selected restricted-session policy. Do not restore `NativeEndpointNameV1`, endpoint files, pairing keys,
-grants, capability digests, TCP/token-file fallback, discovery framework, reconnect pool or generic transport
-plugins.
-
-After deletion or replacement, run minimal Rust 1.98 check/Clippy for actual protocol/client/CLI consumers.
-Native pipe runtime cases return only with a selected persistent-pipe implementation.
+Main's Windows CLI still declares this package; move its actual client/dispatcher consumers before removing
+source/Cargo/features/fixtures. Preserve any useful OS I/O handling at its real owner, not a forwarding crate.
+[Client](../../search-provider-client/FUNCTIONS.md) and [protocol](../../search-provider-protocol/FUNCTIONS.md)
+own the replacement. Run minimal compiler/Clippy including the Windows consumer when source changes.
+[Prior recipe](https://github.com/UnknownAlienHuman/eliot-search/blob/6ae24197a1be8695ede5bb7d12dfaf97f5bca1fc/crates/search-runtime/search-provider-transport-windows/README.md) is historical. No transport
+implementation or package deletion is delivered by this documentation change.
