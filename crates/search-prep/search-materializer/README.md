@@ -1,45 +1,22 @@
 # search-materializer
 
-Convert one retained object into text, source-coordinate maps and useful document/code structure.
-Materialization owns transformations and their assurance; it does not own another object store or
-publication lifecycle.
-
-Read the [implementation guide](../../../docs/implementation/README.md) and
-[FUNCTIONS.md](FUNCTIONS.md).
+Turn exact retained bytes into the selected text representation, coordinates and explicit gaps.
+[FUNCTIONS.md](FUNCTIONS.md) owns the algorithm; the [preparation map](../README.md) routes adjacent work.
 
 ## One preparation pass
 
-```text
-committed retained revision
-→ one verified object read
-→ one MaterializationProduct
-→ structure-first UnitSet
-→ one PreparedArtifact
-→ shared immutable object writer
-→ short current-preparation reference in redb
-```
+Start with the [first connected format](FUNCTIONS.md#first-connected-format), then pass its owned product to
+unitization. Filesystem publication belongs to the shared object store, not another materializer writer.
 
-Markdown/JATS/plain/code unitization consumes the private immutable product directly. Rebuild/reparse only
-when loading an independently persisted or external artifact, not between adjacent trusted functions.
+<a id="allocation-discipline"></a>
+## Memory and reuse
+
+[Read limits](FUNCTIONS.md#enforce-the-execution-limit-before-acquisition) and
+[artifact acceptance](FUNCTIONS.md#prepared-artifact-acceptance) define what is checked and when.
+Do not read “validate a saved artifact” as “rerun its parser on every load.”
 
 ## Current duplication
 
-The text/product pipeline is useful. The legacy artifact platform is not: its contextual publication
-kernel is about 40 KiB before tests and mirrors revision-store's stage/write/sync/publish/readback code.
-It can leave the staging name after successful publication. Daemon preparation then performs additional
-complete reads/copies of plaintext artifacts.
-
-Delete that platform after prepared artifacts use the shared current-format object writer. Materializer
-continues to define prepared payload/maps/structure, but filesystem publication and GC have one owner.
-
-## Allocation discipline
-
-- Move the owned UTF-8 buffer into `String` when it is already valid and unchanged.
-- Preserve exact text without allocating a second identical normalization buffer.
-- During UTF-16 decode, collect coordinates/line boundaries in one pass instead of retaining multiple
-  scalar-sized temporary arrays.
-- Keep parser offset iterators and borrowed XML events from the existing donors.
-- Bound actual parsed nodes/events/maps/units and output bytes before retaining them.
-
-Unsupported encoding, lossy mapping, cancellation, deadline or truncation yields a typed gap/error. It
-never produces zero digests, `invalid` profile strings or a complete-looking checkpoint.
+The [pinned earlier source map](https://github.com/UnknownAlienHuman/eliot-search/blob/d83e1e27d27768b9803b5fd809c1631ff4cf73d7/crates/search-prep/search-materializer/FUNCTIONS.md#inspected-source-useful-work-and-actual-defects)
+records duplicate writers, missing reader budget propagation and profile/empty-input defects. Recheck actual
+callers at the code cut; preserve useful decoding/maps, not the legacy pipeline or historical file-size targets.
