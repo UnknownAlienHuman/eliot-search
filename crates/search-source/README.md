@@ -7,9 +7,9 @@ published evidence. The [implementation spine](../../docs/implementation/README.
 
 ```text
 explicit selected file
-→ pre-read policy
-→ one stable final-handle/Git-object read
-→ post-read classification
+→ selection/exclusion and declared-size checks
+→ one bounded stable file read
+→ actual byte/kind checks
 → plain immutable put_object
 → one typed SourceRecord compare/set
 → one preparation result
@@ -17,7 +17,7 @@ explicit selected file
 ```
 
 The first walking skeleton supports one explicit local file. Root inventory and periodic reconciliation follow
-after the end-to-end Search path works.
+after the end-to-end Search path works. Git acquisition is a later selected source, not a prerequisite.
 
 ## Storage profiles
 
@@ -41,13 +41,13 @@ pinned view and exact ObjectRefs, not path history or registry replay.
 
 | Responsibility | Owner |
 |---|---|
-| root containment and stable read | root/safe-reader composition |
-| selected-source policy | one small admission evaluator |
-| immutable bytes | revision-store object owner |
-| roots/sources/current heads | typed redb/source methods |
-| changed/missing/incomplete observations | reconcile owner |
-| source transformation | preparation owner |
-| served evidence | PublishedView + immutable reader |
+| source containment and stable read | [Safe reader](search-safe-reader/FUNCTIONS.md) |
+| selection/exclusion and refusal reasons | [Admission](search-source-admission/FUNCTIONS.md) |
+| immutable bytes | [Object store](search-revision-store/FUNCTIONS.md) |
+| roots/sources/current heads | [Source rows](search-source-registry/FUNCTIONS.md) |
+| changed/missing/incomplete observations | [Reconciliation](search-source-reconcile/FUNCTIONS.md) |
+| source transformation | [Preparation](../search-prep/README.md) |
+| served evidence | [Pinned query/evidence](../search-query/README.md) |
 
 Delete receipt, provenance, history, portfolio, restore and replay platforms after their actual callers move.
 Keep only concrete current rows and behavior used by the connected path.
