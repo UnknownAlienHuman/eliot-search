@@ -48,8 +48,9 @@ measurement. Do not let the server default choose. A different residency choice 
 under the selected profile. The release matrix records build/query latency, RAM/cache pressure and disk.
 
 Stage 2 has one file and no candidate filter, so it creates only the text index. Stage 3A adds exact keyword/filter
-indexes only for fields used by real source/access/path-kind filters. Those indexes also set
-`enable_hnsw(false)` and explicit memory. Prefix or tenant optimization is enabled only for an actual query shape.
+indexes only for fields used by real source/path-kind filters. Those indexes also set
+`enable_hnsw(false)` and explicit memory. Prefix optimization is added only for an actual query shape; no tenant/
+access subsystem is selected.
 
 ## Retrieval text: no alias inflation
 
@@ -101,17 +102,11 @@ Exact or an explicit exact keyword producer.
 
 ## Scope and IDF
 
-For a scoped query:
-
-```text
-base population = selected sources ∩ actual access/session restriction
-candidate filter = base population + request-only narrowing
-idf.corpus       = base population
-```
-
-If base population is the whole physical collection, omit `idf`. Explicit empty returns without RPC; unknown or
-incomplete selection never widens. All real filter fields are payload-indexed. BM25 statistics are shard-local, so
-the baseline uses one ordinary shard and no per-source custom-shard portfolio.
+The [source-selection owner](../search-query/search-access/FUNCTIONS.md#candidate-and-statistics-scope) defines the
+local base population, candidate narrowing, explicit-empty behavior and IDF scope. There is no session-access or
+tenant predicate to implement. An entire-collection base may omit the IDF override, not request-only filters.
+All actual filter fields are payload-indexed. BM25 statistics remain shard-local; the baseline uses one ordinary
+shard and no per-source custom-shard portfolio.
 
 ## Visibility and response economy
 

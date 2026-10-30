@@ -6,38 +6,37 @@ Current next step and evidence only. Algorithms stay with their owners.
 <a id="resume-after-interruption"></a>
 ## Resume
 
-**R064 — concrete implementation choices and removal of competing layer recipes, 2026-10-30.**
-Inspected main: `69e85b04c0d1e3d4e8ef1742ec128ecd95cc8c04` (R063). Documentation only; source and dependencies are unchanged.
+**R065 — lean preparation handoff and source-selection ownership, 2026-10-30.**
+Inspected main: `d83e1e27d27768b9803b5fd809c1631ff4cf73d7` (R064). Documentation only; source and dependencies are unchanged.
 
 Next implementation remains [Foundation](../implementation/README.md#1-foundation--invocation-settings-and-root)
-at the [actual dispatch](../implementation/CODE_MAP.md#existing-dispatch-to-replace). Use the
-[implementation choices](../implementation/WORKING_GUIDE.md#implementation-choices) while writing that path;
-do not first rewrite all shared types, ports or domain packages. Stop at the stage's connected result.
+at the [actual dispatch](../implementation/CODE_MAP.md#existing-dispatch-to-replace). Later Stage 2 preparation
+starts with one UTF-8 text/code file, not every parser or historical UnitSet format. Use the
+[preparation map](../../crates/search-prep/README.md) only when that part of the path changes.
 
 <a id="established-decisions--do-not-rediscover"></a>
 <a id="decisions-and-owners"></a>
 ## Selected decisions
 
-[Local scope](../architecture/LOCAL_SCOPE.md) is unchanged. Prefer private functions and concrete owners;
-justify abstractions by an actual invariant, variation, dependency or ownership need, not names or line quotas.
-Keep effect-specific recovery, source integrity, finite work and the pinned view/window lifetime.
+Local plain storage and delivery order are unchanged. Preparation owns one representation and bounded ranges;
+projection owns upload pages/backend IDs; source rows own guarded installation. Known saved artifacts are verified
+at their actual boundary, not reparsed at every handoff. Lexical scope links to the local selection owner.
 
 <a id="coverage-ledger"></a>
 <a id="changed-documentation"></a>
 ## Documentation changes
 
-Working guide now defines implementation defaults, data/error/cost handling and causal-path review. Root instructions
-and PR template link that method without a new form or framework. Shared-data guidance separates useful typed
-invariants from cloned DTO/plan/receipt families. Ports/domain/planner entrypoints no longer duplicate algorithms
-or prescribe a global layer-rewrite queue. Planner consumes the local scope owner and keeps existing windows;
-it no longer specifies removed session/access restrictions.
+Shortened preparation README/AGENTS paths and moved historical audits behind immutable links. Specified the first
+format, execution-only context, one-buffer/range representation, no self-referential artifact address and bounded
+page composition. Preserved coordinate/integrity, retry, empty/gap, ABA and fixed-pending-input rules. Removed the
+lexical recipe's obsolete session-access predicate. Issue #331 must use the same main recipes and execution context.
 
 <a id="delivery-remaining"></a>
 ## Remaining implementation
 
-Foundation → one retained file through Qdrant and the actual CLI → later delivery stages. Existing legacy code
-still needs real caller/Cargo/fixture cutovers. #610 remains unmerged; no source removal is inferred from this edit.
-Preserve unpublished work and user bytes/keys. No product stage is completed by documentation.
+Foundation → one retained file through real Qdrant and CLI → later stages. Existing code still needs actual
+caller/Cargo/fixture cutovers. #610 remains separate; no deletion or parser upgrade is inferred from this edit.
+Preserve user data/keys and unpublished work. No implementation stage is completed by documentation.
 
 <a id="evidence-status"></a>
 <a id="execution-evidence"></a>
@@ -45,15 +44,15 @@ Preserve unpublished work and user bytes/keys. No product stage is completed by 
 
 | Check | Result / limit |
 |---|---|
-| Inputs | All 14 edited files match GitHub blob IDs at the inspected main. An older archive supplied only byte-matching inputs/reference material, not a current checkout. |
-| Review | Compared shared-data/domain/ports/planner entrypoints with current owner recipes and local scope. No fresh complete source-caller census or independent-agent review. |
-| Navigation/diff | 41 changed-page relative links resolved against candidate files and nine pinned supporting-file reads; 68 previous heading/explicit anchors retained; git diff --check passed. No full repository or external-URL crawl. |
-| Scope | Markdown only; no code, Cargo/lockfile, configuration, workflow or test-source change. No new checker or task database. |
-| Execution | No Rust build, Clippy, product tests or runtime qualification. Existing library/version selections were not changed or re-audited. |
+| Inputs | All 11 edited inputs reconstructed and matched their pinned GitHub blob IDs. An older archive supplied byte-matching inputs only, not a current full checkout. |
+| Review | Compared preparation, object, projection, lexical, selection and delivery rules. Source-defect inventories are explicitly historical; no fresh full caller census or independent-agent review. |
+| Navigation/diff | 32 changed-page relative links checked against candidate files and eight pinned supporting reads; all 74 prior anchors retained; git diff --check passed. No full repository or external-URL crawl. |
+| Scope | Markdown only. No source, Cargo/lockfile, configuration, workflow, test source or permanent checker added. |
+| Execution | No Rust build, Clippy or product tests. No library upgrade, new upstream/API audit or runtime memory/performance result. |
 
 <a id="evidence-index"></a>
 <a id="prior-evidence"></a>
 ## Previous evidence
 
-[R063 registry](https://github.com/UnknownAlienHuman/eliot-search/blob/69e85b04c0d1e3d4e8ef1742ec128ecd95cc8c04/docs/audit/ANALYSIS_REGISTRY.md)
-retains previous checks. Update the next connected result and actual evidence, not another specification or diary.
+[R064 registry](https://github.com/UnknownAlienHuman/eliot-search/blob/d83e1e27d27768b9803b5fd809c1631ff4cf73d7/docs/audit/ANALYSIS_REGISTRY.md) retains prior checks.
+Update the next connected result and actual evidence, not a second specification or audit diary.

@@ -1,49 +1,25 @@
 # search-unitizer
 
-Turn a materialization into useful units with exact source coordinates. A unit is an occurrence in a
-particular representation; its ID does not promise semantic stability across revisions.
+Turn one prepared representation into bounded source-backed ranges. [FUNCTIONS.md](FUNCTIONS.md) owns the rules;
+the [preparation map](../README.md) routes the input, object writer and publication consumer.
 
-Read the [implementation guide](../../../docs/implementation/README.md) for integration,
-[FUNCTIONS.md](FUNCTIONS.md) for existing functions and [AGENTS.md](AGENTS.md) for changes here.
+<a id="accepted-v3-baseline"></a>
+## First connected path
 
-## Accepted v3 baseline
+Use the existing line-preferred range mechanism in [layout.rs](src/layout.rs) for unchanged UTF-8. No structural
+parser, historical UnitSet envelope or cross-revision identity is required to return the first useful excerpt.
+The recipe distinguishes reusable representation ranges from publication-owned backend point IDs.
 
-The implemented `prepare_unit_set_input` / `build_unit_manifest` path accepts nonempty,
-byte-identical UTF-8 text/code with `ExactBytes`, an empty loss map and equal input/canonical digests.
-It derives contiguous line-preferred ranges, occurrence IDs and an immutable manifest.
-Current v3 does not support arbitrary transcoded, normalized or lossy materializations.
+<a id="markdown-structural-v4"></a>
+<a id="jats-structural-v5"></a>
+## Other formats
 
-[layout.rs](src/layout.rs) implements the reusable range algorithm. Raw units cover each input byte
-once, preserve UTF-8 boundaries and obey actual unit/count limits. Source admission and Qdrant
-publication happen in their respective application owners.
-
-## Markdown structural v4
-
-[markdown_unitset/build.rs](src/markdown_unitset/build.rs) is implemented. It builds raw v3 coverage
-plus structural occurrences and inline observations from the existing materializer product.
-Heading relationships differ from physical containment; overlapping structural observations do not
-increase the covered byte count. Selected normalized values retain mapped provenance.
-
-## JATS structural v5
-
-[jats_unitset/build.rs](src/jats_unitset/build.rs) is implemented. It builds raw coverage plus element
-occurrences and the materializer's attribute/text/comment observations. Original XML ranges and mapped
-values remain distinct. It introduces no XML parser.
-
-These new UnitSet paths are not connected to production daemon ingestion. The old DIRECT daemon uses
-the existing layout/profile APIs. That is a caller gap, not missing UnitSet implementation.
+Consume actual materializer structures/maps only when that format's end-to-end path is selected. Do not add a
+second parser or infer raw coverage from overlapping structures. Optional formats do not block plain text.
 
 ## Refactoring target
 
-Consume one immutable materialization and build units once. Structural construction currently invokes
-full materializer replay through `verify_markdown` / `verify_jats`, rereading and reparsing the source.
-Remove that requirement with the ingress/callers. Validate externally reconstructed or persisted
-artifacts at their acceptance boundary.
-
-The v3 builder also constructs a canonical value tree, hashes it, serializes the whole manifest,
-copies the encoded bytes and throws them away after checking length. Keep typed unit records and one
-bounded encoding where persistence needs it. Use real content/occurrence identity where consumed;
-source/fixture hashes, nested envelopes and receipts are not preservation requirements.
-
-Change v3/v4/v5 and their actual consumers together. Legacy formats and APIs do not need a compatibility
-layer. An unsupported old root may be rejected before writing and left intact.
+The [pinned earlier inventory](https://github.com/UnknownAlienHuman/eliot-search/blob/d83e1e27d27768b9803b5fd809c1631ff4cf73d7/crates/search-prep/search-unitizer/README.md)
+records v3/v4/v5, parser replay and discarded encodings. It is inspection history, not an instruction to migrate
+all formats at once. Replace the actual caller's route, then remove displaced representations and exclusive fixtures.
+Keep original data intact; do not add another manifest/proof layer to maintain old internal APIs.

@@ -15,6 +15,11 @@ at the code cut. Do not repair that proof protocol or preserve it through wrappe
 Consume one complete captured inventory of preparation outcomes: exact source/prepared/ObjectRefs, explicit gaps,
 unit text/ranges, selected structural context, physical profile and actual scope fields.
 
+[Unitization](../../search-prep/search-unitizer/FUNCTIONS.md#representation-and-ownership) supplies one representation
+with bounded descriptors, not another point model. Compose the selected retrieval text from those ranges into each
+bounded page; no reparse or whole-document/per-unit string duplication. Derive backend IDs here, not in reusable
+prepared artifacts. Bind the already-persisted prepared ObjectRef in evidence; never require a self-reference.
+
 Stream bounded pages containing actual retrieval_text, required routing/filter payload and matching evidence.
 A digest is not uploadable input. Validate complete selected outcomes and point/byte ceilings before effects;
 an oversized source produces an explicit gap or build refusal, not silent partial-source completeness.
