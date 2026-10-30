@@ -1,26 +1,22 @@
 # ELIOT Search
 
-A standalone local search application for codebases and document collections. The target returns ranked
-locations, verified retained-source excerpts and explicit gaps. Qdrant is the derived index, not source evidence.
+Local search for codebases and documents: ranked locations, retained-source excerpts and explicit gaps.
+One OS account, plain local storage, same-host Qdrant and an owned CLI/daemon connection.
+No application encryption, key management, pairing or multi-user access platform.
 
-**Current documentation is published on `main`. The persistent product is not connected end to end.**
-The source refactor in [PR #610](https://github.com/UnknownAlienHuman/eliot-search/pull/610) is separate and has not
-been merged by this documentation update. The [registry](docs/audit/ANALYSIS_REGISTRY.md#resume) distinguishes
-published rules, inspected source revisions and executed behavior.
+**Status: the persistent product is not yet connected end to end.** Documentation describes the target;
+[source refactor #610](https://github.com/UnknownAlienHuman/eliot-search/pull/610) is not merged by these docs.
 
-## Start here
-
-| Need | Read |
+| Need | Start here |
 |---|---|
-| Product and invariants | [Architecture](docs/architecture/README.md) |
-| Implement the next connected path | [Delivery sequence and owners](docs/implementation/README.md#delivery-sequence) |
-| Resume work or inspect evidence | [Analysis registry](docs/audit/ANALYSIS_REGISTRY.md#resume) |
+| Product and boundaries | [Architecture](docs/architecture/README.md), [local scope](docs/architecture/LOCAL_SCOPE.md) |
+| Implement | [Current step](docs/audit/ANALYSIS_REGISTRY.md#resume) → [delivery sequence](docs/implementation/README.md#delivery-sequence) |
+| Find code and check a change | [Code map](docs/implementation/CODE_MAP.md), [working guide](docs/implementation/WORKING_GUIDE.md) |
 | Find a specific rule | [Documentation index](docs/README.md) |
-| Run the application | [Quickstart status](QUICKSTART.md); no verified persistent quickstart yet |
+| Run | [Quickstart status](QUICKSTART.md); no verified persistent quickstart yet |
 
-Start with root/settings, then one retained file through Qdrant to a CLI excerpt. Add restart and complete-generation
-convergence next. Optional models, encryption and adapters do not block that path. Existing source is evidence of
-what is implemented, not a requirement to preserve old architecture.
+Implement root/settings first, then one file through retained storage and Qdrant to an actual CLI excerpt.
+Add restart/inventory and complete-generation convergence next. Do not build optional systems first.
 
 ## License
 

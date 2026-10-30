@@ -77,7 +77,7 @@ opens arbitrary revision offsets or re-resolves against latest source state.
 | Foreign route/generation/scope, absent or contradictory pinned point row, malformed/duplicate backend identity | Backend/view inconsistency. Fail or contaminate that backend result; do not silently skip and claim a clean ranked set. |
 | Pinned row exists but selected retained object/representation/range is genuinely missing or unsupported | Item-local gap with the actual cause. It may advance the page only when represented in the delivered response. |
 | Object digest/address mismatch, invalid map or impossible range | Corruption/integrity failure; emit no excerpt and preserve the cause. |
-| Cancellation, restricted-session revocation, absolute deadline, aggregate read/output exhaustion | Request/page stop at the unhandled item. Not evidence that the item is absent and not permission to refill indefinitely. |
+| Cancellation, session close, absolute deadline, aggregate read/output exhaustion | Request/page stop at the unhandled item. Not evidence that the item is absent and not permission to refill indefinitely. |
 | Temporary storage/system failure | Request/backend failure or finite retry according to the real owner; do not flatten it into permanent missing evidence. |
 
 Charge work already performed. A bounded partial response may contain earlier handled cards/gaps plus a request

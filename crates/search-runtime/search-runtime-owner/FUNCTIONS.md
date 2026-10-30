@@ -1,8 +1,8 @@
-# Root owner — one current-format guard
+# Root owner — one local lock and plain format
 
-This owner classifies, initializes and opens one root, holds process-lifetime exclusion, and owns the small
-platform finalization seam shared with the object writer. It owns no source catalogue, query session or lifecycle
-ledger. Target behavior below is not implemented/runtime evidence.
+[Local scope](../../../docs/architecture/LOCAL_SCOPE.md) selects a private per-user application directory,
+not a sandbox against malicious same-user code. This owner classifies/initializes/opens the root and retains
+one process lock. It owns no keys, source catalogue, query state or lifecycle ledger. This is target behavior.
 
 ## Public operations
 
@@ -13,117 +13,97 @@ open_existing(path, settings, ExecutionContext) -> DataRootGuard
 explicit_discard_incomplete(path, ExecutionContext)
 ```
 
-Use the [execution/query separation](../../../docs/implementation/README.md#minimal-cross-owner-values).
-Root work needs deadline/cancellation and its own finite limits, never a query view or scoring profile.
-Help/version perform no root effects; inspect is read-only.
+Use execution-only deadline/cancellation and bounds, never a query view. Help/version have no root effects;
+inspect is read-only. Do not add a plain/encrypted selection or generic storage-profile registry.
 
 ## Classification
 
-The plain layout contains a final root manifest, minimal control store, immutable-object namespace and recognizable
-owned initialization debris. Root metadata binds format/root identity, plain profile and store schema versions.
-
-| Observation | Classification |
+| Observation | Result |
 |---|---|
-| Absent or empty target without a final manifest/owned marker | Uninitialized |
-| Exact current marker and recognized unfinished empty layout, no final manifest | IncompleteInitialization |
-| Final manifest with exact compatible layout, no incomplete-import marker | Current |
-| Final manifest plus recognized current-format incomplete-import marker (Stage 5) | IncompleteImport; normal open refuses before backend effects |
-| Final manifest with missing/conflicting required layout | Corrupt |
-| Unknown, foreign, unsafe or unsupported pre-release layout | Unsupported |
-| Actual exclusive owner present | Busy |
+| Absent/empty selected directory | Uninitialized; only explicit init creates application files |
+| Only the fixed lock file, or recognized unfinished empty layout with init marker; no final manifest | IncompleteInitialization; explicit init/discard only |
+| Compatible final manifest and required stores, no incomplete-import marker | Current |
+| Complete/partial archive layout | Not a runnable root |
+| Incomplete-import marker | Normal open refuses before recovery/backend effects |
+| Missing/conflicting committed files | Corrupt; no automatic repair |
+| Unknown/unsupported layout, including old encrypted roots | Unsupported; leave data/keys intact |
+| Another cooperating process holds the lock | Busy |
 
-Unknown entries are not an empty uninitialized root. A valid final manifest with leftover owned debris is not
-permission to discard the committed root. Ordinary open/search/status never repairs, resumes, migrates or deletes.
+Check the actual selected directory and reject unsupported links/reparse entries in application state. Use
+ordinary OS permissions; a root under a shared writable location is not the selected deployment. No arbitrary
+parent-chain/anti-administrator security promise is made. Sources cannot supply application output paths.
+
+## One lock
+
+Use one stable lock file and [std::fs::File::try_lock](https://doc.rust-lang.org/std/fs/struct.File.html#method.try_lock),
+opened read/write without truncation. Existing-root open uses its existing lock; explicit initialization creates
+it. Keep the handle in DataRootGuard until all stores/tasks close. WouldBlock means Busy; other errors are errors.
+Do not reacquire through cloned handles, infer ownership from file existence/PID or steal a stale marker.
+Never unlink/replace the lock file on shutdown: otherwise another opener can lock a different file at the same path.
+All application writers and stopped-root maintenance cooperate with this lock. It is not a barrier to hostile OS users.
+A crash before the init marker may leave only this lock file. Explicit init may continue from that recognized
+otherwise-empty state after acquiring the same file; reclassify under the lock before any store writes.
 
 ## Final-manifest-last initialization
 
-```text
-validate target → acquire actual exclusion → retain/verify required path handles
-→ exact owned initialization marker → create/flush/close/verify empty stores
-→ unique manifest stage in final parent → write/flush exact bytes
-→ platform no-clobber finalization → verified final manifest/layout
-→ safe removal of owned marker/stage debris → DataRootGuard
-```
-
-No user source is admitted before the final manifest. Interruption before publication uses strict discard/retry,
-not resume or phase replay. Resolve an uncertain finalization through exact final/marker/layout inspection;
-never restart creation over a possibly committed root.
+Validate the selected empty/recognized layout; take exclusion; write the owned init marker; create and verify
+empty stores; publish the final manifest last through the helper below. Admit no user content before that manifest.
+A failure before publication allows only strict recognized-empty discard/retry. No init journal or resume phases.
+An uncertain publication is resolved from the exact final manifest/layout, never by overwriting it.
 
 <a id="windows-finalization"></a>
 <a id="windows-finalization--corrected-r054-boundary"></a>
-## Windows finalization candidate
+<a id="unix-finalization"></a>
+## Shared no-clobber publication
 
-This is the single root/object Windows recipe. The selected candidate is documented Win32, but its ELIOT path
-stability and durability remain unexecuted. [Upstream evidence and exact report](../../../docs/audit/DONOR_VERIFICATION_REGISTER_2026-10-09.md#plain-object-publication-donor)
-are separate from support qualification.
+Use the maintained [tempfile NamedTempFile API](https://docs.rs/tempfile/3.27.0/tempfile/struct.NamedTempFile.html#method.persist_noclobber)
+in the private final parent, on the same filesystem:
 
 ```text
-retain verified root→final-parent directory handles
-  with FILE_SHARE_READ | FILE_SHARE_WRITE, without FILE_SHARE_DELETE
-retain verified stage handle with DELETE access
-establish a stable absolute destination namespace from the retained final parent
-→ SetFileInformationByHandle(FileRenameInfo)
-   RootDirectory=NULL; ReplaceIfExists=FALSE
-→ reopen final through the verified parent relationship
-→ compare stable identity, non-reparse kind, length and exact bytes
+NamedTempFile::new_in(final_parent)
+→ bounded write of exact bytes; verify length/hash; as_file().sync_all()
+→ persist_noclobber(final_path)
+→ verify the final through the ordinary reader
+→ remove owned temporary debris when safe
 ```
 
-No-delete sharing constrains rename/delete access to the opened objects; it is not by itself proof that every
-component of an absolute path is stable. The implementation must also account for mutable ancestors above the
-data root and reparse/device-path resolution. Do not claim safety from the root→parent chain alone.
+Pin the dependency with its real consumer at the code cut; the 3.27.0 API was inspected, not compiled here.
+Keep one small private helper shared by manifest/object writers, not a new filesystem service. Existing final
+means verify exact expected content; never fall back to overwriting persist/rename. A failed/uncertain outcome
+retains enough owned debris for exact inspection and later stopped-root cleanup.
 
-The focused canary must establish accepted absolute/extended path form, access/share flags, absent-target
-success, existing-target refusal, stage/parent/ancestor replacement resistance, safe reopen, local same-volume
-support, bounded errors and classifiable failure debris. Refuse an unsupported or unproven profile.
-
-Do not use path-only MoveFileExW/tempfile publication, the legacy relative-RootDirectory wrapper, a private direct
-NT finalizer or a generic filesystem framework as fallback. Reuse useful verified-open/identity code only after
-tracing current callers; the legacy source-registration publication route is removed with its consumers.
-
-File-data flush, namespace visibility, final readback and sudden-power-loss durability are separate claims.
-Do not advertise the last one without executed evidence.
-
-## Unix finalization
-
-Use a private directory-relative no-replace operation where available. A same-filesystem link/unlink fallback
-needs exact final verification and visible stage-debris handling. Ordinary overwriting rename is not no-clobber.
+This supersedes the custom FileRenameInfo/RootDirectory/ancestor-handle design for the selected local threat model.
+The library documents no-overwrite behavior, not universal atomic cleanup or power-loss durability; a leftover
+stage link can remain. Do not use a public temp directory. Flush file data, sync directories where supported,
+and report actual platform/filesystem durability. Success/readback is not proof against sudden power loss.
+Do not add private NT calls or a second platform algorithm solely to recreate the retired hostile-writer model.
 
 ## Explicit discard
 
-Discard requires actual exclusion, no final manifest, the exact current-format marker, only recognized empty
-control/object layout and owned stages, no source/prepared/published/pending/import references, and matching
-inspected/opened identities. Unknown entries, conflicting bytes, replacement or uncertain deletion refuse.
-No baseline resume, initialization journal, operation digest, owner epoch or quarantine platform.
+Require the exclusive guard, no final manifest, exact owned init marker, only recognized empty stores/stages and
+no source/prepared/published/pending/import references. Unknown entries or uncertain identity/deletion refuse.
+A committed or populated root is never eligible. Keep the stable lock file through discard/retry; do not unlink
+it while another opener may hold it. No cleanup of originals or user keys.
 
 <a id="archive-and-import-boundary"></a>
 ## Archive and import boundary
 
-[Maintenance](../search-retention/FUNCTIONS.md#backup-is-a-completed-archive-not-a-runnable-clone) owns archive
-layout and completion. Neither a complete nor partial archive has a runnable root manifest. Ordinary root open
-must refuse it before pending/cleanup recovery or backend access; archive readers never use normal root open.
-
-When Stage 5 import is implemented, its empty destination is initialized normally under the exclusive guard.
-Before importing data or issuing RPCs, persist one current-format incomplete-import marker bound to this root.
-Normal open refuses it before backend work. Unknown/conflicting markers also refuse; absence is not enough if
-layout validation fails. Explicit import retry uses the same private lock primitive, validates the marker under
-exclusion, then opens destination-only owners; it does not bypass the refusal in normal open.
-Clear it durably only after verified complete destination current/evidence state; an uncertain clear is resolved
-by exact readback under the guard. This is not a phase journal, baseline-init resume or permission to discard
-nonempty state. Add the marker and its open checks together with import, not as a Foundation prerequisite.
+[Maintenance](../search-retention/FUNCTIONS.md#backup-is-a-completed-archive-not-a-runnable-clone) owns the separate
+non-runnable archive layout. Ordinary open refuses archives and incomplete imports before backend recovery.
+When Stage 5 import arrives, persist one destination-bound incomplete marker before data/RPCs; explicit import
+retry acquires the same lock and validates that marker. Remove it durably only after verified complete destination
+current/evidence state. Uncertain removal is resolved by exact readback. This is not an init-resume platform or
+a Foundation prerequisite; add the marker/checks with the importing consumer.
 
 ## Open and shutdown
 
-Open retains required handles, acquires one actual exclusive guard, rereads/classifies current metadata, then
-opens normal stores. Reject archives/incomplete imports before executing recovery or any external effect.
-Shutdown stops admission, drains/cancels finite work, drops windows/views, stops publication/backend users, closes
-stores, then drops the guard. No DRAINING/RELEASED record or per-request borrowing of the guard as a global mutex.
+Validate existing root, acquire its lock, reread/classify metadata, then open stores. Unsupported roots are not
+mutated to create missing files. Shutdown stops admission, cancels/drains work, drops windows/views, stops backend
+users, closes stores and finally drops the guard. No DRAINING/RELEASED record or per-request root mutex.
 
 ## Removal and checks
 
-Remove owner leases/slots/succession, unrelated process/executable identities, health/drain receipts, compatibility
-locks, argv/stage custody, initialization resume/journal and root-owned source/key/migration wrappers with callers.
-Preserve user data and unpublished #598 overlap.
-
-After code run minimal locked Rust 1.98 check/Clippy for root/daemon/store consumers. Focused cases cover
-classification, all initialization interruption points, strict discard, exclusive ownership, documented platform
-publication/replacement behavior, restart and shutdown order. Record exact platform and achieved durability.
+Replace owner slots/epochs, leases, argv custody, key selection, migration wrappers and custom publication with
+actual callers. Preserve data and unpublished work. After code run minimal locked check/Clippy for root/daemon/
+store consumers. Later cases cover init interruption, same-file exclusion, no-clobber conflict, corrupt/unknown
+roots, safe discard, archive/import refusal and restart. Record exact OS/filesystem and limits; no run is claimed.

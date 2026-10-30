@@ -55,8 +55,8 @@ new window's slot then. Continue/Expand get fresh request deadlines capped by th
 work limits. Access never renews it, and committing a frame never starts a new TTL. An exhausted
 cursor may retain the window until expiry while emitted items remain expandable; otherwise release it promptly.
 
-One-shot output exposes no live locator. Session end, EOF, failure, daemon restart or selected restricted-
-session revocation drops its windows. A later invocation cannot resurrect them.
+One-shot output exposes no live locator. Session end, EOF, failure or daemon restart drops its windows.
+A later invocation cannot resurrect them. The local product has no restricted-client revocation subsystem.
 
 ## Admission before expensive work
 
@@ -114,7 +114,7 @@ source read, revalidation RPC or other fallible work after advertising the locat
 
 A healthy pre-output error/cancellation returns an existing unexpired window with cursor/emitted set unchanged.
 Actual read/work charges remain spent; failure does not refund them. A failed new Search inserts no window.
-Partial output/disconnect discards pending availability. Expiry/revocation cancels unfinished work and prevents
+Partial output/disconnect discards pending availability. Expiry/session close cancels unfinished work and prevents
 new acquisitions; after a completed terminal the same session owner applies the prepared update and then removes
 expired availability without renewing it. Local flush is not peer acknowledgement.
 

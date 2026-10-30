@@ -43,7 +43,8 @@ acknowledgement, exactly-once delivery or proof of rollback.
 
 Dispatch only constructed operations. Version, a non-reused session-local request ID, finite remaining duration
 and operation form the envelope. Trusted owned-child stdio needs no pairing, MAC, grant or capability receipt;
-source selection still belongs to the daemon. Restricted external authentication is separate scope.
+source selection still belongs to the daemon. [Local scope](../../docs/architecture/LOCAL_SCOPE.md) excludes
+remote/restricted-user authentication; do not add that protocol as a future placeholder.
 
 One active data request is sufficient. Cancel names that request and consumes neither another work slot nor
 completed-ID history. A late Cancel cannot cancel the next ID. Counter exhaustion closes instead of wrapping.

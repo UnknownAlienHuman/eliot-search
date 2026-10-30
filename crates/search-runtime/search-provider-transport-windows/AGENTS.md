@@ -1,21 +1,15 @@
-# Working on the old Windows provider transport
+# Windows pipe transport — legacy boundary
 
-Read the [current protocol](../../search-provider-protocol/README.md),
-[client map](../../search-provider-client/FUNCTIONS.md), [CLI issue #332](https://github.com/UnknownAlienHuman/eliot-search/issues/332), package [README](README.md) and local [source map](FUNCTIONS.md).
+The selected [local product](../../../docs/architecture/LOCAL_SCOPE.md) uses one owned-child stdio connection,
+not a separately listening pipe service or restricted-client protocol. Do not add pairing, credentials, endpoint
+discovery, new transport variants or compatibility constructors here.
 
-The baseline local product uses owned child stdio. Historical audits found this client-only `PIPE_NOWAIT`
-adapter coupled to the old typed provider/pairing path and no selected child-stdio consumer. Treat that as
-revision-specific evidence. Immediately before removal, search current manifests, Rust and non-Rust callers,
-constructors, features, targets, tests and workflows.
 
-When the current search confirms no real persistent-daemon consumer, remove the package/workspace/dependency
-entries and old client callers together. If a consumer exists, name it and retain only the smallest truthful
-unavailable seam while migrating it; do not harden legacy endpoint, pairing, grant or session APIs.
+## Cutover
 
-A future selected persistent-daemon profile may implement one actual owner-only Windows pipe server/client using
-the current framed protocol, real ACL/peer-owner validation and one bounded I/O context. Do not preserve
-`NativeEndpointNameV1`, endpoint files, pairing keys, grants, capability digests, TCP fallbacks, discovery or
-reconnect platforms.
-
-After deletion or replacement, run minimal Rust 1.98 check/Clippy for actual protocol/client/CLI consumers.
-Native pipe runtime cases are required only when that optional profile is selected.
+Main's Windows CLI still declares this package; move its actual client/dispatcher consumers before removing
+source/Cargo/features/fixtures. Preserve any useful OS I/O handling at its real owner, not a forwarding crate.
+[Client](../../search-provider-client/FUNCTIONS.md) and [protocol](../../search-provider-protocol/FUNCTIONS.md)
+own the replacement. Run minimal compiler/Clippy including the Windows consumer when source changes.
+[Prior recipe](https://github.com/UnknownAlienHuman/eliot-search/blob/6ae24197a1be8695ede5bb7d12dfaf97f5bca1fc/crates/search-runtime/search-provider-transport-windows/AGENTS.md) is historical. No transport
+implementation or package deletion is delivered by this documentation change.

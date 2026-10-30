@@ -1,44 +1,37 @@
 # Working on ELIOT Search
 
-Read [the documentation index](docs/README.md), the current stage in
-[the implementation sequence](docs/implementation/README.md#delivery-sequence), then only the affected
-owner's `FUNCTIONS.md`, local instructions and real callers. Use the
-[registry](docs/audit/ANALYSIS_REGISTRY.md#resume) for the current branch and evidence, not as another specification.
+Read the [resume point](docs/audit/ANALYSIS_REGISTRY.md#resume), the current
+[delivery stage](docs/implementation/README.md#delivery-sequence), then only its owner recipe and actual callers.
+The [working guide](docs/implementation/WORKING_GUIDE.md) gives commands, checks and update rules;
+the [code map](docs/implementation/CODE_MAP.md) identifies real entrypoints.
 
-## Documentation and source status
+## Product boundary
 
-The current rules are the architecture, delivery sequence and owner recipes linked from `docs/README.md`.
-They are published independently of the source refactor in PR #610. Source findings and completed removals in
-R001-R056 refer to their named revisions/that branch, not automatically to `main`. Inspect actual files before
-acting. Old 8.4/wave/P00/swarm/qualification material retained for legacy tooling is historical, not authority.
+Follow [local product scope](docs/architecture/LOCAL_SCOPE.md): one OS account, same-host Qdrant, plain storage,
+owned-child stdio. No application encryption, key platform, pairing/grants, remote users or multi-tenant policy.
+Keep data integrity, no-execute input handling, bounded work and preservation of user files.
 
-Land a reviewed documentation-only change without waiting for product completion. Land each coherent source
-cut after its minimal compiler/Clippy closure; broad product qualification is not a reason to grow a permanent PR.
-Never include unrelated source changes merely to publish documentation.
+## Implement
 
-## Working method
+Use one manager-owned worktree. Delegate only disjoint reads/edits; one manager owns interfaces and integration.
+Leave unpublished #598 work untouched; it is not a prerequisite or selected crypto integration.
 
-Use one manager-owned worktree and one integration owner. Delegate only disjoint inspection or edits;
-the manager owns interfaces, the final diff and commit. Do not modify unpublished #598 work.
+Trace entrypoint → effect/state owner → immediate consumer. Implement that connected change and remove the
+replaced route with callers. Keep a crate/trait/worker only for a concrete consumer or substantial responsibility.
+Do not replace code with receipts, hashes, status tables or a new lifecycle framework.
 
-Before a code change, name the entrypoint, concrete owner/effect, immediate consumer, displaced route and
-smallest compiler/Clippy closure. Then implement that connected path. Trace current callers before deleting
-code; old package maps and tests do not make a disconnected abstraction necessary.
+## Check and publish
 
-Keep a trait, package, worker or dependency only for a real consumer. Remove displaced implementations and
-exclusive fixtures together; a temporarily retained route needs a named next deletion, not a compatibility
-promise. Preserve user files and sole retained copies. Never substitute receipts, hashes or planning prose
-for real behavior. Do not build a second index, controller or universal lifecycle framework.
+After code, run the smallest locked check and Clippy for changed owners and real consumers; include real binaries
+when wiring changes. Tests and broad qualification follow the working product, not this documentation task.
+For docs, check links/anchors, whitespace, source claims and agreement with the owning rule.
 
-## Verification
+Update the owning recipe once, its affected incoming links and the existing registry's next step/checks. Recheck
+branch heads before publishing. Land coherent docs/code changes independently; do not grow a permanent PR.
+No source/manifest/workflow changes are hidden inside a documentation-only landing.
 
-After production changes, run the smallest locked Rust 1.98 check and Clippy for changed owners and immediate
-consumers; select actual binaries when their wiring changes. Broad tests and release/scale qualification follow
-the connected product, not preliminary documentation. Do not run unrelated suites to qualify a docs-only change.
+## Current versus historical
 
-For documentation changes, check the diff, links/anchors and agreement with the owning rule. Change the rule once
-at its owner and link to it elsewhere. Distinguish target design, inspected source and executed behavior.
-
-Before publishing, recheck the actual branch head. Record inspected revision, changes, checks and unrun work in
-the existing registry. Update a conflicting issue body and the PR summary without copying algorithms into them.
-Report only checks that ran. Do not merge unrelated source work as part of a documentation update.
+Main contains new instructions and older implementation. #610 is separate unmerged source work: its deletions,
+parser upgrade and compiler evidence are not automatically main state. Inspect the current checkout.
+Old 8.4/P00/wave/swarm/qualification packets are historical inputs, not current requirements or launch gates.
