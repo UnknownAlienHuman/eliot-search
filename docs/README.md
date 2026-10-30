@@ -14,6 +14,7 @@ Choose one route; do not load the whole documentation tree.
 | Change configuration | [Typed settings](../crates/search-config/FUNCTIONS.md) |
 | Change root or file publication | [Root](../crates/search-runtime/search-runtime-owner/FUNCTIONS.md) |
 | Change retained objects | [Object store](../crates/search-source/search-revision-store/FUNCTIONS.md) |
+| Change file selection / read refusal | [Admission](../crates/search-source/search-source-admission/FUNCTIONS.md) |
 | Change source discovery/current state | [Source family](../crates/search-source/README.md) |
 | Change preparation | [Materializer](../crates/search-prep/search-materializer/FUNCTIONS.md), [unitizer](../crates/search-prep/search-unitizer/FUNCTIONS.md) |
 | Change retrieval/index | [Lexical profile](../crates/search-lexical/FUNCTIONS.md), [Qdrant bridge](../crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md) |
@@ -31,6 +32,9 @@ READMEs route readers; the registry records current evidence and next work. Do n
 [Update rules](implementation/WORKING_GUIDE.md#what-to-update) specify which files change with each kind of work.
 A code map is an inspection aid, not a mandatory crate graph. Fix conflicting text at its owner and incoming
 references in the same change. Keep useful section anchors or update callers of them.
+Active issues and open PRs link to these main owners; they must not copy algorithms or name an old branch as
+current authority. Link current status to the registry without duplicating its checkpoint number. Fixed SHAs
+remain appropriate for historical evidence. A scope change also needs a search of active issue/PR bodies.
 
 ## Published documentation versus code
 
