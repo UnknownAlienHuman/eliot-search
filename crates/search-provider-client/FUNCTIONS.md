@@ -78,8 +78,10 @@ FlushFileBuffers or a delivery receipt. Do not globally discard live windows on 
 error; protocol distinguishes request outcome from failed transport.
 
 Remove pairing/profile/grant constructors, synthetic registration producers, MAC/replay state, TCP/token/endpoint
-features and duplicate request/client models with their real callers. Provider pairing credentials are not
-revision encryption: shared OS-secret owners and unpublished #598 storage remain outside this deletion.
+features and duplicate request/client models with their real callers. The
+[local removal map](../../docs/architecture/LOCAL_SCOPE.md#remove-legacy-security-wiring) permits removing unused
+public OS-secret/key wiring after caller checks. Preserve user bytes/keys, actual shared file/lock helpers and
+unpublished #598 work; these are not a reason to retain a general key layer or add encrypted consumers.
 Validate borrowed fields, construct one current request and retain actual wire-input validation; no second
 request-model or validation crate. Do not repair a retired bootstrap just to keep its constructor usable.
 

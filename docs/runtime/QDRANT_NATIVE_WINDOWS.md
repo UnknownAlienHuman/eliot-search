@@ -1,103 +1,56 @@
-# Qdrant on Windows
-
-## Historical 1.19 development artifact
-
-Qdrant 1.19.0 Windows x64 was previously installed and smoke-tested on 2026-09-10:
-
-- build `74f3e85b`, `x86_64-pc-windows-msvc`;
-- archive `qdrant-x86_64-pc-windows-msvc.zip`, 29,340,688 bytes,
-  SHA-256 `980CB2E1AE771155CF211DA8C0A8A9206B6482BD4EFFDC4DB994D3ADB707B087`;
-- executable 84,184,576 bytes,
-  SHA-256 `369C562EAE3D89333A13ABFDB522FA209E3F587C1217A1059D817E80814EA9D4`;
-- historical ready/create/upsert/search/count/delete smoke succeeded.
-
-This is immutable historical evidence only. It does not establish current availability, Qdrant 1.20 behavior,
-product correctness, data compatibility, containment or authentication.
+<a id="qdrant-on-windows"></a>
+# Local Qdrant on Windows — status and update route
 
 ## Selected implementation baseline
 
-R049 selects Qdrant Server/Rust client **1.20.x** for #263/#264 because direct BM25 over a scoring full-text payload
-index plus `TextQuery` and the `code` tokenizer remove baseline sparse-vector inference and fixed `avg_len`.
-
-The repository lock still contains client 1.19.0 and no Qdrant 1.20 Windows artifact has been installed or run by
-this documentation work. The implementation cut must select exact server bytes and client version together and
-record origin, license, hashes and commands.
+Main still pins client 1.19.0. The selected scoring-text path targets one exact server/client 1.20.x patch, adopted
+with the real consumer. This page provides no verified ELIOT installation/config command or Windows support claim.
+[Bridge dependency cut](../../crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md#dependency-cut) owns the
+SDK/server choice and gRPC endpoint; [root Quickstart](../../QUICKSTART.md) owns executed product commands.
 
 ## Baseline product mode
 
-The selected Rust bridge uses a configured local **gRPC** endpoint. This illustrates the target settings;
-it is not a runnable current ELIOT config schema until the typed-settings consumer is implemented:
+The operator starts Qdrant on the same machine and controls its private data directory and listeners. ELIOT
+connects through the [local bridge](../../crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md#local-connection).
+Do not add a mode selector, launcher, server download, generated credential or configuration writer to the app.
+A pre-existing key is passed privately only when required. Client loopback selection does not configure server
+listeners; deployment must keep them local. No remote/anonymous fallback on connection failure.
 
-```toml
-[qdrant]
-mode = "external"
-endpoint = "http://127.0.0.1:6334"
-```
-
-Port 6333 is REST/health; port 6334 is gRPC. The [bridge recipe](../../crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md#dependency-cut)
-owns the transport choice and links the official definitions. Start Qdrant manually, as an installed service
-or through development tooling. The one bridge:
-
-1. connects with the actual optional API key;
-2. observes live server/version/capabilities;
-3. creates/verifies the exact physical collection and scoring full-text schema;
-4. performs insert-only publication, `TextQuery`, scope/IDF filtering and exact readback;
-5. queries the physical collection named by `PublishedView`—never a serving alias.
-
-No executable hash, artifact manifest, owner fence, secret lease or qualification receipt is passed to the bridge.
-Release packaging may record exact server bytes independently.
-
-Minimal Qdrant service configuration remains ordinary Qdrant configuration:
-
-```yaml
-storage:
-  storage_path: ./storage
-service:
-  host: 127.0.0.1
-  http_port: 6333
-  grpc_port: 6334
-```
-
-Use one actual API key when the selected threat profile requires authentication. Do not wrap it in a lease or
-equality protocol.
+The previous illustrative ELIOT TOML was not an implemented schema. Do not copy it into production settings.
+Add typed endpoint input only with its actual bridge consumer; config fields without consumers are rejected.
 
 ## Windows evidence required for Qdrant 1.20
 
-Before claiming support, execute on the exact packaged artifact:
+Once the connected product exists, record exact server origin/version/bytes, Rust client version, platform and
+commands. Verify the stage's actual collection/schema, first build/query, retained excerpt and honest failures.
+Restart/old-view/cleanup/resource cases join their delivery stages; do not run a broad qualification platform as
+a prerequisite for writing the first path. Linux API/source inspection is not Windows execution.
 
-- service startup/shutdown and restart against its private data directory;
-- scoring full-text index creation with explicit `code` tokenizer/text settings;
-- insert-only build, exact readback and `TextQuery`;
-- payload scope plus independent `idf.corpus` behavior;
-- process crash/restart with durable current generation verification;
-- complete next generation and old pinned view;
-- terminal collection deletion and exact logical absence;
-- delayed request versus retired-collection delete;
-- bounded memory/disk/handles, current + building + retained generations;
-- authentication, cancellation and content-free diagnostics.
+<a id="optional-managed-child-mode"></a>
+## Deferred managed-server convenience
 
-Historical 1.19 smoke does not substitute for any of these.
-
-## Optional managed-child mode
-
-A later convenience profile may spawn the exact configured server and retain the actual child handle. It must use
-private create-new resources, sanitized environment, bridge-authenticated readiness, one absolute deadline and an
-actual Windows Job Object/kill-on-close tree guard or report managed mode unsupported. Failure/shutdown performs
-bounded terminate and reap. No attach by PID/name/port, automatic restart, auto-download or qualification platform.
-
-The current `search-qdrant-supervisor` does not satisfy this boundary and must be replaced or deleted under #334
-after current callers are rechecked.
+The [supervisor removal map](../../crates/search-index-qdrant/search-qdrant-supervisor/FUNCTIONS.md) owns the old
+source boundary. A later explicitly selected launcher must not revive its leases, receipts or state machines.
+No managed server is needed to establish a working connection or publish a generation.
 
 ## Qdrant Edge is separate
 
-Qdrant Edge is an embedded replacement candidate, not a managed server or fallback. Prior donor inspection
-recorded beta/WAL concerns for 0.8.0; that is historical candidate evidence, not the current release status.
-Recheck the exact released line only with a real replacement consumer after the server path works. Require
-Windows persistence/crash, BM25/filter, generation lifecycle, build-size and latency evidence. Never ship
-server and Edge as permanent dual backends.
+Any future embedded evaluation is a replacement experiment, not a second backend or fallback. Recheck current
+upstream evidence only for a real adoption task; historical release observations do not select an implementation.
 
 ## Updating Qdrant
 
-Updates are explicit. Install/test a new server/client/profile side by side, build a fresh physical generation
-when schema/retrieval meaning changes, commit matching evidence/current state and install the view only after exact
-readback. Do not auto-upgrade or silently reuse an incompatible data directory.
+| Change | Update and check together |
+|---|---|
+| Client/server patch | Consumer Cargo entry, lock, exact server artifact/version and donor evidence; compile actual bridge and consumers. |
+| Schema or retrieval meaning | Physical profile and fresh-generation publication; never relabel old data. |
+| Request-only scoring | Query-profile consumer; do not rebuild for k/b alone. |
+| Working Windows command | Root Quickstart plus registry revision/platform/limits, after executing it. |
+
+Do not auto-upgrade or reuse an incompatible data directory. Preserve old objects and installed data during
+side-by-side evaluation; only the publisher may retire ELIOT's eligible collections.
+
+## Historical 1.19 development artifact
+
+[The recorded September smoke and exact artifact identifiers](https://github.com/UnknownAlienHuman/eliot-search/blob/7ed46f79f07a23f01f75f5e85a96248dc42e280b/docs/runtime/QDRANT_NATIVE_WINDOWS.md#historical-119-development-artifact)
+remain historical evidence. They do not establish present 1.20 availability, current-main integration or support.

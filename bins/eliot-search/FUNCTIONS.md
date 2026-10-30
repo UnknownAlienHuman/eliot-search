@@ -85,8 +85,10 @@ revision offsets, revive expiry or switch revisions. A lost session repeats Sear
 ## Cutover and verification
 
 Change CLI/client/protocol/daemon consumers together. Remove duplicate parser/launch/endpoint/session routes and
-exclusive fixtures; preserve native-path handling, bounded diagnostics and actual cleanup behavior. Protect shared
-revision-key owners and #598 when removing pairing-only code.
+exclusive fixtures; preserve native-path handling, bounded diagnostics and actual cleanup behavior. Follow the
+[local removal boundary](../../docs/architecture/LOCAL_SCOPE.md#remove-legacy-security-wiring): public key/credential
+wrappers may leave with their last consumers. Preserve user bytes/keys, unpublished work and real OS/file helpers,
+not an unused secret layer or a planned encrypted-storage integration.
 
 After production changes run minimal locked Rust 1.98 check/Clippy selecting actual binaries, not libraries only.
 Later execution covers terminal-before-display, live cancellation/EOF, two-request paging/expansion, backpressure,

@@ -1,62 +1,27 @@
 # Working on indexing and publication
 
-Read the [architecture](../../docs/architecture/README.md),
-[implementation spine](../../docs/implementation/README.md) and nearest owner recipe. Qdrant stores rebuildable
-derived retrieval state; immutable objects and committed evidence remain with their actual owners.
+Use the [family map](README.md), current delivery stage and affected owner recipe. Do not preload every package.
+Follow [local scope](../../docs/architecture/LOCAL_SCOPE.md): the configured backend is on this machine.
 
 ## Selected baseline
 
-Connect one configured Qdrant Server/Rust client 1.20.x through one bridge/runtime before adding process
-management. The current Cargo lock still contains client 1.19.0; upgrade dependency, lock, schema and actual
-publication/query consumers together.
-
-Use direct BM25 over one scoring full-text payload index with explicit `code` tokenizer/text processing and
-`TextQuery`. Do not preserve baseline sparse BM25 vectors, query inference or fixed local `avg_len` merely because
-old code exposes them.
-
-`PublishedView` names an exact physical collection and matching redb snapshot. Do not add Qdrant alias authority.
-Do not partition a general portfolio by custom shard key: BM25 statistics are shard-local and cross-shard scores
-would require another fusion owner.
+One bridge connects to the operator-started server. Do not construct the old supervisor, provision a key, spawn
+Qdrant or add a backend-mode selector to make the first Search work. Connection and index readiness are distinct;
+the [bridge](search-qdrant-bridge/FUNCTIONS.md) owns both cases and the exact dependency/schema cut.
 
 ## Publication order
 
-Use one publisher and one fixed pending generation input:
-
-```text
-complete fixed pages
-→ complete insert_only physical build + exact readback
-→ bounded evidence/inventory/current commit
-→ open matching snapshot
-→ short PublishedView install
-```
-
-No redb writer or view-manager mutex spans Qdrant/object I/O. A failed/uncertain generation is never served and its
-name is never reused. Remove duplicate daemon/bridge journals, supplied commit proofs and completed-operation
-history.
-
-Stage 3A complete immutable generations are mandatory correctness/reference behavior. Measure build/edit latency,
-writes, resources and retained-generation disk against #215's predeclared budgets. Add changed-source point deltas,
-stable occurrence identity and fixed closures only where those budgets fail.
+Use [publication](search-publication/FUNCTIONS.md) for fixed input, bounded metadata commit and view installation.
+Stage 2/3A uses fresh immutable generations. Do not implement Stage 3B identities/mutation before measured need.
 
 ## Lifetime and cleanup
 
-Query pins current under a short lock, then releases it before scope/backend/evidence work. A live window may clone
-the same guard. Last guard drop only wakes cleanup.
-
-Baseline cleanup deletes whole retired physical collections only after no current/pending/future target, live guard
-or unresolved targetable attempt remains. Delete terminally, verify exact logical absence and never reuse the name.
-Move only this useful helper from the old reclaimer package; delete point-delete manifests, writer ledgers,
-watermarks, receipts and checkpoint machinery.
+Preserve exact old-view evidence, finite work and whole-generation cleanup. Never hold a redb writer or view
+mutex over external I/O. Do not duplicate the publisher's recovery rules in another package.
 
 ## Optional processes/backends
 
-The current supervisor is disconnected and cannot apply claimed Windows containment. Managed Qdrant is an optional
-small child/Job owner after the external-endpoint path works; otherwise delete it.
-
-Qdrant Edge is an isolated later replacement candidate, not a fallback. Do not add a backend trait or dual writer.
-A newer released Edge line must pass persistence/crash, Windows, full-text/BM25, filtering, generation and size/
-latency evidence before replacing the bridge.
-
-A planner, identity, bridge, publication or view-manager name does not require a permanent crate. Keep a boundary
-only for a real dependency/effect or substantial algorithm. Change direct callers and delete displaced mechanisms
-in the same vertical cut.
+Managed Qdrant and Edge are not baseline work or fallback routes. No new launcher, platform containment service,
+secret lifecycle or generic backend trait. Recheck real callers before removing obsolete source and fixtures.
+After code, use the [working guide](../../docs/implementation/WORKING_GUIDE.md#minimal-production-checks) for the
+actual bridge/publication/query/daemon closure; a library-only or cfg-excluded check cannot qualify wiring.

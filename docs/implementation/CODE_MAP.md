@@ -1,6 +1,6 @@
 # Code entrypoints and change map
 
-Inspected main: `6ae24197`. This maps existing files, not a claim that the replacement product is connected.
+Inspected main: `7ed46f79` (entry.rs bodies and current documentation). This maps existing files, not a claim that the replacement product is connected.
 The [owner map](README.md#owners) defines intended responsibilities; a row below does not require keeping a crate.
 Recheck callers and Cargo targets before editing. Update this map only when those entrypoints change.
 
@@ -10,6 +10,34 @@ Recheck callers and Cargo targets before editing. Update this map only when thos
 |---|---|---|
 | eliot-search / eliot-search | [entry.rs](../../bins/eliot-search/src/entry.rs), [Cargo.toml](../../bins/eliot-search/Cargo.toml) | src/main.rs is a legacy test target, not the installed CLI |
 | eliot-searchd / eliot-searchd | [entry.rs](../../bins/eliot-searchd/src/entry.rs), [Cargo.toml](../../bins/eliot-searchd/Cargo.toml) | src/main.rs and sealed-* targets are legacy harnesses; checking the library alone misses entrypoint wiring |
+
+## Existing dispatch to replace
+
+These are actual calls in the two entry.rs files at the inspected revision, not desired new APIs:
+
+```text
+CLI main
+  maybe_run_legacy_remote (feature-gated)
+  → public_client::maybe_run
+  → app::run_main (fallback)
+
+daemon main
+  secure_commands::maybe_refuse_legacy_effects
+  → owner_composition::maybe_run_direct_registry
+  → native_root_command::maybe_run
+  → source_migration_command::maybe_run
+  → preparation_composition::maybe_run
+  → maybe_run_legacy_loopback (feature-gated)
+  → public_runtime_service::maybe_run
+  → secure_commands::maybe_run
+  → app::run_main (fallback)
+```
+
+The arrows are short-circuit dispatch alternatives: later handlers run only if earlier ones decline.
+Foundation replaces repeated invocation routing with one parsed command reaching the real root/settings owner.
+The daemon also prints help additions after dispatch; update that path when changing help. Do not leave an earlier
+legacy handler able to intercept a converted command. Do not route current requests through old protected-store,
+key-selection or migration commands merely to preserve their constructors.
 
 ## Work by path
 
@@ -24,7 +52,8 @@ Recheck callers and Cargo targets before editing. Update this map only when thos
 | Publish and retain a view | [publication/src](../../crates/search-index-qdrant/search-publication/src/), control-redb | [Publisher](../../crates/search-index-qdrant/search-publication/FUNCTIONS.md); query + cleanup |
 | Query, evidence, Exact | [query family](../../crates/search-query/) | [Query map](../../crates/search-query/README.md); retained reader + protocol/daemon |
 | Child connection and output | [provider-client/src](../../crates/search-provider-client/src/), [protocol/src](../../crates/search-provider-protocol/src/) | [Client](../../crates/search-provider-client/FUNCTIONS.md), [protocol](../../crates/search-provider-protocol/FUNCTIONS.md), [CLI](../../bins/eliot-search/FUNCTIONS.md); both binaries |
-| Remove legacy security | CLI/daemon manifests; runtime secret/crypto packages; pairing/key-selection callers | [Removal map](../architecture/LOCAL_SCOPE.md#remove-legacy-security-wiring); move actual consumers before deleting packages |
+| Remove legacy security | CLI/daemon manifests; runtime secret/crypto packages; pairing/key-selection callers | [Removal map](../architecture/LOCAL_SCOPE.md#remove-legacy-security-wiring); preserve user data/private work, not unused public wrappers |
+| Remove Qdrant process scaffolding | Existing supervisor and its Cargo/feature callers | [Removal boundary](../../crates/search-index-qdrant/search-qdrant-supervisor/FUNCTIONS.md#removal-boundary); baseline connect uses only the bridge |
 
 Use [caller-search/check commands](WORKING_GUIDE.md#find-callers-before-changing-a-boundary) for each row. Legacy
 feature names are not product milestones. Shared data belongs with its real producer/consumer; do not implement
