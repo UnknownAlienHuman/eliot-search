@@ -6,29 +6,25 @@ current callers before inlining/deleting it and move actual consumers in the sam
 ## Direct baseline
 
 ```text
-typed request + operation context(view, scope, execution; scoring for Search) + constructed handlers
-Search   → Qdrant TextQuery
-Exact    → retained-source scan
-Continue → stored QueryWindow page
-Expand   → emitted-item bounded context
+new Search/Exact → capture current view + selection once
+  Search → Qdrant TextQuery with request scoring
+  Exact  → retained-source scan without scoring
+Continue/Expand → existing session window + its original view/selection
+  Continue → stored result page
+  Expand   → emitted-item bounded context
 ```
 
 Optional operations appear only with actual producers/handlers. Unsupported modes fail before source/backend
-work. A call to one handler requires no recipe, capability set, task/leg plan or fingerprint.
+work. Pass the typed operation and its already owned context directly; no second structure copies view/scope
+from RequestContext. A call to one handler needs no recipe, capability set, task/leg plan or fingerprint.
 
 ## Search selection
 
 Use the view's physical collection/text field and the admitted request's separate query-scoring profile. Do not
-read k/b from physical view identity. The [scope owner](../search-access/FUNCTIONS.md) supplies:
-
-```text
-base = selected sources ∩ real session/access restriction
-candidate filter = base + request-only narrowing
-IDF corpus = base
-```
-
-For an entire-collection base, omit its redundant predicate and IDF override, not request-only clauses. Omit the
-candidate filter only when no clauses remain. Known empty performs no RPC. Free text nominates by TextQuery;
+read k/b from physical view identity. The [scope owner](../search-access/FUNCTIONS.md#candidate-and-statistics-scope)
+defines selected-source membership, candidate narrowing and IDF; consume that one resolved result rather than
+rebuilding policy in the planner. Local source selection has no session grants or permission platform.
+Known empty performs no RPC; whole-population selection keeps request-only filters. Free text uses TextQuery;
 explicit required/excluded clauses remain filters, not exact spelling/phrase proof.
 
 Only a real operation over incompatible collections/profiles justifies a finite private branch list and explicit

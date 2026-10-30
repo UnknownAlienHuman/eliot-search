@@ -16,10 +16,13 @@ unused implementations to satisfy the catalogue.
 | lexical/index/admin | one Qdrant scoring-text/TextQuery bridge; no local aliases or sparse BM25 inference |
 | pins/access | pinned PublishedView and direct scope resolution |
 | handles/continuation | one process-local QueryWindow |
-| secrets/process/models/overlay | selected concrete owner only when a real consumer needs it |
+| secrets/pairing | Remove public wrappers with plain/local callers; preserve user bytes/keys and unpublished work. No new secret owner. |
+| process/models/overlay | Concrete owner only for an explicitly selected real consumer |
 
-A trait belongs beside a consumer that really needs multiple implementations. Use concrete current values and
-actual errors. Do not introduce ports-v2, a service locator or a forwarding package.
+Use concrete calls by default. A narrow consumer-local trait may isolate actual implementation variation or a
+real dependency boundary; use existing library traits where they fit. Apply the
+[implementation choices](../../docs/implementation/WORKING_GUIDE.md#implementation-choices), not a quota of
+implementations or a mandatory trait per owner. Do not introduce ports-v2, a service locator or forwarding crates.
 
 <a id="why-the-common-context-is-wrong"></a>
 ## Execution versus query state
@@ -46,10 +49,10 @@ where the effect can outlive the process, not a completed-operation archive.
 
 ## Deletion order
 
-Move control callers from generic journal/snapshot; source callers from registry replay; acquisition/preparation
-from generic ports; publication/query to the concrete bridge/view/window; then protocol and optional consumers.
-Delete each unconsumed trait, fake/conformance catalogue and dependency edge with its last real caller. Preserve
-useful behavior, not trait counts or pre-release wire/shape fixtures.
+The [delivery sequence](../../docs/implementation/README.md#delivery-sequence) and real compile/runtime dependencies
+choose the next cut, not the table above. Do not rebuild all control/source/port families before a root or CLI
+change. Replace the selected path, remove each unconsumed trait/adapter and its exclusive fixtures with that cut,
+and delete the workspace member after its final caller. Preserve useful behavior, not trait counts or old shapes.
 
 After production changes run minimal locked Rust 1.98 check/Clippy for affected owners and immediate consumers.
 Connected application behavior, not a package-local fake, establishes the replacement boundary.

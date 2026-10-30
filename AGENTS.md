@@ -18,7 +18,9 @@ Leave unpublished #598 work untouched; it is not a prerequisite or selected cryp
 
 Trace entrypoint → effect/state owner → immediate consumer. Implement that connected change and remove the
 replaced route with callers. Keep a crate/trait/worker only for a concrete consumer or substantial responsibility.
-Do not replace code with receipts, hashes, status tables or a new lifecycle framework.
+Use the [implementation choices](docs/implementation/WORKING_GUIDE.md#implementation-choices): private functions
+and concrete state first; abstractions must solve an actual ownership, dependency or duplication problem.
+Do not replace code with receipts, hashes, status tables or a new lifecycle framework. No file/line quotas.
 
 ## Check and publish
 

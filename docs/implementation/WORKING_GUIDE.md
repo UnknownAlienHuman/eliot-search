@@ -35,6 +35,53 @@ Move real consumers together; delete the displaced route, exclusive fixtures and
 user data or shared OS/file helpers with crypto/pairing wrappers. A retained legacy path needs a concrete next
 removal, not a permanent compatibility facade.
 
+## Implementation choices
+
+Optimize the number of state owners, representations and call hops, not the line count. Start with the real
+caller and a private function or concrete struct; add a boundary only when it does identifiable work.
+
+| Decision | Default | Add more only when |
+|---|---|---|
+| Function/module | A readable operation with private helpers | A helper names coherent behavior, limits a borrow/transaction lifetime or removes actual repetition; not one file per verb |
+| Crate | Use the existing consuming owner | A real dependency, platform or substantial reusable algorithm needs isolation that a module cannot provide; a new noun is not a package |
+| Trait/adapter | Concrete call or an existing library trait | Actual implementation variation or a dependency cycle needs a narrow local interface; not a trait around every owner |
+| Value/type | Reuse a value with the same meaning; move/borrow it | A distinct invariant, ownership lifetime or wire/storage boundary requires another type; a newtype should prevent a named mistake |
+| State/task | One mutable owner; ordinary calls for pure steps | Work must run concurrently for responsiveness or a real resource boundary; reuse the existing runtime and bound ownership/queues |
+| Dependency | Existing maintained mechanism after reading its API | It replaces owned complexity and fits the actual consumer; no universal wrapper over every donor method |
+
+A concrete vendor adapter can hide SDK types without a matching trait. Standard traits and small local test seams
+are not a global ports catalogue. Do not invent a second backend or test framework to justify an interface, or
+force unrelated semantics through one generic helper just to remove similar lines.
+Use private visibility by default. Arc shares genuinely shared ownership; a mutex protects actual mutable sharing,
+not a borrow-checker workaround. Preserve the existing view/window lifetime and no-lock-across-I/O rules.
+
+A change does not need Manager → Service → Repository → Port → Adapter layers. Each retained layer must own
+behavior, a lifetime or a real dependency conversion; a forwarding rename is not a boundary. Do not enforce
+function/file-size quotas, create trait/impl pairs for every struct, or compress the real algorithm into clever
+one-liners. Keep named helpers where they make the flow easier to inspect.
+
+## Data, failures and work
+
+Decode/validate at external or persisted boundaries, then carry the checked value to the real consumer. Do not
+serialize/hash/reparse an in-process handoff or clone a complete catalogue to change one row. Move acquired bytes
+through retention/preparation; use references or bounded pages where that suffices. Persistence/restart and actual
+object-integrity checks still require their owner's validation: removing duplicate checks must not remove those.
+
+Wire and storage models may differ for a real representation or validation reason. Do not build Raw/Parsed/Plan/
+Permit/Receipt families that merely copy the same fields. [Shared data](../../crates/search-contracts/FUNCTIONS.md)
+owns what is shared; [effect owners](README.md#owners) own their state and errors.
+
+Represent errors the caller actually handles. Preserve the cause until the public edge maps it once to a bounded,
+redacted error/gap. No generic error registry, one enum per helper or string matching for control flow. Missing,
+corrupt, cancelled and not-yet-ready are not interchangeable empty successes. Do not hide a failed operation with
+unwrap_or_default, a blanket catch or a silent legacy fallback. Retry only where the actual owner knows it is safe;
+a timeout is not rollback. Do not add a universal retry/compensation service.
+
+Bound real bytes, allocations, queue entries and work before expensive operations. Reuse the original deadline
+and charged counters. Never add a whole-corpus scan, per-item full-object verification, global sort or duplicate
+body copy just to produce status/receipts. Share required integrity reads where safe; measure necessary scans
+against the selected corpus budgets before adding caches, incremental histories or parallel workers.
+
 ## Minimal production checks
 
 Use the repository toolchain, existing lockfile and only the affected target/feature closure. Examples:
@@ -96,9 +143,24 @@ external-link crawl. Do not restore old wave/receipt validators merely to make t
 | Working command now exists | Root QUICKSTART with exact executed commands, revision/platform and limits |
 | Stage or unfinished work changed | Existing registry: next connected change, owner, stop condition, actual checks and unresolved limits; no second task database |
 
-A small owner recipe answers: what enters, what it does, what leaves, what can fail, which code/callers to replace.
-New settings/types appear with a real consumer, not as a future-feature catalogue. Use standard libraries and
-maintained dependencies before inventing parsers, crypto, locks, process managers or storage abstractions.
+A small owner recipe answers: input → real operation → output, failure behavior, source/caller cutover and checks.
+Document invariants and chosen mechanisms, not a class diagram to instantiate verbatim. Keep examples at the
+smallest current stage; future handlers/settings do not get placeholder DTOs. README routes to the recipe and
+AGENTS gives editing constraints; neither copies its algorithm or a full historical caller census.
+
+## Review the causal path
+
+Before publishing, follow one real input through dispatch, state/effect and output. Check each new abstraction's
+specific job, each copy/scan's cost, and each durable row's restart or user-data need. Remove forwarding-only
+hops, duplicated representations and unreachable fallback routes. Verify that cancellation, conflict and missing
+state keep their meaning and that a partial result cannot become complete success.
+
+The old consumer must reach the replacement, not an uncalled helper beside the old path. Search imports, module/
+feature wiring and actual dispatch again for the displaced route. A needed temporary dependency keeps a concrete
+next removal; do not finish every legacy owner before landing the current connected change.
+
+These are review questions, not a new form, score, quota or gate framework. A smaller diff with a lost invariant
+is not an improvement. Do not use fewer lines or passing Clippy alone as evidence of correct behavior.
 
 ## Publish
 

@@ -6,39 +6,38 @@ Current next step and evidence only. Algorithms stay with their owners.
 <a id="resume-after-interruption"></a>
 ## Resume
 
-**R063 — local backend cutover and concrete agent routes, 2026-10-29.**
-Inspected main: `7ed46f79f07a23f01f75f5e85a96248dc42e280b` (R062). Documentation only; no code/dependency removal is implied.
+**R064 — concrete implementation choices and removal of competing layer recipes, 2026-10-30.**
+Inspected main: `69e85b04c0d1e3d4e8ef1742ec128ecd95cc8c04` (R063). Documentation only; source and dependencies are unchanged.
 
-Next implementation: [Foundation](../implementation/README.md#1-foundation--invocation-settings-and-root), starting
-at the [actual dispatch](../implementation/CODE_MAP.md#existing-dispatch-to-replace). Parse invocation once, route
-plain inspect/init/open to the real root owner, then report factual status without earlier legacy interception.
-The guide defines stop conditions and minimal check/Clippy; do not start every linked issue or require Qdrant here.
+Next implementation remains [Foundation](../implementation/README.md#1-foundation--invocation-settings-and-root)
+at the [actual dispatch](../implementation/CODE_MAP.md#existing-dispatch-to-replace). Use the
+[implementation choices](../implementation/WORKING_GUIDE.md#implementation-choices) while writing that path;
+do not first rewrite all shared types, ports or domain packages. Stop at the stage's connected result.
 
 <a id="established-decisions--do-not-rediscover"></a>
 <a id="decisions-and-owners"></a>
 ## Selected decisions
 
-[Local scope](../architecture/LOCAL_SCOPE.md) is unchanged: one OS account, plain storage, child stdio and local
-Qdrant. Public unused key wrappers may be removed with callers; private work and user bytes/keys remain intact.
-[Bridge](../../crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md#connection-versus-index-readiness)
-distinguishes connection, not-yet-indexed, damaged-current and verified-empty views. No readiness service is added.
+[Local scope](../architecture/LOCAL_SCOPE.md) is unchanged. Prefer private functions and concrete owners;
+justify abstractions by an actual invariant, variation, dependency or ownership need, not names or line quotas.
+Keep effect-specific recovery, source integrity, finite work and the pinned view/window lifetime.
 
 <a id="coverage-ledger"></a>
 <a id="changed-documentation"></a>
 ## Documentation changes
 
-Removed the remaining public-key-layer preservation instruction from CLI/client. Consolidated Qdrant entrypoints:
-local connection/schema stays in the bridge, publication in its owner, old managed-launch plans in history.
-The first path needs no supervisor, key lease, mode selector or duplicate readiness probe. No remote-user scope.
-Added actual short-circuit dispatch and Foundation stop conditions; made one-shot versus later live-session order
-explicit. Current task issues must point to main's owners, not earlier refactor-branch copies or duplicated tables.
+Working guide now defines implementation defaults, data/error/cost handling and causal-path review. Root instructions
+and PR template link that method without a new form or framework. Shared-data guidance separates useful typed
+invariants from cloned DTO/plan/receipt families. Ports/domain/planner entrypoints no longer duplicate algorithms
+or prescribe a global layer-rewrite queue. Planner consumes the local scope owner and keeps existing windows;
+it no longer specifies removed session/access restrictions.
 
 <a id="delivery-remaining"></a>
 ## Remaining implementation
 
-Foundation → one retained file through real Qdrant and the actual CLI → later stages in the delivery guide.
-Old crypto/pairing/supervisor code and dependency edges still exist until real consumers are cut over. #610 source
-work remains separate. Preserve unpublished #598 work; it is not a selected integration. No product stage is closed.
+Foundation → one retained file through Qdrant and the actual CLI → later delivery stages. Existing legacy code
+still needs real caller/Cargo/fixture cutovers. #610 remains unmerged; no source removal is inferred from this edit.
+Preserve unpublished work and user bytes/keys. No product stage is completed by documentation.
 
 <a id="evidence-status"></a>
 <a id="execution-evidence"></a>
@@ -46,15 +45,15 @@ work remains separate. Preserve unpublished #598 work; it is not a selected inte
 
 | Check | Result / limit |
 |---|---|
-| Exact inputs | All 16 edited files reconstructed and matched their GitHub blob IDs at the inspected main revision. Earlier archive used only for matching/reference, not as a current checkout. |
-| Source read | Both current entry.rs bodies and root dependency pins read; dispatch order is statically observed, not executed. No fresh whole-repository caller census. |
-| Documentation | Changed-page relative links/fragments, preserved old heading anchors and diff whitespace checked locally. Supporting targets inspected separately; no full fresh-main/legacy or external-link crawl. |
-| Publication | Parent/candidate comparison must contain Markdown only; verify main and merged tree after landing. |
-| Runtime | No Rust, Cargo/lockfile, config, workflow or test-source changes. No build, Clippy, Qdrant, Windows or product tests run. Existing donor selections were not re-audited. |
+| Inputs | All 14 edited files match GitHub blob IDs at the inspected main. An older archive supplied only byte-matching inputs/reference material, not a current checkout. |
+| Review | Compared shared-data/domain/ports/planner entrypoints with current owner recipes and local scope. No fresh complete source-caller census or independent-agent review. |
+| Navigation/diff | 41 changed-page relative links resolved against candidate files and nine pinned supporting-file reads; 68 previous heading/explicit anchors retained; git diff --check passed. No full repository or external-URL crawl. |
+| Scope | Markdown only; no code, Cargo/lockfile, configuration, workflow or test-source change. No new checker or task database. |
+| Execution | No Rust build, Clippy, product tests or runtime qualification. Existing library/version selections were not changed or re-audited. |
 
 <a id="evidence-index"></a>
 <a id="prior-evidence"></a>
 ## Previous evidence
 
-[R062 registry](https://github.com/UnknownAlienHuman/eliot-search/blob/7ed46f79f07a23f01f75f5e85a96248dc42e280b/docs/audit/ANALYSIS_REGISTRY.md) retains earlier decisions/checks.
-Update the next connected change, exact revision and actual checks; do not append another audit diary or spec.
+[R063 registry](https://github.com/UnknownAlienHuman/eliot-search/blob/69e85b04c0d1e3d4e8ef1742ec128ecd95cc8c04/docs/audit/ANALYSIS_REGISTRY.md)
+retains previous checks. Update the next connected result and actual evidence, not another specification or diary.
