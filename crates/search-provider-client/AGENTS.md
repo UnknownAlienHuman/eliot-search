@@ -12,8 +12,8 @@ multiplexing scheduler or let a data/history limit prevent cancellation and clos
 frame into a partially written frame; follow the protocol owner's failure rule.
 
 The child-stdio session owns exactly one child/stream cleanup guard. The CLI supplies invocation settings and
-renders results; it does not build another process manager. A separately owned pipe connection is never killed
-as though it were this client's child.
+renders results; it does not build another process manager. Only owned-child stdio is selected. Do not preserve
+a named-pipe/endpoint connection mode, and never kill the independently operated Qdrant server.
 
 Replace pairing/profile/grant authority, NativeClientExpectations, per-record MACs, replay transcripts,
 loopback/token/endpoint fallback and duplicate CLI core sessions with their actual consumers. Preserve useful

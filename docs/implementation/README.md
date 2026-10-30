@@ -64,7 +64,17 @@ Owners #333/#266/#360. Implement actual help/version → args_os/settings once �
 factual status. Only data root, bounded config input and diagnostics are needed. No keys or storage-mode selector.
 Use the root owner's standard lock and same-parent no-clobber helper, not a custom Windows security platform.
 Initialize manifest-last; known empty incomplete state may be explicitly discarded/retried. Unknown/user data stays.
-Finish when actual entrypoints reach these owners and displaced routes are removed or have a concrete next removal.
+Use the [actual dispatch map](CODE_MAP.md#existing-dispatch-to-replace). Work in this order:
+
+| Connected change | Stop condition before the next change |
+|---|---|
+| Parse invocation once | Help/version and invalid input finish before spawning or opening stores; selected settings reach the actual handler. |
+| Route inspect/init/open to the root owner | One guard owns the real root lifetime; plain initialization and refusal paths use the existing root recipe, not key selection. |
+| Connect factual status and remove bypasses | Real binary dispatch cannot enter a displaced route for converted commands; status reports observed root/store state. |
+
+These can land as small connected cuts with minimal actual-consumer check/Clippy. No Qdrant server, complete
+settings catalogue, transport rewrite, crypto removal programme or future test framework blocks Foundation.
+When a shared legacy route cannot yet leave, name its remaining caller and next removal; do not create a facade.
 
 <a id="2-walking-skeleton--one-file-to-one-cli-result"></a>
 ### 2. One file to one CLI result
@@ -76,6 +86,10 @@ and evidence commit → PublishedView → TextQuery → retained excerpt → CLI
 Upgrade exact Qdrant client/server/schema and their real consumers together; the main lock still has client 1.19.0,
 while the selected scoring-text path needs the documented 1.20.x APIs. Pin the exact adopted patch at the code cut.
 Use lexical/bridge owner settings, not copied tables. Keep final owners' persistent references, not a throwaway demo.
+Connect to the operator-started local server; no supervisor construction or key lease. A fresh root without a
+published generation is buildable, not a corrupt root or a successful empty search; the bridge owns those cases.
+The one-shot CLI uses the actual owned-child framed path for one request. Live paging/windows arrive in Stage 4;
+do not create a temporary line protocol or require full interactive behavior to deliver the first result.
 No broad inventory, watcher, paging, encryption, permission system, point mutation or cleanup platform first.
 Complete when default binaries return real retained evidence through Qdrant; missing/corrupt evidence is not a card.
 
@@ -98,9 +112,10 @@ If every declared class passes 3A, leave 3B absent; do not weaken corpus require
 
 ### 4. Exact and live session
 
-Owners #249/#275/#280/#332. Literal Exact scans pinned retained inventory. One serviced framed session then keeps
-bounded QueryWindows. Continue pages stored order; Expand uses an emitted item's neighborhood. Complete terminal
-output precedes the prepared local cursor update; partial transport output commits nothing and closes the session.
+Owners #249/#275/#280/#332. Literal Exact scans pinned retained inventory. Extend the same serviced framed
+connection with bounded QueryWindows; do not replace the one-shot transport. Continue pages stored order;
+Expand uses an emitted item's neighborhood. Complete terminal output precedes the prepared local cursor update;
+partial transport output commits nothing and closes the session.
 
 ### 5. Maintenance and selected product depth
 

@@ -27,6 +27,33 @@ port 6333. Keep the configured transport/port explicit; no protocol probing/fall
 [port definitions](https://qdrant.tech/documentation/installation/#networking). Connect/publication use
 ExecutionContext even before any published view exists; only Search adds BM25 scoring.
 
+## Local connection
+
+Follow [local product scope](../../../docs/architecture/LOCAL_SCOPE.md). Accept only the selected same-host
+loopback endpoint; there is no remote endpoint, transport fallback or auto-discovery mode. The operator owns
+server startup, storage and listener configuration. ELIOT neither starts nor kills that server. A loopback client
+URL does not establish the server's other bindings; keep deployment configuration separate from application code.
+
+Pass an existing API key directly to the SDK only when that local server requires it. Missing/wrong credentials
+fail the connection; no key generation, vault, lease, rotation or anonymous retry. No credentials in argv/status/errors.
+One daemon-owned client serves publication/query. Connect needs execution state, not a view or supervisor binding.
+
+## Connection versus index readiness
+
+| Observed state | Application behavior |
+|---|---|
+| Plain root, no committed current generation | Connection and first build may proceed. Search reports not indexed yet, not a successful empty result. |
+| Committed current generation | Verify its exact collection/schema and matching metadata before installing the view. |
+| Current metadata names a missing/incompatible/corrupt collection or evidence | Refuse serving that view; report the cause. Never adopt an arbitrary collection or silently treat it as a fresh root. |
+| Verified committed empty generation | It is a valid view; an empty result may be genuine. Distinguish this from a failed or unfinished build. |
+| Connection/version/auth failure | Report backend unavailable/incompatible; no local search fallback or readiness receipt. |
+
+Absence of current does not imply that no build is pending. Resolve existing pending/uncertain effects through
+the publisher before replacement; reconnecting must not allocate another generation by itself.
+Derive these states from root/current/view metadata; do not create a readiness service or durable state machine.
+Foundation help/version/root inspection do not require Qdrant. An explicit later rebuild uses the publisher and
+retained source; connect must not erase state or run an implicit rebuild.
+
 ## Physical profile V1
 
 Stage 2 creates one vectorless one-shard collection and one scoring text field. Use exact builder semantics:
@@ -128,14 +155,16 @@ receive subwords only. Therefore typed required/excluded text filters are not ex
 ## Scope and IDF
 
 ```text
-base population = selected sources ∩ actual access/session restriction
+base population = resolved local source selection in the pinned view
 candidate filter = base population + request-only narrowing
 idf.corpus       = base population
 ```
 
-Source/access clauses appear in both candidate filter and IDF corpus. Request-only clauses do not. If base is the
-entire physical collection, omit `idf`. Explicit empty returns without RPC; unknown/incomplete never widens.
-Every filter field is indexed. One ordinary shard keeps one BM25 statistics population.
+Source-selection clauses appear in both candidate filter and IDF corpus; request-only narrowing does not.
+If base is the entire physical collection, omit redundant base/IDF clauses, not request-only candidate filters.
+Explicit empty returns without RPC; unknown/incomplete selection never widens. The
+[scope owner](../../search-query/search-access/FUNCTIONS.md) defines selection, not grants or restricted users.
+Every actual filter field is indexed. One ordinary shard keeps one BM25 statistics population.
 
 ## Stage 2/3A immutable generation
 
@@ -163,12 +192,13 @@ Delete a retired collection only after publication proves no durable/current/pen
 unresolved attempt can use it. Delete terminally, verify exact absence, never reuse name and retain cleanup row on
 uncertainty. Logical absence is not physical erase proof.
 
-External endpoint is baseline. Managed child is an optional later small owner. Qdrant Edge is an isolated
-replacement experiment, never fallback/dual backend.
+The operator-started local endpoint is the baseline; do not require the legacy supervisor. Managed-server
+convenience needs a separate explicit selection. Qdrant Edge is only a later replacement experiment, not fallback.
 
 ## Verification
 
-Run locked Rust 1.98 check/Clippy for bridge plus real publication/query/daemon consumers. Execute vectorless
+After source changes run locked check/Clippy for the bridge and real publication/query/daemon consumers.
+After the connected path exists, distinguish fresh-no-index, valid-empty and missing-current states; then execute vectorless
 creation; complete explicit schema/readback; HNSW disabled; Pinned/Cached/Cold profiles; minimal payload/no vectors;
 InsertOnly replay/conflict; Code tokenizer document/ranking/filter behavior; k/b validation; any-token TextQuery;
 all-token filters; whole/scoped IDF; deterministic canary; cancellation; old-view use; delete/absence; and measured

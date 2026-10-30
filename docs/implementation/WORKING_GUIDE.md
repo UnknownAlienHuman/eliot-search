@@ -15,6 +15,8 @@ next step and that stage only. Do not rebuild the audit history or wait for #598
 
 For a code task, name the real entrypoint, state/effect owner, immediate consumer and replaced route in a few
 sentences. Then write the connected code. No ticket schema, frozen-scope form or preliminary framework is required.
+A task number coordinates work, not a demand to finish every linked issue. Follow the current stage's connected
+change/stop condition. Read adjacent owners only when their boundary is affected; do not preload the whole map.
 
 ## Find callers before changing a boundary
 
@@ -75,6 +77,11 @@ meaningful anchor or update the reference. Check the short path from README/AGEN
 For version/current-code claims, inspect the named Cargo file, lock entry or source at the recorded commit.
 Compare the rule with adjacent producers/consumers; do not implement or leave two competing versions.
 
+When removing a feature, check the touched owner's README, AGENTS, FUNCTIONS and active issue body together.
+A local prohibition must not leave an adjacent instruction to construct the same feature. Preserve useful
+historical evidence at an immutable revision, clearly separated from instructions. Do not use raw keyword counts
+as acceptance: a warning about old encrypted data is not a request to implement encryption.
+
 No Rust run is required for prose-only edits. Do not describe selected-page link checks as a full-repository or
 external-link crawl. Do not restore old wave/receipt validators merely to make them green.
 
@@ -87,7 +94,7 @@ external-link crawl. Do not restore old wave/receipt validators merely to make t
 | File/target/package moved | Cargo/module callers, CODE_MAP row, affected links; remove obsolete facade/fixture references |
 | Dependency changed | Consumer Cargo entry, Cargo.lock, donor row with version/features/source/date; distinguish inspected from executed |
 | Working command now exists | Root QUICKSTART with exact executed commands, revision/platform and limits |
-| Stage or unfinished work changed | Existing registry: next result, owner, actual checks and unresolved limits; no second task database |
+| Stage or unfinished work changed | Existing registry: next connected change, owner, stop condition, actual checks and unresolved limits; no second task database |
 
 A small owner recipe answers: what enters, what it does, what leaves, what can fail, which code/callers to replace.
 New settings/types appear with a real consumer, not as a future-feature catalogue. Use standard libraries and
