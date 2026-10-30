@@ -40,6 +40,21 @@ not a frozen indexed contract.
 ExecutionContext, RequestContext, view guards, clocks/cancellation, streams, redb rows, publication progress,
 query-window contents and vendor types remain with their concrete owners. No universal context or state bus.
 
+## One representation per meaning
+
+Start a value beside its actual producer/consumer. Share it only across a real boundary that needs that same
+meaning; do not copy the [cross-owner value table](../../docs/implementation/README.md#minimal-cross-owner-values)
+into a mandatory public type inventory. SourceId versus PointId can justify distinct types because mixing them
+is wrong; a newtype for every integer/string, plus a builder/validator/codec per wrapper, does not.
+
+Decode and validate incoming data at the real boundary. Keep a separate checked/storage value when an invariant
+or representation genuinely differs; otherwise move or borrow the same value. No field-for-field transport →
+contracts → domain → plan → executor clones. The wire must not serialize runtime guards or vendor internals.
+
+Expose errors/gaps that a real consumer distinguishes. Preserve owner-specific causes and map once at the public
+edge; do not add generic reason registries, per-helper error families or caller-supplied verified flags. A checked
+value means its actual constructor established that invariant, not that an echoed digest proves it.
+
 ## Serialization and identity
 
 Use one current Serde DTO family; [protocol](../search-provider-protocol/FUNCTIONS.md) owns frame/message bounds.

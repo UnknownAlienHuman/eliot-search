@@ -1,6 +1,7 @@
 ## Result
 
 What actual behavior or documentation rule changed? Name the owner and affected consumers.
+What replaced route was removed? Explain a new abstraction or remaining duplicate only when one is introduced.
 
 ## Checks
 

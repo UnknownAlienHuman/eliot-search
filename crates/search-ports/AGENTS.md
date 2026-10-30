@@ -1,28 +1,12 @@
 # Working on search-ports
 
-This package is a deletion target. Read [README.md](README.md), the exact
-[source/caller census](FUNCTIONS.md), the [architecture](../../docs/architecture/README.md) and
-[implementation guide](../../docs/implementation/README.md).
+This catalogue is a deletion target, not the location for new abstractions. Read the affected replacement in
+[FUNCTIONS.md](FUNCTIONS.md), then inspect its real current callers and receiving owner.
 
-Do not add, harden or version a global port, associated-type family, operation context, generic receipt,
-mutation identity, capability, conformance descriptor or fake implementation. Do not preserve a trait name
-merely to make an obsolete consumer compile.
+Use the root [implementation choices](../../docs/implementation/WORKING_GUIDE.md#implementation-choices).
+Standard library traits and a narrow local interface may solve a real boundary; they do not require multiple
+production backends, a conformance registry or a ports-v2 package. Do not add dummy implementations to justify one.
 
-When changing a consumer:
-
-1. identify the concrete current owner and actual effect;
-2. call its direct API with current values;
-3. carry an absolute deadline/cancellation and real counters only where the operation needs them;
-4. resolve uncertain effects through authoritative state/readback;
-5. move a genuinely reusable small helper to its natural owner;
-6. delete the old import, adapter, conformance entry, generated map and exclusive fixture in the same slice.
-
-A new trait is allowed only beside one real consumer that simultaneously needs multiple implementations. It
-must be small, concrete and local. Test fakes remain beside that consumer and do not become a product-wide
-registry.
-
-The end state removes `crates/search-ports`, its workspace dependency, P00 port catalogues and generated
-coverage consumers. Do not create `search-ports-v2`, forwarding crates, a service locator or an effect bus.
-
-After production changes, run minimal Rust 1.98 check and strict Clippy for the changed owner and immediate
-real consumers. Port counts, fake matrices and source-shape tests are not acceptance gates.
+Move one connected consumer path to its concrete owner. Carry only needed execution state, preserve actual
+failure semantics, and remove displaced imports/adapters/exclusive fixtures together. No ordered rewrite of all
+port families precedes Foundation. Run minimal locked check/Clippy for affected owners and immediate consumers.

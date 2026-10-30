@@ -1,94 +1,33 @@
 # search-domain — remove the planned-system algebra
 
-This package is not a useful business-domain core. At the original public-main baseline
-`c8e38b6fc9829f1cd38070773b1b3e5b21de18ad` it contained about **80.9 KiB of production Rust** centralizing
-proof, fingerprint, currentness, coverage, eligibility, visibility, transition and mutation vocabularies from
-the historical Architecture 8.4 programme. That size is historical inventory, not a current recount or target.
+Legacy proof/transition vocabulary is not a required application layer. [FUNCTIONS.md](FUNCTIONS.md) maps each
+remaining family to the actual state/effect owner. Read that affected row, not every historical domain rule.
 
-The established caller audit found most exported operations without an external production caller. Remaining
-uses belonged either to mechanisms selected for removal or to small rules that can live beside their real owner.
-Recheck the exact current callers when performing the code cut; do not infer deletion safety from this old byte
-count alone.
+<a id="established-caller-disposition"></a>
+## Historical inventory
 
-Read the [architecture](../../docs/architecture/README.md),
-[implementation guide](../../docs/implementation/README.md) and local [source/caller map](FUNCTIONS.md).
-
-## Established caller disposition
-
-The audit found no external caller for the public assurance, currentness, plan-fingerprint, eligibility, stable
-candidate-order, coverage or visibility evaluators; their concrete operation names resolved only to package
-source/tests at the inspected revision.
-
-External uses found in that readset:
-
-- `transition_publication` — old generic `PublicationIntent` persistence/visibility code being replaced by one
-  `PendingPublication` + `CurrentPublishedView` transaction;
-- `transition_source_ownership` and `source_ownership_v2` — old namespace cutover/registry/record schemas being
-  deleted with the source registry stack;
-- `classify_mutation_outcome` — runtime-owner/development code; a small generic enum/function around actual
-  owner failure semantics;
-- Cargo dependencies from packages whose old APIs imported domain types although the selected target no longer
-  needs this package.
-
-A package dependency or re-export is not a consumer of useful behavior.
+The [previous inventory and caller findings](https://github.com/UnknownAlienHuman/eliot-search/blob/69e85b04c0d1e3d4e8ef1742ec128ecd95cc8c04/crates/search-domain/README.md)
+are revision-specific. Recheck current imports and dispatch before deleting source; package presence is not use.
 
 ## Target
 
-Domain rules live with the operation which owns the data/effect:
-
-| Current domain area | Direct owner |
-|---|---|
-| publication transition | `search-publication` pending/current/cleanup records |
-| source head/ownership | typed current source/root owner |
-| selected scope | query's `ResolvedScope` over the pinned view |
-| coverage/complete negative | current `SearchResponse` / explicit `Exact` operation |
-| ranking/order | Qdrant/native fusion or the small real rank merge |
-| evidence assurance | actual manifest/object verification and explicit gaps |
-| currentness | immutable `PublishedViewGuard` and current source/view references |
-| visibility/readiness | actual constructed handler/component state |
-| mutation outcome | concrete effect owner; unknown only after a possible real effect |
-
-Do not replace this package with `domain-v2`, another policy kernel or a directory of generic enums.
+Keep a rule beside the state, transaction or effect it controls. The
+[implementation choices](../../docs/implementation/WORKING_GUIDE.md#implementation-choices) govern extraction;
+there is no replacement domain-v2, decision service or public enum catalogue.
 
 ## Potentially useful small code
 
-Retain a helper only when at least two current direct owners use exactly the same semantics after cutover.
-Otherwise move it beside its caller.
-
-The current `classify_mutation_outcome` may be reduced to direct effect-owner logic:
-
-```text
-before dispatch / known abort     → known failure
-possible external/durable effect  → unresolved until authoritative readback
-verified postcondition            → success
-contradictory actual state        → blocked/corrupt
-```
-
-Publication, redb, object writer and process ownership have different readback/retry actions; a universal
-retryability enum is not automatically useful.
+Share only identical behavior needed by actual consumers. Similar error names do not make file publication,
+redb commit and backend writes the same recovery algorithm. A matching readback does not establish that every
+possibly dispatched external writer has stopped; the effect owner's recipe decides what can proceed.
 
 ## Removal boundary
 
-Delete after direct callers move:
-
-- assurance aggregate and reason/proof records;
-- coverage classification over old exact reports;
-- currentness axes, snapshot-drift/fingerprint comparisons and revalidation policy;
-- plan/query fingerprint construction and verification;
-- eligibility AST/set/equivalence/digest proofs;
-- generic stable candidate ordering based on old assurance/fingerprint fields;
-- source ownership v2/cutover generation and generic transition state machine;
-- old publication transition over `PublicationIntentState`;
-- visibility requirements over process/binding/grant/profile booleans;
-- generic `Decision`, `ReasonSet` and `DomainError` surfaces after consumers disappear;
-- package fixtures/property tests protecting those APIs;
-- unused `search-domain` Cargo dependencies from consumer packages.
-
-Keep concrete checked arithmetic and deterministic ordering in the actual owner which uses them. Do not leave
-forwarding re-exports.
+Move useful behavior with its real callers; remove displaced exports, exclusive fixtures and dependencies.
+No global domain rewrite is a prerequisite to a connected feature. Preserve data, not obsolete type shapes.
 
 ## Completion
 
-The current source, publication, query, evidence, readiness and failure paths compile without `search-domain`.
-Every retained rule is visible in its owning operation and tested through its real inputs/outputs. The package
-is deleted unless a small, independently meaningful multi-consumer kernel remains after the cutovers.
+The changed product path uses its concrete owner without duplicate policy/transition layers. Delete this crate
+when its final useful caller moves; do not infer that deletion has already happened. Use the
+[minimal production checks](../../docs/implementation/WORKING_GUIDE.md#minimal-production-checks).
