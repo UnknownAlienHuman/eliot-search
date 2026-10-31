@@ -1,0 +1,37 @@
+name: Temporary cleanup snapshot
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - '.github/workflows/cleanup-snapshot.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  snapshot:
+    if: github.head_ref == 'codex/cleanup-register-r067' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - name: Archive only tracked public repository files
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rev-parse HEAD > checkout-sha.txt
+          git ls-tree -r HEAD > checkout-tree.txt
+          git archive --format=tar.gz --output=checkout.tar.gz HEAD
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: cleanup-checkout
+          path: |
+            checkout.tar.gz
+            checkout-sha.txt
+            checkout-tree.txt
+          retention-days: 1
+          if-no-files-found: error
