@@ -44,15 +44,10 @@ members = [
     "crates/search-eval",
     "crates/search-provider-protocol",
     "crates/search-provider-client",
-    "crates/search-eliot-adapter",
     "bins/eliot-searchd",
     "bins/eliot-search",
-    "bins/eliot-search-model-worker",
-    "bins/eliot-search-doc-worker",
-    "crates/search-runtime/search-revision-crypto",
     "crates/search-runtime/search-os-secrets-windows",
     "crates/search-runtime/search-provider-transport-windows",
-    "xtask",
 ]
 
 [workspace.package]
@@ -107,7 +102,6 @@ search-eval = { path = "crates/search-eval" }
 search-provider-protocol = { path = "crates/search-provider-protocol" }
 search-provider-client = { path = "crates/search-provider-client" }
 search-provider-transport-windows = { path = "crates/search-runtime/search-provider-transport-windows" }
-search-eliot-adapter = { path = "crates/search-eliot-adapter" }
 
 # Single vendor-SDK pin. Only search-qdrant-bridge may inherit this
 # dependency; its exact version must match the qualified client receipt.
@@ -118,9 +112,6 @@ qdrant-client = { version = "=1.19.0", default-features = false }
 # testing/unstable feature); do not widen it implicitly.
 blake3 = { version = "=1.8.2", default-features = false, features = ["std", "pure", "zeroize"] }
 sha2 = { version = "=0.10.9", default-features = false }
-
-# #250: official read-only Cargo facts, private to the bounded xtask adapter.
-cargo_metadata = { version = "=0.23.1", default-features = false }
 
 # #400/#389: private maintained file syntax events; no donor product tree.
 # Cargo ignores build metadata in requirements; locked artifact/checksum bind spec-1.1.0.

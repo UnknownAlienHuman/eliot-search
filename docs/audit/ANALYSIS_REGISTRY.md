@@ -1,59 +1,121 @@
-# Analysis registry
+# Work register
 
-Current next step and evidence only. Algorithms stay with their owners.
+One place for remaining work, current evidence and the next task. Algorithms stay in owner recipes.
+**R067 — repository cleanup and executable work register, 2026-10-30.** Base: `f3d710131aa3b06a63198694bed7ec82b1e251df`.
 
 <a id="resume"></a>
 <a id="resume-after-interruption"></a>
-## Resume
+## Next task
 
-**R066 — lean source admission and consistent work entrypoints, 2026-10-30.**
-Inspected main: `2aa65104d903200806decec83c4713389608ba15` (R065). Documentation only; no source cutover.
+**F1 is next.** Start from [actual entry.rs dispatch](../implementation/CODE_MAP.md#existing-dispatch-to-replace),
+not old src/main.rs harnesses. Capture invocation once; help/version and rejected input have no effects; connect
+plain root commands without earlier legacy interception. Do not start all rows or optional features at once.
 
-Next remains [Foundation](../implementation/README.md#1-foundation--invocation-settings-and-root), from the
-[actual dispatch](../implementation/CODE_MAP.md#existing-dispatch-to-replace). Later the one-file path uses
-[admission](../../crates/search-source/search-source-admission/FUNCTIONS.md) without an approval/policy platform.
-Do not start a global source rewrite or optional format work before that connected result.
+One manager owns one worktree and the integration diff. Give an executor one row plus its affected paths,
+owner recipe, preserved invariants and stop condition. Read its changed caller path, not every document.
+After two failed approaches, record the cause and change approach; do not stack fallback wrappers or suppress errors.
+
+<a id="work-register"></a>
+<a id="delivery-remaining"></a>
+## Remaining work
+
+READY means the next connected implementation can start; WAIT means its listed prerequisite is not complete.
+DONE requires landed files and recorded checks, never a revised recipe. IDs are local navigation, not a new API.
+The [package register](WORKSPACE_MEMBER_DISPOSITION_2026-10-21.md#package-register) covers every remaining member.
+
+| ID / status | Depends on | Exact starting paths and owner | Stop condition / removal |
+|---|---|---|---|
+| C0 / DONE in this change | None | Old xtask/swarm/tooling and five unconsumed packages | Source, manifests, unused lock entries, exclusive fixtures/workflows and competing documents removed together; no surviving input reader lost. |
+| F1 / READY | None | bins/eliot-search{,d}/src/entry.rs; daemon config_composition; [settings](../../crates/search-config/FUNCTIONS.md) | One parsed command reaches the real handler; help/version/invalid input avoid store/spawn effects. Remove converted maybe_run/fallback routes. Include real binaries in check/Clippy. |
+| F2 / WAIT | F1 | daemon owner_composition, native_root_command; [root](../../crates/search-runtime/search-runtime-owner/FUNCTIONS.md) | Plain inspect/init/open and factual status use one lifetime guard. Move concrete OS/file operations, remove legacy key/epoch/initialization protocols; do not add Linux no-op security adapters. |
+| S1 / WAIT | F2 | owner_composition/kernel/native_source.rs, safe_reader_adapter; [source map](../../crates/search-source/README.md#ownership) | Same acquired bytes reach plain ObjectRef and guarded current row. Delete receipt/provenance/registry replay and duplicate writers with their actual consumers. |
+| P1 / WAIT | S1 | preparation_composition; [materializer](../../crates/search-prep/search-materializer/FUNCTIONS.md), [unitizer](../../crates/search-prep/search-unitizer/FUNCTIONS.md) | One UTF-8 representation/ranges, one stored outcome, no adjacent reparse or second writer. Empty/gap and stale-result semantics remain truthful. |
+| Q1 / WAIT | P1 | publication_composition, search-control-redb, [bridge](../../crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md), [publisher](../../crates/search-index-qdrant/search-publication/FUNCTIONS.md) | Real fixed build, matching current/evidence state and installed view. Adopt exact client/server with consumers; remove supervisor/lease/proof coupling, not by creating dummy credentials. |
+| U1 / WAIT | Q1 | public_client, public_runtime_service, provider_composition; [CLI](../../bins/eliot-search/FUNCTIONS.md), [client](../../crates/search-provider-client/FUNCTIONS.md), [protocol](../../crates/search-provider-protocol/FUNCTIONS.md) | One-shot CLI returns a verified retained excerpt via final child-stdio path. Remove pairing/pipe/bootstrap/duplicate requests and old query plan/executor wrappers. No throwaway transport. |
+| R1 / WAIT | U1 | source_roots, source-reconcile, control, publication, pins/reclaimer | Restart and complete desired-state comparison converge without lost wakeups; old views stay valid and whole generations clean safely. Remove duplicate journals, point GC and full-catalogue status scans. |
+| X1 / WAIT | R1 | query family, daemon continuation/result_handles, client | Exact scans retained inventory; live windows keep original view/order, bounded expansion and expiry. Delete duplicate handle/catalogue/fence/replay state. |
+| M1 / WAIT | R1 | daemon maintenance/restore_composition; [maintenance](../../crates/search-runtime/search-retention/FUNCTIONS.md) | Complete stopped-root marking, non-runnable archives and isolated fresh-destination import. Remove generic lease/purge/restore machinery, preserving originals. |
+| O1 / DEFERRED | Connected baseline + explicit need | code-enricher, overlay, comparator, subject-resolver; [optional depth](../product/AGENT_ANALYSIS_FRAMEWORK.md#optional-depth) | Remove unconsumed scaffolds after feature/launch/caller check. Implement optional behavior only for a selected real consumer; no empty replacement binaries or placeholders. |
+| V1 / WAIT | Connected shipped paths | [later checks](../implementation/TEST_CUTOVER.md), issue #215 | Run actual behavior/platform/relevance/resource cases; publish only supported measured claims and executed Quickstart. Before this, production cuts run minimal check/Clippy, not broad tests. |
+
+Stage 3B is conditional on declared Stage 3A budgets failing, not an additional prerequisite. Delivery order and
+mechanisms remain in the [implementation sequence](../implementation/README.md#delivery-sequence). Shared
+contracts/domain/ports shrink with each real consumer above; there is no separate global rewrite phase.
 
 <a id="established-decisions--do-not-rediscover"></a>
 <a id="decisions-and-owners"></a>
-## Selected decisions
+## Preserved decisions
 
-[Local scope](../architecture/LOCAL_SCOPE.md), root/object publication and delivery order are unchanged.
-Admission keeps existing exclusions, one bounded stable read and actual refusal reasons. Review-required input
-is refused, not routed into a new approval workflow. Decoding stays with preparation; effect outcomes stay with
-object/current-row owners. Cancellation after a possible write is not evidence of rollback.
+[Local scope](../architecture/LOCAL_SCOPE.md): plain per-account storage, same-host operator-owned Qdrant, owned-child
+stdio. No application encryption, key platform, grants or multi-user layer. Keep source integrity, exclusions,
+finite work, coherent views and conservative deletion. Preserve user originals/keys and unpublished branches.
 
 <a id="coverage-ledger"></a>
 <a id="changed-documentation"></a>
-## Documentation changes
+## Cleanup delivered
 
-Replaced the admission type/policy catalogue and duplicate README algorithms with one direct recipe; linked every
-source-family responsibility to its owner. The index now routes file refusal directly and requires stable current-
-status links rather than copied checkpoint labels. Open #189/#215/#267 still carried the retired Windows algorithm
-at inspection; PR #610 described R057 as current. Their publication-time updates point to main owners instead.
+Removed old task/receipt generators and their complete repository input closure: xtask, swarm packets, obsolete
+configuration catalogues, qualification reports, PowerShell wrappers, redundant workflows, old master/contracts
+and superseded audits. Historical evidence is accessible at fixed Git revisions, not duplicated in active context.
+Removed unconsumed revision crypto, disconnected Eliot adapter and refusal-only model/document workers.
+No live source was replaced by a stub; remaining coupled code is mapped above, not called deleted.
 
-<a id="delivery-remaining"></a>
-## Remaining implementation
-
-Foundation → one retained file through Qdrant/CLI → later stages. Existing Rust still needs real caller/Cargo/
-fixture cutovers. Preserve unsupported roots, user files/keys and unpublished work. #610 remains separate and is
-not qualified by this documentation change. No product stage or full-repository audit is completed here.
+The single manual workflow checks a selected production package/target/features and Clippy without requiring
+workspace-wide tests. The package register maps every remaining explicit Cargo member to one of these cuts.
 
 <a id="evidence-status"></a>
 <a id="execution-evidence"></a>
-## Evidence
+## Verification and known blockers
 
-| Check | Result / limit |
-|---|---|
-| Inputs | Six edited files matched GitHub blob IDs at the inspected main. Current connector reads plus a hash-matched reference archive, not a full fresh checkout. |
-| Review | Admission/source navigation compared with local scope, reader, preparation, object, current-row and maintenance boundaries. Active issues searched for the retired Windows recipe; PR #610 read directly. No full source-caller or independent-agent audit. |
-| Navigation/diff | 52 changed-page relative links checked in the candidate/reference graph with current owner/fragment reads; 42 previous anchors preserved; git diff --check passed. Not a complete repository or external-link crawl. |
-| Scope | Six Markdown files and relevant issue/PR descriptions. No Rust/Cargo/lockfile/config/workflow/test-source change or permanent checker. |
-| Execution | Build, Clippy and product tests NOT_RUN. No new dependency selection, runtime or performance result. |
+Full snapshot was obtained from Actions at `15d2a25b` (base plus temporary read-only snapshot workflow).
+All 2,735 tracked blobs were verified against that exact tree, including 572 original Markdown files.
+Review covers the full path inventory, manifest/launch references for removed components and retained-document
+navigation. It is not a proof of every remaining runtime algorithm or an independent-agent review.
+
+**Existing baseline problems, not cleanup regressions:**
+
+| Area / exact baseline | Observed result | Required follow-through |
+|---|---|---|
+| Windows default CLI + daemon, Rust 1.98 | cargo check passes with warnings | This does not establish new product behavior or alternate features. |
+| Linux default daemon | 19 compiler errors: missing platform/unsupported module paths in sealed_owner_epoch, sealed_store and sealed_transaction; unconditional Windows-secret imports in owner_composition; missing File import in direct_store/store.rs | F1/F2 must resolve the actual call/target boundary; no cfg-hidden success claim or fake non-Windows encryption. |
+| Windows strict Clippy | Stops in search-os-secrets/src/legacy_revision_protection/codec.rs:59 on needless_lifetimes | F2/U1: remove/repair the actual dependency closure; no global allow or guessed clean result beyond the first failure. |
+| Linux strict Clippy | Five diagnostics in search-provider-transport-windows/src/lib.rs:24–31: missing_const_for_fn, unused_self, needless_pass_by_ref_mut | U1: remove the legacy listening transport with its client, rather than expand its unsupported stub. |
+
+[Run 41154835544](https://github.com/UnknownAlienHuman/eliot-search/actions/runs/41154835544) compared base `f3d71013`
+and cleanup `d20e52bb` on Windows 2025 and Ubuntu 24.04 with Rust 1.98.0. Both ran:
+
+```text
+cargo +1.98.0 metadata --locked --no-deps --format-version 1
+cargo +1.98.0 check --locked -p eliot-search --bin eliot-search -p eliot-searchd --bin eliot-searchd
+cargo +1.98.0 clippy --locked -p eliot-search --bin eliot-search -p eliot-searchd --bin eliot-searchd -- -D warnings
+```
+
+Metadata passes: 52 original → 47 current workspace members. Windows check passes at both revisions;
+Linux check and strict Clippy fail with identical diagnostic messages/locations before and after cleanup.
+These are inherited failures, not PASS. Surviving production Rust is unchanged; only unconsumed source is deleted.
+The final documentation/temporary-workflow removal does not alter that checked source/Cargo graph.
+
+Cargo regenerated the lock from original pins in [run 41154714522](https://github.com/UnknownAlienHuman/eliot-search/actions/runs/41154714522):
+36 unused entries removed, every retained version/source/checksum preserved. An earlier manual pruning missed
+feature-dependent edges and failed --locked; it was replaced by this Cargo-generated lock, not waived.
+
+All 188 retained Markdown files were parsed: 714 internal file/fragment links resolve, no missing targets;
+external/pinned historical URLs were not crawled. All remaining Cargo path dependencies/declared target paths
+exist, package rows cover all 47 members once, YAML parses and git diff --check passes. Temporary snapshot,
+lock preparation and comparison workflows are removed before landing; only the scoped manual workflow remains.
+
+No product tests, full-feature build, Qdrant run, performance result or autonomous-agent completion is claimed.
+
+## Update and finish a task
+
+Change status only with the actual result: record commit, command/target/features, outcome and remaining blocker.
+Update changed package rows and one owning recipe; keep issue bodies as links. A blocked agent leaves its concrete
+cause and safe diff, not fabricated completion. The integration owner rechecks dispatch, removed imports and the
+minimal build closure before landing. Remaining source defects are not erased by a smaller file count.
 
 <a id="evidence-index"></a>
 <a id="prior-evidence"></a>
-## Previous evidence
+## History
 
-[R065 registry](https://github.com/UnknownAlienHuman/eliot-search/blob/2aa65104d903200806decec83c4713389608ba15/docs/audit/ANALYSIS_REGISTRY.md)
-retains prior checks. Current status is maintained here, not copied into every issue and PR.
+[R066 registry](https://github.com/UnknownAlienHuman/eliot-search/blob/f3d710131aa3b06a63198694bed7ec82b1e251df/docs/audit/ANALYSIS_REGISTRY.md)
+retains earlier evidence. The old #610 branch is reference material to reconcile, not a bulk merge instruction.

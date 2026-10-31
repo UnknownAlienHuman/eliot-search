@@ -8,7 +8,8 @@ Choose one route; do not load the whole documentation tree.
 | Task | Read |
 |---|---|
 | Understand what to build | [Architecture](architecture/README.md), [local scope](architecture/LOCAL_SCOPE.md) |
-| Continue implementation | [Resume](audit/ANALYSIS_REGISTRY.md#resume) → current [stage](implementation/README.md#delivery-sequence) |
+| Continue implementation | [Work register](audit/ANALYSIS_REGISTRY.md#work-register) → first ready task → its owner |
+| Remove or consolidate a package | [Complete workspace map](audit/WORKSPACE_MEMBER_DISPOSITION_2026-10-21.md#package-register) |
 | Find the actual files/callers | [Code map](implementation/CODE_MAP.md) |
 | Check a change / update documentation | [Working guide](implementation/WORKING_GUIDE.md) |
 | Change configuration | [Typed settings](../crates/search-config/FUNCTIONS.md) |
@@ -42,9 +43,9 @@ Main's source still includes legacy implementations. #610's source removals and 
 to their named branch revisions. An absent caller in an old audit is not permission to delete current code.
 Read actual manifests, dispatch and consumers before acting.
 
-Old Architecture 8.4, P00, swarm, wave and qualification inputs are historical even when retained on disk for old
-tooling. They do not restore encryption, grants, compatibility promises or acceptance gates. Do not read them
-unless an actual deletion/caller investigation needs them.
+Old Architecture 8.4, P00, swarm, wave packets, generated coverage maps and their xtask/workflow consumers
+have been removed together. [Pre-cleanup history](https://github.com/UnknownAlienHuman/eliot-search/tree/f3d710131aa3b06a63198694bed7ec82b1e251df) is available only for a specific source investigation;
+it cannot restore encryption, grants, compatibility promises or acceptance gates.
 
 ## Supporting navigation
 

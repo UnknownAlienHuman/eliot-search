@@ -1,16 +1,12 @@
-# Audit navigation
-
-Audit records describe evidence and uncertainty; they do not grant authority or qualify runtime behavior.
+# Work and evidence
 
 | Need | Read |
 |---|---|
-| Resume/current branch | [Registry](ANALYSIS_REGISTRY.md#resume) |
-| Current decisions and remaining work | [Decisions](ANALYSIS_REGISTRY.md#established-decisions--do-not-rediscover), [remaining work](ANALYSIS_REGISTRY.md#delivery-remaining) |
-| Executed checks and limits | [Evidence status](ANALYSIS_REGISTRY.md#evidence-status) |
-| Prior snapshots/readsets | [Evidence index](ANALYSIS_REGISTRY.md#evidence-index) |
-| Upstream facts and limits | [Donor register](DONOR_VERIFICATION_REGISTER_2026-10-09.md) |
-| Package consolidation guidance | [Workspace disposition](WORKSPACE_MEMBER_DISPOSITION_2026-10-21.md) |
-| Historical root causes | [Distilled audit](ARCHITECTURAL_AND_CODE_AUDIT_2026-10-17.md) |
+| Next task, dependencies, completion and blockers | [Work register](ANALYSIS_REGISTRY.md#work-register) |
+| Every current workspace package and its disposition | [Workspace map](WORKSPACE_MEMBER_DISPOSITION_2026-10-21.md#package-register) |
+| Actual checks and unrun behavior | [Execution evidence](ANALYSIS_REGISTRY.md#evidence-status) |
+| Installed versus selected dependencies | [Donor register](DONOR_VERIFICATION_REGISTER_2026-10-09.md) |
+| Old findings, reports and removed scaffolding | [Immutable pre-cleanup tree](https://github.com/UnknownAlienHuman/eliot-search/tree/f3d710131aa3b06a63198694bed7ec82b1e251df) |
 
-[Architecture](../architecture/README.md) owns purpose; [implementation](../implementation/README.md) owns order;
-local owner recipes own algorithms. Update a short registry entry and the owning rule, not another audit database.
+Current rules live with [architecture](../architecture/README.md), [delivery](../implementation/README.md) and owner recipes.
+History is not a second work queue. Update the affected row and rule rather than appending an audit diary.

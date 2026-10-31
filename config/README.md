@@ -1,5 +1,5 @@
-# Legacy configuration inputs
+# Configuration
 
-These files remain with main's legacy consumers. They are not runnable examples of the replacement configuration.
-Use the current [settings recipe](../crates/search-config/FUNCTIONS.md); add only fields consumed by the connected
-implementation. Remove old catalogues with their source consumers, not by importing unrelated changes from #610.
+[Typed settings](../crates/search-config/FUNCTIONS.md) owns supported fields, precedence and validation.
+There is no replacement runnable preset yet. Add examples only with the actual consumer and executed command.
+Old wave/secret/registry catalogues were tooling inputs and have been removed; they are not supported options.

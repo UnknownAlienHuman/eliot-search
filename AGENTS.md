@@ -1,6 +1,6 @@
 # Working on ELIOT Search
 
-Read the [resume point](docs/audit/ANALYSIS_REGISTRY.md#resume), the current
+Read the [work register](docs/audit/ANALYSIS_REGISTRY.md#work-register), take the first ready unfinished task, then its current
 [delivery stage](docs/implementation/README.md#delivery-sequence), then only its owner recipe and actual callers.
 The [working guide](docs/implementation/WORKING_GUIDE.md) gives commands, checks and update rules;
 the [code map](docs/implementation/CODE_MAP.md) identifies real entrypoints.
@@ -36,4 +36,8 @@ No source/manifest/workflow changes are hidden inside a documentation-only landi
 
 Main contains new instructions and older implementation. #610 is separate unmerged source work: its deletions,
 parser upgrade and compiler evidence are not automatically main state. Inspect the current checkout.
-Old 8.4/P00/wave/swarm/qualification packets are historical inputs, not current requirements or launch gates.
+The old 8.4/P00/wave/swarm tooling and unused revision-crypto package are removed. Historical Git content
+is inspection material only, never a current requirement. Use the work register, not an old branch task queue.
+
+Do not mark a task done from prose or a passing helper. Record the actual consumer path, removal and command outcome.
+After two failed attempts, compare the concrete errors and change approach; do not add a fallback or suppress the failure.
