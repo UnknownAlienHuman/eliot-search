@@ -1,15 +1,18 @@
 # Work register
 
 One place for remaining work, current evidence and the next task. Algorithms stay in owner recipes.
-**R067 — repository cleanup and executable work register, 2026-10-30.** Base: `f3d710131aa3b06a63198694bed7ec82b1e251df`.
+**R068 — connected CLI invocation increment, 2026-10-31.** Base: `26497dfd7319e22b6faf4f28e15b9695bf007c18`.
 
 <a id="resume"></a>
 <a id="resume-after-interruption"></a>
 ## Next task
 
-**F1 is next.** Start from [actual entry.rs dispatch](../implementation/CODE_MAP.md#existing-dispatch-to-replace),
-not old src/main.rs harnesses. Capture invocation once; help/version and rejected input have no effects; connect
-plain root commands without earlier legacy interception. Do not start all rows or optional features at once.
+**Finish F1 in daemon/settings.** The CLI now captures native arguments once and routes directly to current
+handlers. Do not redo that change or call all of F1 complete. Start at the daemon's
+[actual entry.rs dispatch](../implementation/CODE_MAP.md#existing-dispatch-to-replace) and config_composition:
+replace repeated argument reads/interceptors with one selected command and consumed settings. Help/version and
+invalid invocation must finish before effects. Plain root ownership remains F2; the final serviced client is U1.
+Do not start all rows, rebuild removed copies or substitute the old src/main.rs test harness.
 
 One manager owns one worktree and the integration diff. Give an executor one row plus its affected paths,
 owner recipe, preserved invariants and stop condition. Read its changed caller path, not every document.
@@ -19,14 +22,15 @@ After two failed approaches, record the cause and change approach; do not stack 
 <a id="delivery-remaining"></a>
 ## Remaining work
 
-READY means the next connected implementation can start; WAIT means its listed prerequisite is not complete.
+READY means work can start; PARTIAL means a named increment landed and the remainder can continue; WAIT means
+its prerequisite is not complete.
 DONE requires landed files and recorded checks, never a revised recipe. IDs are local navigation, not a new API.
 The [package register](WORKSPACE_MEMBER_DISPOSITION_2026-10-21.md#package-register) covers every remaining member.
 
 | ID / status | Depends on | Exact starting paths and owner | Stop condition / removal |
 |---|---|---|---|
-| C0 / DONE in this change | None | Old xtask/swarm/tooling and five unconsumed packages | Source, manifests, unused lock entries, exclusive fixtures/workflows and competing documents removed together; no surviving input reader lost. |
-| F1 / READY | None | bins/eliot-search{,d}/src/entry.rs; daemon config_composition; [settings](../../crates/search-config/FUNCTIONS.md) | One parsed command reaches the real handler; help/version/invalid input avoid store/spawn effects. Remove converted maybe_run/fallback routes. Include real binaries in check/Clippy. |
+| C0 / DONE (R067) | None | Old xtask/swarm/tooling and five unconsumed packages | Source, manifests, unused lock entries, exclusive fixtures/workflows and competing documents removed together; no surviving input reader lost. |
+| F1 / PARTIAL | None | daemon src/entry.rs, app, config_composition; [settings](../../crates/search-config/FUNCTIONS.md) | CLI capture/direct routing is connected. Finish daemon routing and actually consumed settings; remove converted interceptors. Do not claim complete request validation or final transport from this CLI-only cut. Include changed binaries in check/Clippy. |
 | F2 / WAIT | F1 | daemon owner_composition, native_root_command; [root](../../crates/search-runtime/search-runtime-owner/FUNCTIONS.md) | Plain inspect/init/open and factual status use one lifetime guard. Move concrete OS/file operations, remove legacy key/epoch/initialization protocols; do not add Linux no-op security adapters. |
 | S1 / WAIT | F2 | owner_composition/kernel/native_source.rs, safe_reader_adapter; [source map](../../crates/search-source/README.md#ownership) | Same acquired bytes reach plain ObjectRef and guarded current row. Delete receipt/provenance/registry replay and duplicate writers with their actual consumers. |
 | P1 / WAIT | S1 | preparation_composition; [materializer](../../crates/search-prep/search-materializer/FUNCTIONS.md), [unitizer](../../crates/search-prep/search-unitizer/FUNCTIONS.md) | One UTF-8 representation/ranges, one stored outcome, no adjacent reparse or second writer. Empty/gap and stale-result semantics remain truthful. |
@@ -54,57 +58,48 @@ finite work, coherent views and conservative deletion. Preserve user originals/k
 <a id="changed-documentation"></a>
 ## Cleanup delivered
 
-Removed old task/receipt generators and their complete repository input closure: xtask, swarm packets, obsolete
-configuration catalogues, qualification reports, PowerShell wrappers, redundant workflows, old master/contracts
-and superseded audits. Historical evidence is accessible at fixed Git revisions, not duplicated in active context.
-Removed unconsumed revision crypto, disconnected Eliot adapter and refusal-only model/document workers.
-No live source was replaced by a stub; remaining coupled code is mapped above, not called deleted.
+R068 changes six connected CLI source files and removes five unlinked copies: directory_client.rs, help.rs,
+owned_client.rs, paged_client.rs and service_client.rs (1,625 lines). Capture and select the command once;
+help/version have one owner; existing forwarding borrows the original arguments. No new crate, trait, dependency,
+protocol or test suite. Original user files, unrelated branches and daemon behavior are unchanged.
 
-The single manual workflow checks a selected production package/target/features and Clippy without requiring
-workspace-wide tests. The package register maps every remaining explicit Cargo member to one of these cuts.
+R067's five-package/tooling removal and 47-member register remain intact. Its exact inventory, Cargo normalization
+and older platform checks are retained in the [previous registry](https://github.com/UnknownAlienHuman/eliot-search/blob/26497dfd7319e22b6faf4f28e15b9695bf007c18/docs/audit/ANALYSIS_REGISTRY.md).
 
 <a id="evidence-status"></a>
 <a id="execution-evidence"></a>
 ## Verification and known blockers
 
-Full snapshot was obtained from Actions at `15d2a25b` (base plus temporary read-only snapshot workflow).
-All 2,735 tracked blobs were verified against that exact tree, including 572 original Markdown files.
-Review covers the full path inventory, manifest/launch references for removed components and retained-document
-navigation. It is not a proof of every remaining runtime algorithm or an independent-agent review.
-
-**Existing baseline problems, not cleanup regressions:**
-
-| Area / exact baseline | Observed result | Required follow-through |
-|---|---|---|
-| Windows default CLI + daemon, Rust 1.98 | cargo check passes with warnings | This does not establish new product behavior or alternate features. |
-| Linux default daemon | 19 compiler errors: missing platform/unsupported module paths in sealed_owner_epoch, sealed_store and sealed_transaction; unconditional Windows-secret imports in owner_composition; missing File import in direct_store/store.rs | F1/F2 must resolve the actual call/target boundary; no cfg-hidden success claim or fake non-Windows encryption. |
-| Windows strict Clippy | Stops in search-os-secrets/src/legacy_revision_protection/codec.rs:59 on needless_lifetimes | F2/U1: remove/repair the actual dependency closure; no global allow or guessed clean result beyond the first failure. |
-| Linux strict Clippy | Five diagnostics in search-provider-transport-windows/src/lib.rs:24–31: missing_const_for_fn, unused_self, needless_pass_by_ref_mut | U1: remove the legacy listening transport with its client, rather than expand its unsupported stub. |
-
-[Run 41154835544](https://github.com/UnknownAlienHuman/eliot-search/actions/runs/41154835544) compared base `f3d71013`
-and cleanup `d20e52bb` on Windows 2025 and Ubuntu 24.04 with Rust 1.98.0. Both ran:
+[Run 41191228363](https://github.com/UnknownAlienHuman/eliot-search/actions/runs/41191228363) compares base `26497dfd`
+and source `881548f1` on Ubuntu 24.04 and Windows 2025, Rust 1.98.0. It checks the actual installed CLI target,
+not the old test harness, both with default features and with `--features legacy-loopback-harness`:
 
 ```text
-cargo +1.98.0 metadata --locked --no-deps --format-version 1
-cargo +1.98.0 check --locked -p eliot-search --bin eliot-search -p eliot-searchd --bin eliot-searchd
-cargo +1.98.0 clippy --locked -p eliot-search --bin eliot-search -p eliot-searchd --bin eliot-searchd -- -D warnings
+cargo +1.98.0 check --locked -p eliot-search --bin eliot-search [feature selection]
+cargo +1.98.0 clippy --locked -p eliot-search --bin eliot-search [feature selection] --no-deps -- -D warnings
 ```
 
-Metadata passes: 52 original → 47 current workspace members. Windows check passes at both revisions;
-Linux check and strict Clippy fail with identical diagnostic messages/locations before and after cleanup.
-These are inherited failures, not PASS. Surviving production Rust is unchanged; only unconsumed source is deleted.
-The final documentation/temporary-workflow removal does not alter that checked source/Cargo graph.
+| Check | Base and source result | Meaning |
+|---|---|---|
+| CLI check, both platforms / both selections | PASS with existing warnings | Connected invocation and retained harness compile; no daemon or end-to-end qualification. |
+| CLI strict package Clippy, Linux | FAIL: 13 default / 12 harness diagnostics | Same messages, locations and suggestions before/after; no new diagnostic. |
+| CLI strict package Clippy, Windows | FAIL: 13 default / 13 harness diagnostics | Same messages, locations and suggestions before/after; no new diagnostic. |
 
-Cargo regenerated the lock from original pins in [run 41154714522](https://github.com/UnknownAlienHuman/eliot-search/actions/runs/41154714522):
-36 unused entries removed, every retained version/source/checksum preserved. An earlier manual pruning missed
-feature-dependent edges and failed --locked; it was replaced by this Cargo-generated lock, not waived.
+`--no-deps` checks this package, not dependency lints. Remaining diagnostics concern the old native credential/
+registration/provider client: unused exports/variants, redundant visibility, two const-function suggestions,
+two redundant continues and a Windows borrowed-value suggestion. Keep them assigned to the actual consumer
+cutover; they are not PASS or grounds for blanket suppression. The daemon is unchanged and not rechecked here:
+R067's 19 Linux compiler errors and dependency-level strict Clippy failures remain F1/F2/U1 work.
 
-All 188 retained Markdown files were parsed: 714 internal file/fragment links resolve, no missing targets;
-external/pinned historical URLs were not crawled. All remaining Cargo path dependencies/declared target paths
-exist, package rows cover all 47 members once, YAML parses and git diff --check passes. Temporary snapshot,
-lock preparation and comparison workflows are removed before landing; only the scoped manual workflow remains.
+The complete candidate archive contains 1,709 tracked blobs; each matched its exact Git tree. Local base and
+candidate trees matched GitHub; all six edited source outputs matched the local review. Full surviving-tree
+search found no module/target/import/script reference to the five deleted copies. One args_os call remains in
+installed CLI source; the independent src/main.rs test harness is unchanged.
 
-No product tests, full-feature build, Qdrant run, performance result or autonomous-agent completion is claimed.
+All 188 retained Markdown files and 714 relative links/fragments resolve. The 101 explicit Cargo target/path
+references in 48 workspace manifests exist; YAML and diff whitespace checks pass on the final candidate. External/pinned URLs are not crawled. No independent-agent review, product
+tests, executed CLI scenario, daemon check, Qdrant or performance result is claimed. Temporary read-only CI is
+removed before landing; final documentation-only changes do not alter the checked source or Cargo graph.
 
 ## Update and finish a task
 
@@ -117,5 +112,5 @@ minimal build closure before landing. Remaining source defects are not erased by
 <a id="prior-evidence"></a>
 ## History
 
-[R066 registry](https://github.com/UnknownAlienHuman/eliot-search/blob/f3d710131aa3b06a63198694bed7ec82b1e251df/docs/audit/ANALYSIS_REGISTRY.md)
+[R067 registry](https://github.com/UnknownAlienHuman/eliot-search/blob/26497dfd7319e22b6faf4f28e15b9695bf007c18/docs/audit/ANALYSIS_REGISTRY.md)
 retains earlier evidence. The old #610 branch is reference material to reconcile, not a bulk merge instruction.

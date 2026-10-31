@@ -14,11 +14,14 @@ Read an adjacent recipe only when its boundary changes:
 | Pinned paging and emitted-item lifetime | [Query window](../../crates/search-query/search-continuation/FUNCTIONS.md) |
 | Actual receiving handlers | [Daemon](../eliot-searchd/FUNCTIONS.md) |
 
-At the recorded pre-R055 head, the primary target is src/entry.rs with legacy remote/public_client/app/core routes.
-Inspect their current dispatch and real consumers before replacement. Detailed historical route findings and the
-five already removed orphan files remain in the
-[immutable source audit](https://github.com/UnknownAlienHuman/eliot-search/blob/45ddf887c9e84861b1302334a1f5ecabb263f7f3/bins/eliot-search/FUNCTIONS.md).
-They are not additional implementation steps or proof that a current command runs.
+R068 connects `entry.rs → app::run_main`: one native argv capture and direct command selection, shared local
+help/version, borrowed forwarding arguments and no `maybe_run` interception in the CLI. Its five unlinked command
+copies are deleted from main, not merely from #610. See the [current dispatch map](../../docs/implementation/CODE_MAP.md#existing-dispatch-to-replace).
+
+This is only the invocation increment. Existing effect/line-protocol clients, output handling and daemon routing
+still require their named cutovers. The rest of this file describes that target, not delivered transport behavior.
+The [immutable earlier source audit](https://github.com/UnknownAlienHuman/eliot-search/blob/45ddf887c9e84861b1302334a1f5ecabb263f7f3/bins/eliot-search/FUNCTIONS.md)
+is historical investigation, not a list of additional APIs to restore.
 
 ## Capture and dispatch
 

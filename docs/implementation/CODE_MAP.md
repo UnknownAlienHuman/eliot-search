@@ -1,6 +1,7 @@
 # Code entrypoints and change map
 
-Inspected main: `7ed46f79` (entry.rs bodies and current documentation). This maps existing files, not a claim that the replacement product is connected.
+Base inspected: `26497dfd`; CLI dispatch below is implemented in R068 (`881548f1` source). Daemon dispatch is unchanged.
+This maps actual files, not a claim that the replacement product is connected.
 The [owner map](README.md#owners) defines intended responsibilities; a row below does not require keeping a crate.
 Recheck callers and Cargo targets before editing. Update this map only when those entrypoints change.
 
@@ -13,13 +14,14 @@ Recheck callers and Cargo targets before editing. Update this map only when thos
 
 ## Existing dispatch to replace
 
-These are actual calls in the two entry.rs files at the inspected revision, not desired new APIs:
+These are actual routes, not proposed public interfaces:
 
 ```text
-CLI main
-  maybe_run_legacy_remote (feature-gated)
-  → public_client::maybe_run
-  → app::run_main (fallback)
+CLI main → app::run_main → capture native argv once → bounded dispatch
+  help/version                → local output, no daemon
+  serve-data-root             → public_client::run_command(tail)
+  remote/indexed (harness)     → selected legacy handler(tail)
+  remaining command           → app::core::run_command(command, tail)
 
 daemon main
   secure_commands::maybe_refuse_legacy_effects
@@ -33,8 +35,9 @@ daemon main
   → app::run_main (fallback)
 ```
 
-The arrows are short-circuit dispatch alternatives: later handlers run only if earlier ones decline.
-Foundation replaces repeated invocation routing with one parsed command reaching the real root/settings owner.
+Only the daemon arrows are still short-circuit alternatives: later handlers run if earlier ones decline.
+F1 remains partial: CLI capture/routing is connected, but typed settings and the daemon path still need conversion.
+Existing DIRECT/line-protocol handlers are not the final serviced transport. Do not rebuild a second dispatcher.
 The daemon also prints help additions after dispatch; update that path when changing help. Do not leave an earlier
 legacy handler able to intercept a converted command. Do not route current requests through old protected-store,
 key-selection or migration commands merely to preserve their constructors.
