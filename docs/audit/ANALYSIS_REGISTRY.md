@@ -78,11 +78,32 @@ navigation. It is not a proof of every remaining runtime algorithm or an indepen
 |---|---|---|
 | Windows default CLI + daemon, Rust 1.98 | cargo check passes with warnings | This does not establish new product behavior or alternate features. |
 | Linux default daemon | 19 compiler errors: missing platform/unsupported module paths in sealed_owner_epoch, sealed_store and sealed_transaction; unconditional Windows-secret imports in owner_composition; missing File import in direct_store/store.rs | F1/F2 must resolve the actual call/target boundary; no cfg-hidden success claim or fake non-Windows encryption. |
-| Strict Clippy | Stops in search-os-secrets/src/legacy_revision_protection/codec.rs:59 on needless_lifetimes | Remove/repair the actual legacy dependency closure; no global allow or guessed clean result beyond the first failing package. |
+| Windows strict Clippy | Stops in search-os-secrets/src/legacy_revision_protection/codec.rs:59 on needless_lifetimes | F2/U1: remove/repair the actual dependency closure; no global allow or guessed clean result beyond the first failure. |
+| Linux strict Clippy | Five diagnostics in search-provider-transport-windows/src/lib.rs:24–31: missing_const_for_fn, unused_self, needless_pass_by_ref_mut | U1: remove the legacy listening transport with its client, rather than expand its unsupported stub. |
 
-The baseline diagnostics are in [run 41152732245](https://github.com/UnknownAlienHuman/eliot-search/actions/runs/41152732245).
-Its first diagnostic shell stopped at the first failure; only commands with recorded logs count. Candidate
-base/head comparison and final navigation results are recorded in this change's PR before merge.
+[Run 41154835544](https://github.com/UnknownAlienHuman/eliot-search/actions/runs/41154835544) compared base `f3d71013`
+and cleanup `d20e52bb` on Windows 2025 and Ubuntu 24.04 with Rust 1.98.0. Both ran:
+
+```text
+cargo +1.98.0 metadata --locked --no-deps --format-version 1
+cargo +1.98.0 check --locked -p eliot-search --bin eliot-search -p eliot-searchd --bin eliot-searchd
+cargo +1.98.0 clippy --locked -p eliot-search --bin eliot-search -p eliot-searchd --bin eliot-searchd -- -D warnings
+```
+
+Metadata passes: 52 original → 47 current workspace members. Windows check passes at both revisions;
+Linux check and strict Clippy fail with identical diagnostic messages/locations before and after cleanup.
+These are inherited failures, not PASS. Surviving production Rust is unchanged; only unconsumed source is deleted.
+The final documentation/temporary-workflow removal does not alter that checked source/Cargo graph.
+
+Cargo regenerated the lock from original pins in [run 41154714522](https://github.com/UnknownAlienHuman/eliot-search/actions/runs/41154714522):
+36 unused entries removed, every retained version/source/checksum preserved. An earlier manual pruning missed
+feature-dependent edges and failed --locked; it was replaced by this Cargo-generated lock, not waived.
+
+All 188 retained Markdown files were parsed: 714 internal file/fragment links resolve, no missing targets;
+external/pinned historical URLs were not crawled. All remaining Cargo path dependencies/declared target paths
+exist, package rows cover all 47 members once, YAML parses and git diff --check passes. Temporary snapshot,
+lock preparation and comparison workflows are removed before landing; only the scoped manual workflow remains.
+
 No product tests, full-feature build, Qdrant run, performance result or autonomous-agent completion is claimed.
 
 ## Update and finish a task
