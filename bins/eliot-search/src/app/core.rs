@@ -13,47 +13,6 @@ use crate::provider_client::{self, UnsignedRequest};
 const MAX_RESPONSE_BYTES: usize = 64 * 1024;
 const LEGACY_EFFECTS_UNAVAILABLE: &str = "LEGACY_EFFECTS_UNAVAILABLE";
 
-const fn help() -> &'static str {
-    concat!(
-        "eliot-search ",
-        env!("CARGO_PKG_VERSION"),
-        "\n\n",
-        "CONTROL:\n",
-        "  eliot-search --help\n",
-        "  eliot-search --version\n",
-        "  eliot-search health [--daemon PATH]\n",
-        "  eliot-search health-data-root ROOT [--daemon PATH]\n",
-        "  eliot-search shutdown [--daemon PATH]\n",
-        "  eliot-search self-test [--daemon PATH]\n",
-        "  eliot-search serve-data-root ROOT [--daemon PATH]\n\n",
-        "ONE-SHOT SEARCH:\n",
-        "  eliot-search scan-stdin QUERY [--daemon PATH]\n",
-        "  eliot-search scan-stdin-ascii-insensitive QUERY [--daemon PATH]\n",
-        "  eliot-search scan-file QUERY FILE [--daemon PATH]\n",
-        "  eliot-search scan-file-ascii-insensitive QUERY FILE [--daemon PATH]\n\n",
-        "PERSISTENT DIRECT CORPUS:\n",
-        "  eliot-search search-root ROOT QUERY [--daemon PATH]\n",
-        "  eliot-search search-root-ascii-insensitive ROOT QUERY [--daemon PATH]\n",
-        "  eliot-search list-sources ROOT [--daemon PATH]\n",
-        "  eliot-search verify-root ROOT [--daemon PATH]\n",
-        "  eliot-search read-revision ROOT REVISION_ID START END [--daemon PATH]\n\n",
-        "Legacy write and cleanup commands are unavailable.\n\n",
-        "The CLI prints newline-delimited JSON. Persistent DIRECT results are ",
-        "source-backed by immutable revision readback. The current development ",
-        "revision store is plaintext and reports encrypted_at_rest=false.\n",
-        "\n",
-        "PROVIDER ENDPOINT (running daemon, canonical envelopes):\n",
-        "  eliot-search status [--data-root DIR] [--address IP:PORT] [--token-file PATH]\n",
-        "  eliot-search search \"LITERAL\" [same options]\n",
-        "  eliot-search lexical \"TERMS\" [same options]\n",
-        "  eliot-search refresh [same options]\n",
-        "  eliot-search health|version|shutdown with --address/--token-file also use the endpoint\n",
-        "Recipes without an accepted receipt fail with explicit unavailable (exit 2), ",
-        "never empty success. A missing endpoint descriptor fails closed (exit 1); ",
-        "there is no hidden default address.\n",
-    )
-}
-
 fn daemon_path(explicit: Option<PathBuf>) -> PathBuf {
     if let Some(path) = explicit {
         return path;
@@ -81,15 +40,15 @@ fn daemon_path(explicit: Option<PathBuf>) -> PathBuf {
 fn split_daemon_option(
     arguments: &[OsString],
     required_arguments: usize,
-) -> Result<(Vec<OsString>, Option<PathBuf>), String> {
+) -> Result<(&[OsString], Option<PathBuf>), String> {
     if arguments.len() == required_arguments {
-        return Ok((arguments.to_vec(), None));
+        return Ok((arguments, None));
     }
     if arguments.len() == required_arguments.saturating_add(2)
         && arguments[required_arguments] == OsStr::new("--daemon")
     {
         return Ok((
-            arguments[..required_arguments].to_vec(),
+            &arguments[..required_arguments],
             Some(PathBuf::from(&arguments[required_arguments + 1])),
         ));
     }
@@ -169,9 +128,14 @@ fn invoke_stdio(daemon: &Path, request: &str) -> Result<Vec<String>, String> {
     Ok(responses)
 }
 
-fn invoke_daemon(daemon: &Path, arguments: &[OsString], inherit_stdin: bool) -> Result<(), String> {
+fn invoke_daemon(
+    daemon: &Path,
+    daemon_command: &str,
+    arguments: &[OsString],
+    inherit_stdin: bool,
+) -> Result<(), String> {
     let mut command = Command::new(daemon);
-    command.args(arguments);
+    command.arg(daemon_command).args(arguments);
     command.stdin(if inherit_stdin {
         Stdio::inherit()
     } else {
@@ -197,43 +161,15 @@ fn forward(
 ) -> Result<(), String> {
     let (arguments, explicit_daemon) = split_daemon_option(arguments, required_arguments)?;
     let daemon = daemon_path(explicit_daemon);
-    let mut forwarded = Vec::with_capacity(arguments.len().saturating_add(1));
-    forwarded.push(OsString::from(daemon_command));
-    forwarded.extend(arguments);
-    invoke_daemon(&daemon, &forwarded, inherit_stdin)
+    invoke_daemon(&daemon, daemon_command, arguments, inherit_stdin)
 }
 
-fn run() -> Result<(), String> {
-    let arguments = env::args_os().skip(1).collect::<Vec<_>>();
-    let Some(command) = arguments.first().and_then(|value| value.to_str()) else {
-        if arguments.is_empty() {
-            print!("{}", help());
-            return Ok(());
-        }
-        return Err("COMMAND_NOT_UTF8".to_owned());
-    };
-    let tail = &arguments[1..];
-
+fn run(command: &str, tail: &[OsString]) -> Result<(), String> {
     if let Some(result) = try_provider_command(command, tail) {
         return result;
     }
 
     match command {
-        "--help" | "-h" => {
-            if !tail.is_empty() {
-                return Err("USAGE_ERROR".to_owned());
-            }
-            print!("{}", help());
-        }
-        "--version" | "-V" | "version" => {
-            if !tail.is_empty() {
-                return Err("USAGE_ERROR".to_owned());
-            }
-            println!(
-                "{{\"binary\":\"eliot-search\",\"version\":\"{}\",\"protocol_version\":1}}",
-                env!("CARGO_PKG_VERSION")
-            );
-        }
         "health" => {
             let (_, explicit_daemon) = split_daemon_option(tail, 0)?;
             let daemon = daemon_path(explicit_daemon);
@@ -264,7 +200,6 @@ fn run() -> Result<(), String> {
             print!("{}", String::from_utf8_lossy(&output.stdout));
         }
         "health-data-root" => forward("--health-data-root", tail, 1, false)?,
-        "serve-data-root" => forward("--serve-data-root", tail, 1, true)?,
         "scan-stdin" => forward("--scan-stdin", tail, 1, true)?,
         "scan-stdin-ascii-insensitive" => {
             forward("--scan-stdin-ascii-insensitive", tail, 1, true)?;
@@ -283,7 +218,7 @@ fn run() -> Result<(), String> {
         "list-sources" => forward("--list-sources", tail, 1, false)?,
         "verify-root" => forward("--verify-root", tail, 1, false)?,
         "read-revision" => forward("--read-revision", tail, 4, false)?,
-        _ => return Err(format!("UNKNOWN_COMMAND:{command}")),
+        _ => return Err("UNKNOWN_COMMAND".to_owned()),
     }
     Ok(())
 }
@@ -292,8 +227,8 @@ fn run() -> Result<(), String> {
 ///
 /// Authenticated provider rejections exit 2; local usage/endpoint/transport
 /// errors exit 1 (see `provider_client::exit_for_error`).
-pub fn run_main() -> ExitCode {
-    match run() {
+pub(super) fn run_command(command: &str, tail: &[OsString]) -> ExitCode {
+    match run(command, tail) {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
             eprintln!("{{\"error\":\"{}\"}}", error.replace('"', "'"));

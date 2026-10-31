@@ -1,7 +1,9 @@
 # eliot-search
 
-The CLI captures native arguments/settings, uses one owned local client session and renders typed source-backed
-results. It does not open redb/object/Qdrant state or own scope, planning or another process manager.
+R068 implements one native argument capture and direct dispatch in the installed `entry.rs → app` path.
+Local help/version share one implementation; forwarding borrows the captured arguments. Five unlinked copies
+are removed. Existing DIRECT handlers remain: typed settings, the serviced client and safe typed rendering are
+still target behavior, not completed by this invocation change. The CLI must not own source/store/query state.
 
 Read [FUNCTIONS.md](FUNCTIONS.md) for invocation, modes, presentation, cleanup and removal boundaries;
 [AGENTS.md](AGENTS.md) for editing constraints. Load protocol/client recipes only when those interfaces change.
