@@ -7,7 +7,6 @@
 //! closed provider registry stay on the direct daemon paths and are refused
 //! here with an explicit surface error instead of a silent reinterpretation.
 
-use std::env;
 use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -17,20 +16,16 @@ use crate::provider_client::{self, UnsignedRequest};
 
 const MAX_PATH_BYTES: usize = 32 * 1024;
 
-/// Intercepts `remote ADDRESS TOKEN_FILE COMMAND ...`.
-pub fn maybe_run() -> Option<ExitCode> {
-    let arguments = env::args_os().skip(1).collect::<Vec<_>>();
-    if arguments.first().and_then(|value| value.to_str()) != Some("remote") {
-        return None;
-    }
-    let result = run(&arguments[1..]);
-    Some(match result {
+/// Runs the already-selected legacy remote command.
+pub fn run_command(arguments: &[OsString]) -> ExitCode {
+    let result = run(arguments);
+    match result {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
             eprintln!("{{\"error\":\"{}\"}}", sanitize_json(&error));
             ExitCode::from(provider_client::exit_for_error(&error))
         }
-    })
+    }
 }
 
 fn run(arguments: &[OsString]) -> Result<(), String> {

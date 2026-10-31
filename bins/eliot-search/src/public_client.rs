@@ -17,21 +17,17 @@ const MAX_PATH_BYTES: usize = 32 * 1024;
 const DEFAULT_PAGE_SIZE: usize = 100;
 const MAX_PAGE_SIZE: usize = 1_000;
 
-/// Intercepts `serve-data-root ROOT [--daemon PATH]` before one-shot forwarding.
-pub fn maybe_run() -> Option<ExitCode> {
-    let arguments = env::args_os().skip(1).collect::<Vec<_>>();
-    if arguments.first().and_then(|value| value.to_str()) != Some("serve-data-root") {
-        return None;
-    }
-    let result = parse_arguments(&arguments[1..])
+/// Runs the already-selected live-session command.
+pub fn run_command(arguments: &[OsString]) -> ExitCode {
+    let result = parse_arguments(arguments)
         .and_then(|(root, daemon)| run_session(&daemon_path(daemon), &root));
-    Some(match result {
+    match result {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
             eprintln!("{{\"error\":{}}}", json_string(&error));
             ExitCode::from(2)
         }
-    })
+    }
 }
 
 fn parse_arguments(arguments: &[OsString]) -> Result<(PathBuf, Option<PathBuf>), String> {

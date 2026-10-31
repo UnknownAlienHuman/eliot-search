@@ -16,27 +16,19 @@ struct Options {
     positional: Vec<OsString>,
 }
 
-/// Intercepts `eliot-search indexed ...`; all other commands remain owned by
-/// the canonical application core.
-pub(super) fn maybe_run() -> Option<ExitCode> {
-    let arguments = env::args_os().skip(1).collect::<Vec<_>>();
-    if arguments.first().and_then(|value| value.to_str()) != Some("indexed") {
-        return None;
-    }
-    if arguments.len() == 2
-        && matches!(arguments[1].to_str(), Some("--help" | "-h"))
-    {
+/// Runs the already-selected legacy indexed command.
+pub(super) fn run_command(arguments: &[OsString]) -> ExitCode {
+    if arguments.len() == 1 && matches!(arguments[0].to_str(), Some("--help" | "-h")) {
         print_usage();
-        return Some(ExitCode::SUCCESS);
+        return ExitCode::SUCCESS;
     }
-    let result = run(&arguments[1..]);
-    Some(match result {
+    match run(arguments) {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
             eprintln!("{{\"error\":\"{}\"}}", sanitize_json(&error));
             ExitCode::from(provider_client::exit_for_error(&error))
         }
-    })
+    }
 }
 
 fn run(arguments: &[OsString]) -> Result<(), String> {

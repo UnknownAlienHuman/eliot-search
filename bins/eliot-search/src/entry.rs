@@ -21,18 +21,6 @@ mod remote_client;
 
 use std::process::ExitCode;
 
-#[cfg(feature = "legacy-loopback-harness")]
-fn maybe_run_legacy_remote() -> Option<ExitCode> {
-    remote_client::maybe_run()
-}
-
-#[cfg(not(feature = "legacy-loopback-harness"))]
-const fn maybe_run_legacy_remote() -> Option<ExitCode> {
-    None
-}
-
 fn main() -> ExitCode {
-    maybe_run_legacy_remote()
-        .or_else(public_client::maybe_run)
-        .unwrap_or_else(app::run_main)
+    app::run_main()
 }
