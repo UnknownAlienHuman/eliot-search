@@ -1,9 +1,8 @@
 # Development commands
 
-Use [the working guide](../docs/implementation/WORKING_GUIDE.md) for exact caller search, target-specific
-check/Clippy commands, documentation checks and update rules. [The code map](../docs/implementation/CODE_MAP.md)
-identifies actual binary entrypoints.
+Use [WORKING_GUIDE.md](../docs/implementation/WORKING_GUIDE.md#minimal-production-checks) for direct target-specific
+Cargo commands and document updates. The manual GitHub workflow selects one package/target and runs check plus Clippy;
+it does not run tests or interpret approval packets. Local execution is the normal route.
 
-Old PowerShell/xtask/wave/receipt validators and workflow definitions remain in main until their source cutover.
-They are not current prerequisites. Do not extend them or add another approval/checking platform.
-No helper scripts or workflow changes are required for a documentation-only task.
+The old xtask, PowerShell validators, generated maps and wave workflows are removed. Do not recreate them to
+validate directory shapes, package counts, plan digests or historical fixtures. Check behavior through its real consumer.

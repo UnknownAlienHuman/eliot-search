@@ -1,28 +1,14 @@
-# W10 optional depth
+# Optional depth
 
-This directory is the bounded P16-P18 implementation projection for optional semantic, document and
-advanced-scale profiles after an accepted P15 Product Pulse.
+No optional adapter/worker is required for baseline Search. The old Eliot adapter and model/document refusal
+binaries were removed with their exclusive fixtures; their names never established an implemented capability.
 
-- [`W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md`](W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md) — cross-package activation,
-  profile identity, migration, removal, rollback and measured-benefit semantics.
-- [`manifest.toml`](manifest.toml) — machine ownership and invariant inventory, including the
-  candidate-specific `search-eval` evidence owner.
-- [`../../qualification/optional-depth/`](../../qualification/optional-depth/README.md) — disabled
-  provider/profile templates and candidate-specific G6 evidence.
-- [`../../config/w10-optional-depth.toml`](../../config/w10-optional-depth.toml) — locked and bounded
-  staging settings; configuration cannot authorize optional depth.
-- [`../../swarm/w10-optional-depth.toml`](../../swarm/w10-optional-depth.toml) — one-agent-per-package
-  candidate packets and integration prerequisites.
-- [`../../crates/search-eval/W10_OPTIONAL_EVALUATION.md`](../../crates/search-eval/W10_OPTIONAL_EVALUATION.md)
-  — narrow W10 reentry for paired incremental quality/cost/noninterference/fault/removal evaluation.
-- [`../../swarm/stage-readsets.toml`](../../swarm/stage-readsets.toml) — replacement contexts for daemon,
-  Qdrant/publication/pins/reclaimer and evaluator packages returning after earlier accepted stages.
+| Real selected need | Small implementation boundary | Historical investigation only |
+|---|---|---|
+| Model/reranker | Exact model/task/input/options, bounded result; reuse preparation/query and preserve source evidence. Prefer in-process code unless a real isolation need justifies a child. | [Earlier model map](https://github.com/UnknownAlienHuman/eliot-search/blob/f3d710131aa3b06a63198694bed7ec82b1e251df/bins/eliot-search-model-worker/FUNCTIONS.md) |
+| PDF/document extraction | Exact retained bytes → bounded mapped text/page coordinates and gaps → ordinary prepared object. No live-path reread or query-time extraction. | [Earlier document map](https://github.com/UnknownAlienHuman/eliot-search/blob/f3d710131aa3b06a63198694bed7ec82b1e251df/bins/eliot-search-doc-worker/FUNCTIONS.md) |
+| MCP/ELIOT leaf | Maintained protocol SDK maps implemented operations to the same local client; no second query/window store, grants or backend access. | [Earlier adapter map](https://github.com/UnknownAlienHuman/eliot-search/blob/f3d710131aa3b06a63198694bed7ec82b1e251df/crates/search-eliot-adapter/FUNCTIONS.md) |
 
-No model, tokenizer, runtime, document engine, archive format or scale topology is selected here. Every
-candidate remains disabled until one exact accepted P15 report/reviewer receipt, one dedicated ADR,
-exact artifact and Windows qualification, pre-registered measured incremental benefit, complete removal
-proof and migration/rollback evidence are independently accepted.
-
-The W10 `search-eval` writer receives the exact accepted W9 public API and P15/G5 report/reviewer
-receipts. It does not reread W4/W9 implementation packets, select/execute a provider directly, mutate
-routes/configuration or self-accept G6.
+Read the [product workflows](../product/AGENT_ANALYSIS_FRAMEWORK.md#optional-depth) and current delivery stage.
+Reverify exact upstream API/version/license and actual callers at implementation; old investigation is not an
+installed dependency or reserved pin. Do not recreate placeholder packages, provider registries or refusal binaries.

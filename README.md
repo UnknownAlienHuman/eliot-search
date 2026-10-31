@@ -10,7 +10,8 @@ No application encryption, key management, pairing or multi-user access platform
 | Need | Start here |
 |---|---|
 | Product and boundaries | [Architecture](docs/architecture/README.md), [local scope](docs/architecture/LOCAL_SCOPE.md) |
-| Implement | [Current step](docs/audit/ANALYSIS_REGISTRY.md#resume) → [delivery sequence](docs/implementation/README.md#delivery-sequence) |
+| Implement | [Work register](docs/audit/ANALYSIS_REGISTRY.md#work-register) → [delivery sequence](docs/implementation/README.md#delivery-sequence) |
+| Cleanup decisions for every package | [Workspace map](docs/audit/WORKSPACE_MEMBER_DISPOSITION_2026-10-21.md#package-register) |
 | Find code and check a change | [Code map](docs/implementation/CODE_MAP.md), [working guide](docs/implementation/WORKING_GUIDE.md) |
 | Find a specific rule | [Documentation index](docs/README.md) |
 | Run | [Quickstart status](QUICKSTART.md); no verified persistent quickstart yet |

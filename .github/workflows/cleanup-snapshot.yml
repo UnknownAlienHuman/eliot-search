@@ -1,4 +1,4 @@
-name: Temporary cleanup lock preparation
+name: Temporary cleanup verification
 
 on:
   pull_request:
@@ -8,60 +8,57 @@ permissions:
   contents: read
 
 jobs:
-  lock_blob:
+  production:
     if: github.head_ref == 'codex/cleanup-register-r067' && github.event.pull_request.head.repo.full_name == github.repository
-    permissions:
-      contents: write
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, windows-2025]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
-          ref: f3d710131aa3b06a63198694bed7ec82b1e251df
+          ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false
-      - name: Prune only unreachable locked entries and create an unattached blob
-        shell: python
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPOSITORY: ${{ github.repository }}
+          fetch-depth: 0
+      - name: Install repository compiler and Clippy
+        shell: bash
         run: |
-          import base64, collections, hashlib, json, os, pathlib, re, tomllib, urllib.request
-          removed = {'xtask', 'search-revision-crypto', 'search-eliot-adapter', 'eliot-search-model-worker', 'eliot-search-doc-worker'}
-          old = pathlib.Path('Cargo.lock').read_text()
-          packages = tomllib.loads(old)['package']
-          names = collections.defaultdict(list)
-          for i, package in enumerate(packages):
-              names[package['name']].append(i)
-          members = tomllib.loads(pathlib.Path('Cargo.toml').read_text())['workspace']['members']
-          roots = [re.search(r'(?m)^name\s*=\s*"([^"]+)"', pathlib.Path(m, 'Cargo.toml').read_text()).group(1) for m in members]
-          stack = [i for name in roots if name not in removed for i in names[name]]
-          keep = set()
-          while stack:
-              i = stack.pop()
-              if i in keep:
-                  continue
-              keep.add(i)
-              for dependency in packages[i].get('dependencies', []):
-                  bits = dependency.split()
-                  matches = names[bits[0]]
-                  if len(bits) > 1:
-                      matches = [j for j in matches if packages[j]['version'] == bits[1]]
-                  assert len(matches) == 1, dependency
-                  stack.extend(matches)
-          blocks = re.split(r'(?m)^\[\[package\]\]\n', old)
-          assert len(blocks) - 1 == len(packages)
-          result = (blocks[0] + ''.join('[[package]]\n' + block for i, block in enumerate(blocks[1:]) if i in keep)).rstrip() + '\n'
-          counts = collections.Counter(packages[i]['name'] for i in keep)
-          result = re.sub(r'(?m)^( "([A-Za-z0-9_-]+)) ([^"]+)(",)$', lambda m: m[1] + m[4] if counts[m[2]] == 1 else m[0], result)
-          data = result.encode()
-          expected = '7b86a7f242093740082acda445ad32d4e9489e69'
-          actual = hashlib.sha1(b'blob ' + str(len(data)).encode() + b'\0' + data).hexdigest()
-          assert actual == expected, (actual, expected)
-          payload = json.dumps({'content': base64.b64encode(data).decode(), 'encoding': 'base64'}).encode()
-          request = urllib.request.Request('https://api.github.com/repos/' + os.environ['REPOSITORY'] + '/git/blobs', data=payload, headers={'Authorization': 'Bearer ' + os.environ['GH_TOKEN'], 'Accept': 'application/vnd.github+json', 'Content-Type': 'application/json'}, method='POST')
-          with urllib.request.urlopen(request, timeout=30) as response:
-              created = json.load(response)
-          assert created['sha'] == expected
-          print('Unattached verified lock blob:', expected)
-          print('Preserved entries:', len(keep), 'removed entries:', len(packages) - len(keep))
-          print('No ref, commit, branch or main file was changed by this job.')
+          set -euo pipefail
+          rustup toolchain install 1.98.0 --profile minimal --component clippy --no-self-update
+          rustc +1.98.0 -Vv
+      - name: Compare baseline and proposed production binaries without tests
+        shell: bash
+        env:
+          BASE_SHA: f3d710131aa3b06a63198694bed7ec82b1e251df
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/cleanup-checks"
+          failed=0
+          for revision in "$BASE_SHA" "$HEAD_SHA"; do
+            git checkout --detach "$revision"
+            git rev-parse HEAD
+            for operation in metadata check clippy; do
+              case "$operation" in
+                metadata) args=(metadata --locked --no-deps --format-version 1) ;;
+                check) args=(check --locked -p eliot-search --bin eliot-search -p eliot-searchd --bin eliot-searchd) ;;
+                clippy) args=(clippy --locked -p eliot-search --bin eliot-search -p eliot-searchd --bin eliot-searchd -- -D warnings) ;;
+              esac
+              if cargo +1.98.0 "${args[@]}" > "$RUNNER_TEMP/cleanup-checks/$revision-$operation.log" 2>&1; then result=0; else result=$?; fi
+              printf '%s %s exit=%s\n' "$revision" "$operation" "$result" | tee -a "$RUNNER_TEMP/cleanup-checks/outcomes.txt"
+              if [[ "$revision" == "$HEAD_SHA" && "$result" != 0 ]]; then failed=1; fi
+            done
+            git diff --exit-code
+          done
+          git checkout --detach "$HEAD_SHA"
+          exit "$failed"
+      - name: Preserve raw outcomes including pre-existing failures
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: cleanup-checks-${{ matrix.runner }}
+          path: ${{ runner.temp }}/cleanup-checks
+          retention-days: 3
+          if-no-files-found: warn
