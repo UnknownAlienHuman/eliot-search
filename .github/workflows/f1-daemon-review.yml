@@ -1,4 +1,4 @@
-name: Temporary F1 daemon snapshot
+name: Temporary reviewed source transfer
 
 on:
   pull_request:
@@ -10,28 +10,81 @@ permissions:
   contents: read
 
 jobs:
-  snapshot:
+  prepare:
     if: github.head_ref == 'codex/f1-daemon-r069' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
     timeout-minutes: 5
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false
-      - name: Snapshot tracked public files only
-        shell: bash
+          fetch-depth: 0
+      - name: Apply fixed authored patch and create unattached content blobs only
+        shell: python
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          set -euo pipefail
-          git rev-parse HEAD > checkout-sha.txt
-          git ls-tree -r HEAD > checkout-tree.txt
-          git archive --format=tar.gz --output=checkout.tar.gz HEAD
+          import base64, hashlib, json, os, pathlib, subprocess, urllib.request, zlib
+          repo = os.environ['GITHUB_REPOSITORY']
+          assert repo == 'UnknownAlienHuman/eliot-search'
+          root = f'https://api.github.com/repos/{repo}'
+          def api(path, data=None):
+              request = urllib.request.Request(root + path,
+                  data=None if data is None else json.dumps(data).encode(),
+                  headers={'Authorization': 'Bearer ' + os.environ['GH_TOKEN'],
+                           'Accept': 'application/vnd.github+json',
+                           'Content-Type': 'application/json'})
+              with urllib.request.urlopen(request, timeout=30) as response:
+                  return json.load(response)
+          def blob_sha(data):
+              return hashlib.sha1(b'blob ' + str(len(data)).encode() + b'\0' + data).hexdigest()
+          chunks = ['02379ba2e01d7ae4ae3a0b96e9e89dfa728ab213',
+                    '846c347c2b13cc5e0be874f3631dc8035d0f9399',
+                    '3733610b6818069756372bed3f63b384f51d339d',
+                    '0f5e392ca852ba2c6033dbaf858cd1626ad8a7f2']
+          parts = []
+          for sha in chunks:
+              item = api('/git/blobs/' + sha)
+              data = base64.b64decode(item['content'])
+              assert blob_sha(data) == sha
+              parts.append(data)
+          packed = base64.b64decode(b''.join(parts), validate=True)
+          assert blob_sha(packed) == '11a6ca6f925b776e94fc3a99ff8a7337ae40a99c'
+          payload = json.loads(zlib.decompress(packed))
+          assert payload['base'] == 'd7ec099e4a7cf107c190ee6b124cc7cd496bfeee'
+          subprocess.run(['git', 'diff', '--exit-code', payload['base'], 'HEAD', '--',
+                          'bins/eliot-searchd'], check=True)
+          paths = set(payload['modified']) | set(payload['deleted'])
+          assert len(payload['modified']) == 16 and len(payload['deleted']) == 34
+          for path in paths:
+              p = pathlib.PurePosixPath(path)
+              assert path.startswith('bins/eliot-searchd/') and '..' not in p.parts
+          patch = payload['patch'].encode()
+          subprocess.run(['git', 'apply', '--check', '-'], input=patch, check=True)
+          subprocess.run(['git', 'apply', '-'], input=patch, check=True)
+          for path in payload['deleted']:
+              pathlib.Path(path).unlink()
+          changed = set(subprocess.check_output(['git', 'diff', '--name-only']).decode().splitlines())
+          assert changed == paths, (changed - paths, paths - changed)
+          elements = []
+          for path, expected in payload['modified'].items():
+              data = pathlib.Path(path).read_bytes()
+              assert blob_sha(data) == expected, path
+              result = api('/git/blobs', {'content': base64.b64encode(data).decode(), 'encoding': 'base64'})
+              assert result['sha'] == expected, path
+              elements.append({'path': path, 'mode': '100644', 'type': 'blob', 'sha': expected})
+          for path in payload['deleted']:
+              elements.append({'path': path, 'mode': '100644', 'type': 'blob', 'sha': None})
+          subprocess.run(['git', 'diff', '--check'], check=True)
+          pathlib.Path(os.environ['RUNNER_TEMP'], 'r069-source-blobs.json').write_text(
+              json.dumps({'base': payload['base'], 'tree_elements': elements}, indent=2))
+          print('Verified 16 edited outputs and 34 deletions; no commit or ref was created or moved.')
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: f1-daemon-snapshot
-          path: |
-            checkout-sha.txt
-            checkout-tree.txt
-            checkout.tar.gz
+          name: r069-source-blobs
+          path: ${{ runner.temp }}/r069-source-blobs.json
           retention-days: 1
           if-no-files-found: error
