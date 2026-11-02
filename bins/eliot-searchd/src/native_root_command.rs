@@ -1,5 +1,6 @@
 //! Explicit native initialization, inspection and owner-only lifecycle check.
 
+use std::ffi::OsString;
 use std::process::ExitCode;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
@@ -10,20 +11,12 @@ use crate::owner_composition::{
 };
 use search_runtime_owner::{DataRootOpenMode, DrainReason, OwnerError, RootOpenState};
 
-pub fn maybe_run() -> Option<ExitCode> {
-    let started = Instant::now();
-    let command = std::env::args_os().nth(1)?;
-    let mode = if command == "--inspect-data-root" {
-        DataRootOpenMode::InspectExistingReadOnly
-    } else if command == "--check-existing-root-owner" {
-        DataRootOpenMode::OpenExistingMutating
-    } else if command == "--initialize-data-root" {
-        DataRootOpenMode::InitializeNew
-    } else {
-        return None;
-    };
+pub fn run_command(
+    arguments: &[OsString],
+    mode: DataRootOpenMode,
+    started: Instant,
+) -> ExitCode {
     let result = (|| {
-        let arguments: Vec<_> = std::env::args_os().skip(1).take(257).collect();
         let expected = if mode == DataRootOpenMode::InitializeNew {
             3
         } else {
@@ -37,7 +30,7 @@ pub fn maybe_run() -> Option<ExitCode> {
             .ok_or(OwnerError::OwnerDeadlineInvalid)?;
         let request = NativeRootRequest::new(
             mode,
-            &arguments,
+            arguments,
             deadline,
             Arc::new(AtomicBool::new(false)),
             NativeRootLimits::new([256, 256 * 1024, 512 * 1024, 1024 * 1024 * 1024, 16384, 256])?,
@@ -88,11 +81,11 @@ pub fn maybe_run() -> Option<ExitCode> {
             }
         }
     })();
-    Some(match result {
+    match result {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
             eprintln!("{{\"error\":\"{}\"}}", error.code());
             ExitCode::from(2)
         }
-    })
+    }
 }

@@ -1,6 +1,6 @@
 # Code entrypoints and change map
 
-Base inspected: `26497dfd`; CLI dispatch below is implemented in R068 (`881548f1` source). Daemon dispatch is unchanged.
+Base inspected: `d7ec099e`; CLI routing landed in R068; daemon routing below is implemented in R069.
 This maps actual files, not a claim that the replacement product is connected.
 The [owner map](README.md#owners) defines intended responsibilities; a row below does not require keeping a crate.
 Recheck callers and Cargo targets before editing. Update this map only when those entrypoints change.
@@ -23,24 +23,24 @@ CLI main → app::run_main → capture native argv once → bounded dispatch
   remote/indexed (harness)     → selected legacy handler(tail)
   remaining command           → app::core::run_command(command, tail)
 
-daemon main
-  secure_commands::maybe_refuse_legacy_effects
-  → owner_composition::maybe_run_direct_registry
-  → native_root_command::maybe_run
-  → source_migration_command::maybe_run
-  → preparation_composition::maybe_run
-  → maybe_run_legacy_loopback (feature-gated)
-  → public_runtime_service::maybe_run
-  → secure_commands::maybe_run
-  → app::run_main (fallback)
+daemon main → app::run_main → bounded native argv capture → config CLI split → direct dispatch
+  removed legacy mutations    → refuse before effects
+  persistent DIRECT commands  → owner_composition::run_direct_registry(raw, started)
+  native root commands        → native_root_command::run_command(raw, mode, started)
+  migration commands          → source_migration_command::run_command(raw, started)
+  preparation commands        → preparation_composition::run_command(selected)
+  loopback (explicit harness) → authenticated_proxy::run_command(selected, config)
+  help/version/health/scans    → app shell handler
 ```
 
-Only the daemon arrows are still short-circuit alternatives: later handlers run if earlier ones decline.
-F1 remains partial: CLI capture/routing is connected, but typed settings and the daemon path still need conversion.
-Existing DIRECT/line-protocol handlers are not the final serviced transport. Do not rebuild a second dispatcher.
-The daemon also prints help additions after dispatch; update that path when changing help. Do not leave an earlier
-legacy handler able to intercept a converted command. Do not route current requests through old protected-store,
-key-selection or migration commands merely to preserve their constructors.
+Both installed entrypoints now select directly; public_runtime_service and secure_commands were shadowed by the
+DIRECT-registry route and are deleted. Help has one owner and no post-dispatch additions. The separate legacy
+src/main.rs/sealed-* harnesses are not the installed application.
+
+F1 still needs consumed typed settings. Shell/harness receive the captured CLI layer; native custody reparses
+its raw input under the old model. Native-root/preparation commands reject unconsumed config flags rather than
+ignore them. Convert settings with the actual root constructor; do not prebuild a config facade. Existing DIRECT
+handlers are not the final framed service or plain root, and no new product operation is implied by this map.
 
 ## Work by path
 

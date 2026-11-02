@@ -23,13 +23,6 @@ use crate::owner_composition::{
 };
 use crate::source_roots;
 
-pub fn maybe_run() -> Option<ExitCode> {
-    let started = Instant::now();
-    let arguments = std::env::args_os().skip(1).take(257).collect::<Vec<_>>();
-    MigrationRoute::from_arguments(&arguments)?;
-    Some(run(&arguments, started))
-}
-
 /// The offline migration commands share one route shape. The demanded flag
 /// selects the admitted constructor and the staging stage; each constructor
 /// keeps the caller's raw argv, absolute deadline, cancellation and limits.
@@ -83,7 +76,7 @@ impl MigrationRoute {
     const fn is_source_stage(self) -> bool { matches!(self, Self::SourceStage) }
 }
 
-fn run(arguments: &[OsString], started: Instant) -> ExitCode {
+pub fn run_command(arguments: &[OsString], started: Instant) -> ExitCode {
     let failed = ExitCode::from(2);
     let Some(deadline) = started.checked_add(Duration::from_secs(120)) else {
         return failed;

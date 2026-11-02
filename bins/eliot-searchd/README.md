@@ -1,7 +1,8 @@
 # eliot-searchd
 
-The intended composition root for one standalone local Search application. Current source still has legacy
-interceptors and disconnected subsystems; no default end-to-end product is claimed.
+The intended composition root for one standalone local Search application. The installed binary now captures native
+arguments once and routes directly to the retained handlers. Legacy effect/configuration code and disconnected
+subsystems remain; this is not a default end-to-end product.
 
 [FUNCTIONS.md](FUNCTIONS.md) maps the entrypoints, owners and removal boundary. [AGENTS.md](AGENTS.md) gives local
 editing constraints. Use the [delivery sequence](../../docs/implementation/README.md#delivery-sequence) to select

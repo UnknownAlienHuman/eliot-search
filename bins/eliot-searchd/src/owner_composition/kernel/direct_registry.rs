@@ -374,7 +374,7 @@ mod source_command;
 mod dek_command;
 #[path = "native_dek_selection.rs"]
 mod dek_selection;
-pub use command::maybe_run;
+pub use command::run_command;
 
 #[cfg(all(test, windows))]
 #[path = "direct_registry_tests.rs"]

@@ -28,7 +28,7 @@ pub fn validate_revision(revision: &str) -> Result<(), String> {
 
 /// A stored record may describe an unsupported-input gap, not a searchable layout.
 /// This response acknowledges storage only; it does not grant access or completeness.
-/// Legacy contract preserved for existing service callers (`public_runtime_service`).
+/// Legacy preparation output retained until its remaining callers move.
 #[cfg(test)]
 pub fn emit_prepared(
     writer: &mut impl Write,
@@ -186,14 +186,10 @@ pub fn emit_batch(
     )
 }
 
-pub fn maybe_run() -> Option<ExitCode> {
-    let args = std::env::args_os().skip(1).collect::<Vec<_>>();
-    let command = args.first()?.to_str()?;
-    if !matches!(command, "--prepare-revision" | "--prepare-root") {
-        return None;
-    }
+pub fn run_command(args: &[std::ffi::OsString]) -> ExitCode {
+    let command = args.first().and_then(|value| value.to_str()).unwrap_or("");
     let result = (|| -> Result<(), String> {
-        let (revision, cursor) = match (command, args.as_slice()) {
+        let (revision, cursor) = match (command, args) {
             ("--prepare-revision", [_, _, value]) => {
                 let value = value
                     .to_str()
@@ -222,11 +218,11 @@ pub fn maybe_run() -> Option<ExitCode> {
             emit_batch(&mut output, &batch, (0, 0))
         }
     })();
-    Some(match result {
+    match result {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
             eprintln!("{{\"error\":{}}}", json_string(&error));
             ExitCode::from(2)
         }
-    })
+    }
 }

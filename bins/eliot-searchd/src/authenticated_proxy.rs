@@ -7,4 +7,4 @@
 #[path = "authenticated_proxy/kernel.rs"]
 mod kernel;
 
-pub use kernel::maybe_run;
+pub use kernel::run_command;

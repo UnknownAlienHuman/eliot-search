@@ -7,55 +7,18 @@ use search_source_registry::{
     DEFAULT_REGISTRY_LIMITS, error::RegistryControlPort, recovery::RegistryBatchLookup,
 };
 use std::{
-    ffi::{OsStr, OsString},
+    ffi::OsString,
     process::ExitCode,
     sync::{Arc, atomic::AtomicBool},
     time::Duration,
 };
 use std::{io::Write, path::Path, time::Instant};
 
-pub fn maybe_run() -> Option<ExitCode> {
-    let started = Instant::now();
-    let arguments = std::env::args_os().skip(1).take(257).collect::<Vec<_>>();
-    let Ok((selected, _)) = config::strip_config_args_os(&arguments) else {
-        if !arguments.iter().any(|v| is_direct_command(v)) {
-            return None;
-        }
-        return Some(ExitCode::from(2)); // Invalid full input never falls through to another owner.
-    };
-    if !is_direct_command(selected.first()?) {
-        return None;
+pub fn run_command(arguments: &[OsString], started: Instant) -> ExitCode {
+    match run(arguments, started, &mut std::io::stdout().lock()) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(_) => ExitCode::from(2),
     }
-    Some(
-        match run(&arguments, started, &mut std::io::stdout().lock()) {
-            Ok(()) => ExitCode::SUCCESS,
-            Err(_) => ExitCode::from(2),
-        },
-    )
-}
-
-// Same closed selection on valid and malformed config inputs: no owner fallback.
-fn is_direct_command(argument: &OsStr) -> bool {
-    argument.to_str().is_some_and(|command| {
-        matches!(
-            command,
-            "--register-source-root"
-                | "--register-source-root-v2"
-                | "--admit-source-v2"
-                | "--prepare-revision-dek-v1"
-                | "--select-revision-dek-v1"
-                | "--unregister-source-root"
-                | "--source-roots"
-                | "--health-data-root"
-                | "--verify-root"
-                | "--list-sources"
-                | "--serve-data-root"
-                | "--search-root"
-                | "--search-root-ascii-insensitive"
-                | "--read-revision"
-                | "--sync-source-roots"
-        )
-    })
 }
 
 pub(super) fn run(

@@ -64,7 +64,7 @@ pub use initialization::InitializingDataRoot;
 #[cfg(test)]
 pub use initialization::initialize_new;
 pub use initialization::initialize_direct;
-pub use native_admission::direct_registry::maybe_run as maybe_run_direct_registry;
+pub use native_admission::direct_registry::run_command as run_direct_registry;
 
 #[cfg(all(test, windows))]
 pub(crate) fn fixture_initialization_namespace(root: &std::path::Path) -> Result<Option<[u8; 32]>, &'static str> {
