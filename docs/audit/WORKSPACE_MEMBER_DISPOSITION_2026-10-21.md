@@ -54,7 +54,7 @@ locates entrypoints. A row is a concrete disposition, not a demand to keep one c
 | [search-eval](../../crates/search-eval/Cargo.toml) | 1 | V1 | Keep real product measurements only; no acceptance receipts or runtime authority. |
 | [search-provider-protocol](../../crates/search-provider-protocol/Cargo.toml) | 4 | U1/X1 | Keep one bounded typed frame; remove pairing/MAC/grant/replay protocol. |
 | [search-provider-client](../../crates/search-provider-client/Cargo.toml) | 1 | U1/X1 | Keep owned-child serviced I/O; remove duplicate clients, discovery and old credentials. |
-| [eliot-searchd](../../bins/eliot-searchd/Cargo.toml) | 0 | F1→M1 | Keep actual entry.rs composition; replace old dispatch and remove displaced modules. |
+| [eliot-searchd](../../bins/eliot-searchd/Cargo.toml) | 0 | F1→M1 | R069 connects one argv capture/direct routing and removes two shadowed dispatch families. Finish consumed settings/root and prune the now-exposed unused support with actual callers. |
 | [eliot-search](../../bins/eliot-search/Cargo.toml) | 0 | F1/U1/X1 | R068 connects one argv capture/direct dispatch and removes five orphan copies. Finish typed settings and the actual serviced client; old handlers still remain. |
 | [search-os-secrets-windows](../../crates/search-runtime/search-os-secrets-windows/Cargo.toml) | 2 | F2/U1 | Move needed file/OS operations first; remove credential/DPAPI wiring, not user data. |
 | [search-provider-transport-windows](../../crates/search-runtime/search-provider-transport-windows/Cargo.toml) | 2 | U1 | Remove unused listening-pipe route with client imports; stdio uses no second transport. |

@@ -6,11 +6,21 @@ shutdown and one local dispatcher. Target composition below is not current runti
 <a id="inspected-callers-and-effects"></a>
 ## Current entrypoints and removal seams
 
-At inspected head `45ddf887`, src/entry.rs orders independent interceptors before app::run_main:
-legacy-effect refusal, direct registry, native-root lifecycle, migration, preparation, DIRECT service and secure
-commands. The [immutable route audit](https://github.com/UnknownAlienHuman/eliot-search/blob/45ddf887c9e84861b1302334a1f5ecabb263f7f3/bins/eliot-searchd/README.md)
-records which command is shadowed and why a compiled module is not a connected handler. Recheck actual callers
-at the source cut; do not add another interceptor or enable all old wave features to mask this topology.
+R069 replaces the installed entry.rs interceptor chain with app::run_main and one bounded native argv capture.
+The private app dispatcher selects one handler; no selected command falls through to a second owner. It strips
+config CLI syntax once for routing and passes that captured layer to shell health/status and the explicit
+loopback harness. Existing native custody constructors still validate raw arguments internally; this is not a
+completed typed-settings cutover.
+
+The old DIRECT-registry interceptor already selected every persistent command before public_runtime_service
+and secure_commands. Those shadowed copies and their exclusive source-shape fixtures are removed, not connected
+as a second service. Legacy-effect refusal and one help/version owner remain at the app boundary. Native paths
+stay OsString/Path; shell scan queries and command names reject non-UTF-8 before the selected body read.
+
+Unsupported config flags for the old native-root/preparation handlers are refused before effects. Those handlers
+must gain actually consumed settings with their owner cutover, not silently accept or discard extra flags.
+[The code map](../../docs/implementation/CODE_MAP.md#existing-dispatch-to-replace) records the retained routes.
+The final plain root, framed transport and query product are still work, not behavior established by routing.
 
 Useful source seams to move with their callers:
 
@@ -20,7 +30,7 @@ Useful source seams to move with their callers:
 | safe_reader_adapter | Preserve actual containment, cancellation/deadline and byte limits through the real reader. |
 | native_root_command / registration_mutation / registration_native | Move useful verified-open/identity mechanics to the root owner; remove legacy custody/publication wrappers. |
 | preparation_composition | Preserve usable/empty/gap distinctions, replace duplicate DIRECT store/profile/receipt paths. |
-| public_runtime_service / provider composition | One current framed dispatcher; remove shadowed line/tab/hex, pairing/grant and duplicate session routes. |
+| owner_composition direct_registry / provider composition | Replace the retained DIRECT service with one current framed dispatcher; remove line/tab/hex, pairing/grant and duplicate session routes. |
 | publication/rebuild/query proof modules | Connect actual owners and effects, not fixture-backed plans or supplied readback. |
 
 <a id="query-publication-and-rebuild-boundaries"></a>
@@ -65,7 +75,7 @@ ledger belongs in daemon composition.
 
 ## Removal and verification
 
-Remove duplicate argv parsing/interception, source-registration publication, obsolete migration/secure/sealed
+Complete consumed typed settings and remove residual raw-argument custody, source-registration publication, obsolete migration/sealed
 custody, registry replay/snapshots, duplicate writers, old wave dependencies, provider pairing/grants and separate
 handle/continuation catalogues as their consumers move. Unsupported roots fail before writes and remain intact.
 
