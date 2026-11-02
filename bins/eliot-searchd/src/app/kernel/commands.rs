@@ -1,5 +1,6 @@
 //! DIRECT corpus and maintenance command handlers.
 
+use std::ffi::OsString;
 use std::path::Path;
 
 #[cfg(test)]
@@ -49,11 +50,12 @@ pub(super) fn cmd_serve_data_root(arguments: &[String]) -> Result<(), String> {
     Ok(())
 }
 
-pub(super) fn cmd_scan_stdin(arguments: &[String], argument: &str) -> Result<(), String> {
+pub(super) fn cmd_scan_stdin(arguments: &[OsString], argument: &str) -> Result<(), String> {
+    let query = arguments[1].to_str().ok_or("QUERY_NOT_UTF8")?;
     let text = read_stdin_bounded()?;
     emit_one_shot_scan(
         "stdin",
-        &arguments[1],
+        query,
         argument == "--scan-stdin-ascii-insensitive",
         &text,
         false,
@@ -61,11 +63,12 @@ pub(super) fn cmd_scan_stdin(arguments: &[String], argument: &str) -> Result<(),
     )
 }
 
-pub(super) fn cmd_scan_file(arguments: &[String], argument: &str) -> Result<(), String> {
+pub(super) fn cmd_scan_file(arguments: &[OsString], argument: &str) -> Result<(), String> {
+    let query = arguments[1].to_str().ok_or("QUERY_NOT_UTF8")?;
     let text = read_file_bounded(Path::new(&arguments[2]))?;
     emit_one_shot_scan(
         "file",
-        &arguments[1],
+        query,
         argument == "--scan-file-ascii-insensitive",
         &text,
         true,

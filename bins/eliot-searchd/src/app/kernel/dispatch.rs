@@ -1,16 +1,15 @@
 //! Top-level daemon argument dispatch and process exit mapping.
 
+use std::ffi::OsString;
 use std::process::ExitCode;
+use std::time::Instant;
+
+use search_runtime_owner::DataRootOpenMode;
 
 use crate::development::{Health, scan_text};
 use crate::sha256;
 
 use super::commands::{cmd_scan_file, cmd_scan_stdin};
-#[cfg(test)]
-use super::commands::{
-    cmd_health_data_root, cmd_list_sources, cmd_read_revision, cmd_search_root,
-    cmd_serve_data_root, cmd_verify_root,
-};
 use super::protocol::serve_stdio;
 use super::spec::{Command, help, version_json};
 use super::status::{config_status_line, shell_health_effective};
@@ -55,7 +54,10 @@ fn self_test() -> Result<(), &'static str> {
     Ok(())
 }
 
-fn require_argument_count(arguments: &[String], expected: usize) -> Result<(), String> {
+const MAX_ARGUMENTS: usize = 256;
+const MAX_ARGUMENT_BYTES: usize = 256 * 1024;
+
+fn require_argument_count(arguments: &[OsString], expected: usize) -> Result<(), String> {
     if arguments.len() == expected {
         Ok(())
     } else {
@@ -63,81 +65,91 @@ fn require_argument_count(arguments: &[String], expected: usize) -> Result<(), S
     }
 }
 
-#[cfg(test)]
-fn serve_legacy(arguments: &[String]) -> Result<(), String> {
-    require_argument_count(arguments, 2)?;
-    cmd_serve_data_root(arguments)
-}
-
-#[cfg(test)]
-fn legacy_read(arguments: &[String], command: &str) -> Option<Result<(), String>> {
-    let result = (|| match command {
-        "--health-data-root" => {
-            require_argument_count(arguments, 2)?;
-            cmd_health_data_root(arguments)
+fn capture_arguments() -> Result<Vec<OsString>, String> {
+    let mut arguments = Vec::new();
+    let mut bytes = 0_usize;
+    for value in std::env::args_os().skip(1) {
+        bytes = bytes.checked_add(value.len()).ok_or("ARGUMENT_LIMIT_EXCEEDED")?;
+        if arguments.len() == MAX_ARGUMENTS || bytes > MAX_ARGUMENT_BYTES {
+            return Err("ARGUMENT_LIMIT_EXCEEDED".to_owned());
         }
-        "--search-root" | "--search-root-ascii-insensitive" => {
-            require_argument_count(arguments, 3)?;
-            cmd_search_root(arguments, command)
-        }
-        "--list-sources" => {
-            require_argument_count(arguments, 2)?;
-            cmd_list_sources(arguments)
-        }
-        "--verify-root" => {
-            require_argument_count(arguments, 2)?;
-            cmd_verify_root(arguments)
-        }
-        "--read-revision" => {
-            require_argument_count(arguments, 5)?;
-            cmd_read_revision(arguments)
-        }
-        _ => unreachable!(),
-    });
-    matches!(
-        command,
-        "--health-data-root"
-            | "--search-root"
-            | "--search-root-ascii-insensitive"
-            | "--list-sources"
-            | "--verify-root"
-            | "--read-revision"
-    )
-    .then(result)
-}
-
-fn run() -> Result<(), String> {
-    let raw = std::env::args().skip(1).collect::<Vec<_>>();
-    let (arguments, _) = crate::config_composition::parse_cli_config_args(&raw)?;
-    let Some(argument) = arguments.first().map(String::as_str) else {
-        print!("{}", help());
-        return Ok(());
-    };
-
-    #[cfg(test)]
-    if let Some(result) = legacy_read(&arguments, argument) {
-        return result;
+        arguments.push(value);
     }
+    Ok(arguments)
+}
 
-    match argument {
+fn run() -> Result<ExitCode, String> {
+    let started = Instant::now();
+    let raw = capture_arguments()?;
+    let (arguments, cli) = crate::config_composition::strip_config_args_os(&raw)?;
+    let Some(first) = arguments.first() else {
+        if !raw.is_empty() {
+            return Err("USAGE_ERROR".to_owned());
+        }
+        print!("{}", help());
+        return Ok(ExitCode::SUCCESS);
+    };
+    let command = first.to_str().ok_or("COMMAND_NOT_UTF8")?;
+    match command {
+        "--index-file" | "--index-directory" | "--retire-source" | "--repair-root" | "--gc-root" => {
+            Err("LEGACY_EFFECTS_UNAVAILABLE".to_owned())
+        }
+        "--register-source-root" | "--register-source-root-v2" | "--admit-source-v2"
+        | "--prepare-revision-dek-v1" | "--select-revision-dek-v1"
+        | "--unregister-source-root" | "--source-roots" | "--health-data-root"
+        | "--verify-root" | "--list-sources" | "--serve-data-root" | "--search-root"
+        | "--search-root-ascii-insensitive" | "--read-revision" | "--sync-source-roots" => {
+            Ok(crate::owner_composition::run_direct_registry(&raw, started))
+        }
+        "--inspect-data-root" | "--check-existing-root-owner" | "--initialize-data-root" => {
+            // These legacy root constructors do not consume config layers yet.
+            require_argument_count(&raw, arguments.len())?;
+            let mode = match command {
+                "--inspect-data-root" => DataRootOpenMode::InspectExistingReadOnly,
+                "--check-existing-root-owner" => DataRootOpenMode::OpenExistingMutating,
+                _ => DataRootOpenMode::InitializeNew,
+            };
+            Ok(crate::native_root_command::run_command(&raw, mode, started))
+        }
+        "--plan-control-migration" | "--bootstrap-control-migration" | "--stage-source-control-migration" => {
+            Ok(crate::source_migration_command::run_command(&raw, started))
+        }
+        "--prepare-revision" | "--prepare-root" => {
+            require_argument_count(&raw, arguments.len())?;
+            Ok(crate::preparation_composition::run_command(&arguments))
+        }
+        #[cfg(feature = "legacy-loopback-harness")]
+        "--serve-loopback-data-root" => {
+            Ok(crate::authenticated_proxy::run_command(&arguments, &cli))
+        }
+        _ => run_shell(&arguments, command, &cli).map(|()| ExitCode::SUCCESS),
+    }
+}
+
+fn run_shell(
+    arguments: &[OsString],
+    command: &str,
+    cli: &crate::config_composition::CliConfigArgs,
+) -> Result<(), String> {
+    match command {
         "--help" | "-h" => {
-            require_argument_count(&arguments, 1)?;
+            require_argument_count(arguments, 1)?;
             print!("{}", help());
         }
         "--version" | "-V" => {
-            require_argument_count(&arguments, 1)?;
+            require_argument_count(arguments, 1)?;
             println!("{}", version_json());
         }
         "--health" => {
-            require_argument_count(&arguments, 1)?;
-            println!("{}", shell_health_effective()?.json());
+            require_argument_count(arguments, 1)?;
+            println!("{}", shell_health_effective(cli)?.json());
         }
         "--config-status" => {
-            require_argument_count(&arguments, 1)?;
-            println!("{}", config_status_line()?);
+            require_argument_count(arguments, 1)?;
+            println!("{}", config_status_line(cli)?);
         }
         "--self-test" => {
-            require_argument_count(&arguments, 1)?;
+            require_argument_count(arguments, 1)?;
             self_test().map_err(str::to_owned)?;
             println!(
                 "{}",
@@ -150,38 +162,27 @@ fn run() -> Result<(), String> {
             );
         }
         "--stdio" => {
-            require_argument_count(&arguments, 1)?;
-            serve_stdio(shell_health_effective()?)
+            require_argument_count(arguments, 1)?;
+            serve_stdio(shell_health_effective(cli)?)
                 .map_err(|error| format!("STDIO_ERROR:{error}"))?;
         }
-        #[cfg(test)]
-        "--serve-data-root" => serve_legacy(&arguments)?,
-        #[cfg(test)]
-        "--source-roots" | "--register-source-root" | "--unregister-source-root" => {
-            super::source_root_commands::run(&arguments)?
-        }
-        #[cfg(test)]
-        "--sync-source-roots" => super::source_root_commands::run(&arguments)?,
         "--scan-stdin" | "--scan-stdin-ascii-insensitive" => {
-            require_argument_count(&arguments, 2)?;
-            cmd_scan_stdin(&arguments, argument)?;
+            require_argument_count(arguments, 2)?;
+            cmd_scan_stdin(arguments, command)?;
         }
         "--scan-file" | "--scan-file-ascii-insensitive" => {
-            require_argument_count(&arguments, 3)?;
-            cmd_scan_file(&arguments, argument)?;
+            require_argument_count(arguments, 3)?;
+            cmd_scan_file(arguments, command)?;
         }
-        "--index-file" | "--index-directory" | "--retire-source" | "--repair-root" | "--gc-root" => {
-            return Err(crate::secure_commands::LEGACY_EFFECTS_UNAVAILABLE.to_owned());
-        }
-        _ => return Err(format!("UNKNOWN_ARGUMENT:{argument}")),
+        _ => return Err("UNKNOWN_ARGUMENT".to_owned()),
     }
     Ok(())
 }
 
-/// Runs the daemon command application and maps failures to process status.
+/// Captures one native invocation and maps the selected handler's result to process status.
 pub fn run_main() -> ExitCode {
     match run() {
-        Ok(()) => ExitCode::SUCCESS,
+        Ok(exit) => exit,
         Err(error) => {
             eprintln!(
                 "{{\"error\":\"{}\"}}",

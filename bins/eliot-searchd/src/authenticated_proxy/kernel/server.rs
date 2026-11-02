@@ -1,7 +1,6 @@
 //! Loopback endpoint lifetime and truthful provider capabilities.
 
 use std::cell::Cell;
-use std::env;
 use std::net::TcpStream;
 use std::path::Path;
 use std::rc::Rc;
@@ -13,10 +12,9 @@ use super::dispatch::dispatch_provider_command;
 use super::key::ShimKeySource;
 
 fn provider_capabilities(
+    config: &crate::config_composition::CliConfigArgs,
 ) -> Result<crate::provider_composition::ProviderCapabilities, String> {
-    let args: Vec<String> = env::args().skip(1).collect();
-    let (_, cli) = crate::config_composition::parse_cli_config_args(&args)?;
-    let effective = crate::config_composition::effective_from_process(&cli)?;
+    let effective = crate::config_composition::effective_from_process(config)?;
     let readiness = crate::config_composition::derive_readiness(
         &effective,
         crate::config_composition::direct_dependencies(),
@@ -36,11 +34,12 @@ pub(super) fn run_proxy(
     root: &Path,
     port: u16,
     token_file: &Path,
+    config: &crate::config_composition::CliConfigArgs,
 ) -> Result<(), String> {
     let key = crate::provider_composition::read_shim_key_file(token_file)?;
     let cache = Rc::new(Cell::new(None));
     let mut source = ShimKeySource::new(key, Rc::clone(&cache));
-    let capabilities = provider_capabilities()?;
+    let capabilities = provider_capabilities(config)?;
     let mut child = DirectChild::spawn(root)?;
     println!(concat!(
         "{{\"event\":\"direct_child_ready\",",

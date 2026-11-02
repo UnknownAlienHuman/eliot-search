@@ -31,4 +31,4 @@ mod wire;
 use spec::MAX_PROXY_COMMAND_BYTES;
 use terminal::Terminal;
 
-pub use entry::maybe_run;
+pub use entry::run_command;
