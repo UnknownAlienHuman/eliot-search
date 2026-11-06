@@ -12,7 +12,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 
 use redb_plain::backends::FileBackend;
-use redb_plain::{ReadableDatabase, ReadableTable, TableDefinition, TableHandle};
+use redb_plain::{ReadableDatabase, ReadableTableMetadata, TableDefinition, TableHandle};
 
 const META_TABLE: TableDefinition<&str, u64> = TableDefinition::new("plain_control_meta");
 const FORMAT_VERSION_KEY: &str = "format_version";
