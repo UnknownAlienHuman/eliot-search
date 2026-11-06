@@ -1,71 +1,78 @@
-# Unitization — one prepared product, generation-bound baseline
+# Unitization and the complete UTF-8 prepared artifact
 
-This owner selects bounded units and truthful representation ranges. It owns neither source currentness nor
-backend point lifetime. [Materializer](../search-materializer/FUNCTIONS.md) owns preparation input and installation;
-[lexical](../../search-lexical/FUNCTIONS.md#retrieval-text-no-alias-inflation) owns retrieval-text meaning.
+The selected P1 implementation exposes prepare_utf8 and decode_prepared_utf8 from [src/prepared.rs](src/prepared.rs).
+It depends on the exact owned [materializer product](../search-materializer/FUNCTIONS.md), registry settings/source
+values and maintained BLAKE3. It owns no file writer, CONTROL transaction or backend point lifetime.
 
 ## Baseline output
 
-Start with line-preferred ranges over unchanged UTF-8. Preserve byte/character boundaries and complete raw coverage
-without a per-character identity map. Split oversized ranges locally; no syntax tree or overlapping structural
-model is required. Other selected formats use their actual structures/maps, splitting oversized units or merging
-small peers only within the same context. Preserve gaps and coordinate domains.
+Reuse line-preferred range selection over the same MaterializedText text and line inventory. There is no copied
+line inventory or per-unit String. Oversized lines split only at UTF-8 scalar boundaries; a scalar larger than
+the selected hard unit size is an explicit UnitTooLarge refusal. Complete empty text produces zero units.
 
-A unit needs its kind, representation range and only the selected context. Source/input/transform information
-shared by every unit belongs once on the enclosing product; it need not be copied into every descriptor.
+UnitSpan describes exact source/identical representation [start,end), logical-line bounds and complete-line flags.
+All units are text under this fixed artifact format. Ordinal is vector position within the immutable artifact,
+not cross-revision continuity or a backend point ID.
 
 ## Representation and ownership
 
-Keep one owned text buffer with bounded range/context descriptors, not one owned copy of source text per unit.
-For a mapped format, retain only the actual coordinate/loss data its evidence reader uses. Raw coverage and
-structural overlap are different facts; do not sum overlapping ranges into complete-source coverage.
+PreparationSettings is registry-owned: utf8_version, line_unitizer_version, preferred_unit_bytes and max_unit_bytes.
+The supported pair is 1/1 with 0 < preferred <= hard <= the registry's 64 KiB complete-unit maximum.
+PreparationLimits separately carries fail-only input/output/line/unit/encoded ceilings. Changing those ceilings
+cannot change successful encoded bytes.
 
-Encode the representation and descriptors once through the shared object writer. The prepared artifact cannot
-contain its own content-addressed ObjectRef: that reference is returned after publication of its bytes. Bind it
-from the current preparation row and later evidence records, not a placeholder, cyclic hash or follow-up rewrite.
-Preserve the retained input reference and transform binding required to validate the product.
+prepare_utf8 consumes the verified input Vec through String::from_utf8, computes ranges against its attached
+inventory and encodes the text plus precomputed descriptors once. Hashing, scanning, allocation, descriptor and
+encoding work check the original deadline/cancellation flag and finite dimensions. Size arithmetic is checked;
+bounded allocations are fallible. The encoded-byte ceiling is checked before reserving the complete output.
 
-The [projection assembler](../../search-index-qdrant/search-projection-planner/FUNCTIONS.md#stage-23a-assembler)
-materializes actual retrieval_text and context into bounded upload pages from those ranges. Do not retain both a
-full document and all copied per-unit strings merely to pass between adjacent stages. Charge the temporary page,
-serialization expansion and total prepared output; a count-only unit limit is not a memory bound.
-Once publication captures pending pages, their actual text/payload stays fixed for retry. Do not regenerate them
-from a newer source, changed options or a fresh parser run. No digest-only upload or second text composer.
+The shared object writer publishes and independently verifies the returned Vec as ObjectKind::Prepared.
+The artifact never contains its own subsequently returned ObjectRef. Only the current-preparation outcome and
+later evidence records bind that reference.
 
-## Stage 2 / 3A — no occurrence matching prerequisite
+## Saved wire and acceptance
 
-Publication derives generation-bound backend IDs from captured source/preparation/unit inputs. Unitization does
-not mint Qdrant IDs or store physical collection names in a reusable prepared artifact. A unit's bounded ordinal
-inside that exact immutable artifact is an address, not evidence of continuity with another revision.
+The little-endian complete artifact has magic ELSPRP01 and codec version 1, followed by:
+source namespace/SourceId, registration revision, exact input ObjectRef format/kind/digest/length,
+the typed settings tuple, representation length, descriptor count, actual representation bytes, then descriptors.
+Each descriptor encodes four u64 coordinates and two strict boolean bytes. Header and total sizes are derived
+from those actual fields with checked arithmetic; no nested legacy/layout-only encoding is retained.
 
-A changed source may remint every point in the next fresh generation. An unchanged retained input with identical
-output-affecting settings may reuse its complete preparation without old/new matching. The pinned evidence
-snapshot supplies exact source/prepared/range truth; Stage 3A measurements determine whether rewriting is acceptable.
+Source row_revision and CONTROL settings/outcome CAS revisions are excluded from artifact identity.
+The decoder checks expected source/input/registration/settings, source-only input kind, supported framing,
+actual representation length/BLAKE3, UTF-8, finite total size/counts, contiguous complete coverage, scalar boundaries,
+hard unit size and real logical-line facts. Counts/total length are checked before descriptor allocation.
+Line facts are checked with a streaming cursor, without constructing another line inventory or recomputing
+preferred unit boundaries. Trailing bytes and noncanonical boolean values are refused.
 
-## Stage 3B — conservative reuse only when budgets require it
-
-Only after the delivery guide selects measured incrementality: compare bounded old/new descriptors within the
-same source/context, including actual retrieval input. Reuse only unambiguous one-old/one-new matches. Equal
-duplicates, ambiguous parents and unmatched units get operation-fixed births in the pending delta; disappear/
-reappear never reopens a closed interval. Ordinal, equal text, name or range shift alone is not continuity.
-No general AST diff, LCS or lineage service before demonstrated need.
+PreparedUtf8 has private borrowed text and a bounded descriptor Vec, exposed through text() and units().
+Only the artifact buffer determines its lifetime; expected source/settings are checked, not borrowed into it.
+The real daemon prepare-source consumer reads its stored Prepared object and uses that borrowed view to emit
+bounded actual unit text/ranges. JSON serialization allowance belongs to that caller, not altered chunk settings.
 
 ## Empty and gap semantics
 
-Supported complete empty input or complete text with no searchable units yields zero units and retains source
-binding. Unsupported, truncated, cancelled or unavailable extraction is a gap/incomplete outcome. Partial mapped
-text keeps its actual coverage; no sentinel unit/vector or complete-looking partial source.
-Nonempty→empty changes membership through publication, not direct point deletion here.
+Supported empty text creates a complete saved artifact with zero units and exact source/input/settings binding.
+BinaryContent/InvalidUtf8 and selected fail-only ceiling refusals can become distinct bound current Gaps.
+InvalidSettings/InvalidLimits, binding/integrity/artifact failures, allocation/overflow, Cancelled and Deadline
+remain actual operation errors. No sentinel, fabricated empty success or complete-looking partial result exists.
 
-## Removal
+## Current outcome and later consumers
 
-Remove old revision/coordinate-derived stable-ID claims, nested v3/v4/v5 manifests, adjacent parser replay,
-discarded canonical encodings, duplicate writers and baseline retain/create/close prerequisites with real callers.
-Keep useful layout and range checks; replacing internal formats does not authorize deleting original user data.
+The daemon captures source/current settings/expected outcome, completes object I/O outside redb, then compares
+the full captured guard atomically. Stale success/failure cannot install across row changes, ABA or remove-add.
+The first actual consumer is prepare-source --source-id UUID --data-root ROOT, using verified retained bytes
+even if the original path changes or disappears. retain-file does not acquire an automatic preparation route.
+
+Q1 will consume the stored artifact when its actual publication path is implemented. The old receipt unitizer,
+v3 manifest, Markdown/JATS unitsets and layout-only codec are physically removed with exclusive fixtures.
+Their obsolete external projection/publication interfaces are retired by the integration owner. No future
+consumer name justifies preserving those routes.
 
 ## Verification
 
-After code run minimal locked check/Clippy for actual preparation/publication/evidence consumers. Later baseline
-cases: exact UTF-8 coverage/boundaries, mapped ranges, oversized unit/output, bounded live buffers/pages, supported
-empty, saved-product reuse, changed-source remint and old-view evidence. Stage 3B adds ambiguity, fixed-birth replay
-and measured write-reduction cases only when selected. This recipe supplies no runtime result.
+After the designated lock-resolution handoff, run the smallest locked check/strict Clippy for both prep owners
+and real consumers. Focused saved-artifact cases cover exact text/ranges, borrowed storage, empty, source/registration/
+settings binding, ceiling-independent identity, corrupt counts/ranges/flags/trailing bytes, integrity and transient
+execution failures. Runtime qualification of shared object/CONTROL/CLI behavior belongs to its designated verifier;
+this recipe does not assert those commands have passed.

@@ -2,6 +2,7 @@
 
 mod bootstrap;
 
+use search_contracts::SourceId;
 use std::ffi::OsString;
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -19,6 +20,7 @@ pub enum RootCommand {
     CheckExistingOwner,
     DiscardIncomplete,
     RetainFile,
+    PrepareSource,
 }
 
 impl RootCommand {
@@ -29,6 +31,7 @@ impl RootCommand {
             Self::CheckExistingOwner => "check-existing-root-owner",
             Self::DiscardIncomplete => "discard-incomplete-data-root",
             Self::RetainFile => "retain-file",
+            Self::PrepareSource => "prepare-source",
         }
     }
 }
@@ -37,6 +40,8 @@ pub struct RootInvocation {
     pub(crate) command: RootCommand,
     pub(crate) data_root: PathBuf,
     pub(crate) source_file: Option<PathBuf>,
+    pub(crate) source_id: Option<SourceId>,
+    pub(crate) unit: Option<usize>,
 }
 
 fn emit_error(code: &str) -> ExitCode {
@@ -70,6 +75,7 @@ fn print_help() {
         "  eliot-searchd --check-existing-root-owner [ROOT] [--data-root ROOT] [--config-file PATH]\n",
         "  eliot-searchd --discard-incomplete-data-root [ROOT] [--data-root ROOT] [--config-file PATH]\n",
         "  eliot-searchd --retain-file --source-file PATH [ROOT] [--data-root ROOT] [--config-file PATH]\n",
+        "  eliot-searchd --prepare-source --source-id UUID [--unit N] [--data-root ROOT] [--config-file PATH]\n",
     ));
 }
 

@@ -1,85 +1,39 @@
-//! Receipt-free and receipt-bound exact UTF-8 materialization.
+//! The selected exact UTF-8 transform.
 
-use super::model::{
-    MaterializationLimits, MaterializationReceipt, MaterializedRevision, MaterializedText,
-    RetainedRevision,
-};
-use super::scan::{check_byte_limits, reject_binary_controls, scan_lines};
-use crate::error::MaterializationError;
-use crate::profile::digest_content_bytes;
-use search_contracts::Blake3Digest32;
+use std::sync::atomic::AtomicBool;
+use std::time::Instant;
 
-/// Prepares exact UTF-8 bytes without manufacturing a revision or receipt.
+use super::model::{MaterializationLimits, MaterializedText};
+use super::scan::{check, reject_binary_controls, scan_lines};
+use crate::MaterializationError;
+
+/// Moves verified retained bytes into unchanged UTF-8 text and exact line ranges.
 ///
-/// This is a pure transform. A storage adapter must independently establish the
-/// provenance and integrity of bytes before using its output as search evidence.
+/// Empty input succeeds with zero lines. The caller owns retained-object
+/// verification; this transform performs no source-path or object I/O.
+///
+/// # Errors
+///
+/// Returns a content refusal for binary controls or invalid UTF-8, or an
+/// operation failure for invalid/exceeded ceilings, allocation/coordinate
+/// failure, cancellation, or expiration of the original deadline.
 pub fn materialize_utf8(
     bytes: Vec<u8>,
     limits: MaterializationLimits,
+    deadline: Instant,
+    cancelled: &AtomicBool,
 ) -> Result<MaterializedText, MaterializationError> {
-    let limits = limits.validate()?;
-    check_byte_limits(bytes.len(), limits)?;
-    reject_binary_controls(&bytes)?;
+    check(deadline, cancelled)?;
+    limits.validate()?;
+    if bytes.len() > limits.max_input_bytes {
+        return Err(MaterializationError::InputTooLarge);
+    }
+    if bytes.len() > limits.max_output_bytes {
+        return Err(MaterializationError::OutputTooLarge);
+    }
+    reject_binary_controls(&bytes, deadline, cancelled)?;
     let text = String::from_utf8(bytes).map_err(|_| MaterializationError::InvalidUtf8)?;
-    let (lines, line_endings) = scan_lines(text.as_bytes(), limits)?;
-    Ok(MaterializedText {
-        text,
-        lines,
-        line_endings,
-    })
-}
-
-/// Materializes a receipt-bound retained revision without normalization.
-///
-/// The supplied revision receipt is retained. The exact supplied bytes are
-/// independently hashed with BLAKE3 and must match the supplied content
-/// digest before a revision-bound result is returned.
-pub fn materialize(
-    input: RetainedRevision,
-    limits: MaterializationLimits,
-) -> Result<MaterializedRevision, MaterializationError> {
-    let limits = limits.validate()?;
-    if input.is_empty() {
-        return Err(MaterializationError::EmptyInput);
-    }
-    check_byte_limits(input.len(), limits)?;
-    let exact_len = u64::try_from(input.len()).map_err(|_| MaterializationError::OffsetOverflow)?;
-    if input.byte_count != exact_len {
-        return Err(MaterializationError::InputLengthMismatch);
-    }
-    let content_digest = input
-        .content_digest
-        .ok_or(MaterializationError::MissingContentDigest)?;
-    let revision_receipt = input
-        .revision_receipt
-        .ok_or(MaterializationError::MissingRevisionReceipt)?;
-    let actual_digest = Blake3Digest32::from_bytes(digest_content_bytes(&input.bytes));
-    if actual_digest != content_digest {
-        return Err(MaterializationError::RevisionDigestMismatch);
-    }
-    let MaterializedText {
-        text,
-        lines,
-        line_endings,
-    } = materialize_utf8(input.bytes, limits)?;
-    let line_count =
-        u64::try_from(lines.len()).map_err(|_| MaterializationError::OffsetOverflow)?;
-    let receipt = MaterializationReceipt {
-        source_id: input.source_id.clone(),
-        revision: input.revision,
-        content_digest,
-        input_bytes: exact_len,
-        output_bytes: exact_len,
-        line_count,
-        line_endings,
-        revision_receipt,
-    };
-    Ok(MaterializedRevision {
-        source_id: input.source_id,
-        revision: input.revision,
-        content_digest,
-        text,
-        lines,
-        receipt,
-    })
+    check(deadline, cancelled)?;
+    let lines = scan_lines(text.as_bytes(), limits, deadline, cancelled)?;
+    Ok(MaterializedText { text, lines })
 }

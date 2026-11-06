@@ -1,8 +1,8 @@
 # Code entrypoints and change map
 
-This map describes the current filesystem after the root cut. Current binaries expose root operations and one
-explicit retained-file operation. Native binary and library cases have distinct exact-source scopes in the [registry](../audit/ANALYSIS_REGISTRY.md#evidence-status);
-S1 final gates/builds/basic execution passed at 06bb6877. This map does not qualify the future source-to-Qdrant product.
+Current binaries expose root operations, retain-file and retained-only prepare-source. Native binary and library
+cases have distinct exact-source scopes in the [registry](../audit/ANALYSIS_REGISTRY.md#evidence-status).
+This map does not qualify the future source-to-Qdrant product.
 The [owner map](README.md#owners) defines responsibilities; a row does not require keeping a crate.
 
 ## Real binaries
@@ -23,6 +23,7 @@ routes are removed. Check the real binary; package names and retained workspace 
       root subcommands        → owned eliot-searchd child with matching --operation and settings
                               → bounded root response validation → output
       retain-file --file PATH → same owned child → bounded retained-source response validation → output
+      prepare-source          → same owned child → parsed source ID/unit-bound stored-unit validation → output
 
     daemon entry → app::run_main → app/bootstrap::parse
       standalone help/version → local output, no config/root acquisition
@@ -30,6 +31,8 @@ routes are removed. Check the real binary; package names and retained workspace 
                               → native_root_command::run → search-runtime-owner
       retain-file             → open current root → source-row capture → safe read → object readback
                               → current-source CAS in search-control-redb → factual result
+      prepare-source          → open current root → preserve settings → read-only preparation capture
+                              → retained input → prepare/store/read/decode artifact → outcome CAS → stored unit
 
 | CLI subcommand | Daemon flag | Root function |
 |---|---|---|
@@ -37,7 +40,8 @@ routes are removed. Check the real binary; package names and retained workspace 
 | initialize-data-root | --initialize-data-root | initialize_plain |
 | check-existing-root-owner | --check-existing-root-owner | open_plain |
 | discard-incomplete-data-root | --discard-incomplete-data-root | discard_incomplete_plain |
-| retain-file --file PATH | --retain-file --source-file PATH | open_plain → acquire_file → store_source_bytes/read_source_object → commit_current_source |
+| retain-file --file PATH | --retain-file --source-file PATH | open_plain → acquire_file → store_object/read_object → commit_current_source |
+| prepare-source --source-id UUID [--unit N] | --prepare-source --source-id UUID [--unit N] | open_plain → prepared_source::run → retained read/prepare/store/decode → commit_preparation |
 
 Root functions take (&Path, Instant, &AtomicBool). Init/open return PlainRootGuard; inspection returns
 PlainRootInspection and discard returns unit. The daemon holds guards through terminal root output.
@@ -51,13 +55,16 @@ ELIOT_SEARCH__BOOTSTRAP__DATA_ROOT can supply a missing root. See the
 retain-file emits its source row only after bounded same-handle acquisition, immutable object readback, and the
 short guarded transaction succeed. It does not produce preparation, Qdrant, search, or evidence results.
 
-There is no broad scan, preparation, migration, persistent search, framed-query or alternate harness route.
+prepare-source resolves a retained SourceId without opening the live path. It returns actual complete stored
+text/ranges or explicit empty/Gap, using the serialization-derived allowance for a full 64 KiB unit. The CLI
+preserves selectors from its first parse; legal native path values may equal option names.
+
+There is no broad scan, migration, persistent search, framed-query or alternate harness route.
 Root-state output does not report Qdrant availability. Final native qualification remains distinct from this map.
 
 ## Work by path
 
-The first five rows are current consumers. Remaining rows identify future integration owners, not installed
-commands or completed stages.
+Rows marked future identify integration owners, not installed commands or completed stages.
 
 | Boundary | Source / rule |
 |---|---|
@@ -66,11 +73,16 @@ commands or completed stages.
 | Plain root/control | [root source](../../crates/search-runtime/search-runtime-owner/src/plain_root.rs), [Root](../../crates/search-runtime/search-runtime-owner/FUNCTIONS.md), [control source](../../crates/search-control-redb/src/plain_control.rs), [Control](../../crates/search-control-redb/FUNCTIONS.md) |
 | Stable acquisition and retained body | [Reader](../../crates/search-source/search-safe-reader/FUNCTIONS.md), [Objects](../../crates/search-source/search-revision-store/FUNCTIONS.md), daemon native_root_command |
 | Current source rows and stale work | [Source family](../../crates/search-source/README.md), [Source values](../../crates/search-source/search-source-registry/FUNCTIONS.md), [Control](../../crates/search-control-redb/FUNCTIONS.md) |
-| Future transforms and unit ranges | [Materializer](../../crates/search-prep/search-materializer/FUNCTIONS.md), [Unitizer](../../crates/search-prep/search-unitizer/FUNCTIONS.md) |
+| Retained-only preparation and stored-unit output | [Daemon handler](../../bins/eliot-searchd/src/prepared_source.rs), [CLI validator](../../bins/eliot-search/src/prepared_response.rs), [CONTROL rows](../../crates/search-control-redb/src/current_preparation.rs) |
+| Exact UTF-8 and complete artifact/unit ranges | [Materializer](../../crates/search-prep/search-materializer/FUNCTIONS.md), [Unitizer](../../crates/search-prep/search-unitizer/FUNCTIONS.md) |
 | Future Qdrant calls | [Bridge](../../crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md), [Lexical](../../crates/search-lexical/FUNCTIONS.md) |
 | Future publication and view lifetime | [Publication](../../crates/search-index-qdrant/search-publication/FUNCTIONS.md); connect control and query consumers |
 | Future evidence and Exact | [Query family](../../crates/search-query/README.md), retained reader and daemon consumer |
 | Future framed connection and presentation | [Client](../../crates/search-provider-client/FUNCTIONS.md), [Protocol](../../crates/search-provider-protocol/FUNCTIONS.md), [CLI](../../bins/eliot-search/FUNCTIONS.md) |
+
+The old projection-planner/publication source, manifests and exclusive fixtures were retired in P1 with their
+VerifiedUnitSet consumers. Their FUNCTIONS.md and AGENTS.md remain canonical Q1 recipes at the existing paths;
+they are recipe-only owners until actual publication is connected.
 
 Use the [caller-search method](WORKING_GUIDE.md#find-callers-before-changing-a-boundary) within the selected owner.
 Do not restore deleted daemon implementations or unconsumed APIs because an older map or test named them.

@@ -15,7 +15,6 @@ search-contracts.workspace = true
 search-domain.workspace = true
 search-ports.workspace = true
 search-config.workspace = true
-search-unitizer.workspace = true
 search-lexical.workspace = true
 
 [lints]

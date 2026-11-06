@@ -1,5 +1,6 @@
 //! Four root operations over one bounded, owned daemon child.
 
+use search_source_registry::MAX_PREPARATION_RESPONSE_BYTES;
 use std::env;
 use std::ffi::{OsStr, OsString};
 use std::io::{Read, Write};
@@ -24,6 +25,7 @@ enum RootCommand {
     CheckExistingOwner,
     DiscardIncomplete,
     RetainFile,
+    PrepareSource,
 }
 
 impl RootCommand {
@@ -34,6 +36,7 @@ impl RootCommand {
             Self::CheckExistingOwner => "check-existing-root-owner",
             Self::DiscardIncomplete => "discard-incomplete-data-root",
             Self::RetainFile => "retain-file",
+            Self::PrepareSource => "prepare-source",
         }
     }
 
@@ -44,6 +47,7 @@ impl RootCommand {
             Self::CheckExistingOwner => "--check-existing-root-owner",
             Self::DiscardIncomplete => "--discard-incomplete-data-root",
             Self::RetainFile => "--retain-file",
+            Self::PrepareSource => "--prepare-source",
         }
     }
 }
@@ -55,7 +59,14 @@ enum Parsed {
         command: RootCommand,
         settings: Vec<OsString>,
         daemon: Option<PathBuf>,
+        preparation: PreparationRequest,
     },
+}
+
+#[derive(Default)]
+struct PreparationRequest {
+    source_id: Option<String>,
+    unit: Option<u64>,
 }
 
 struct Captured {
@@ -110,6 +121,7 @@ impl ChildFailure {
 enum DaemonResponse<'a> {
     Snapshot(&'a str),
     Retained(&'a str),
+    Prepared(&'a str),
     Error(&'a str),
 }
 
@@ -159,6 +171,7 @@ fn command(value: &OsStr) -> Option<RootCommand> {
         "check-existing-root-owner" => Some(RootCommand::CheckExistingOwner),
         "discard-incomplete-data-root" => Some(RootCommand::DiscardIncomplete),
         "retain-file" => Some(RootCommand::RetainFile),
+        "prepare-source" => Some(RootCommand::PrepareSource),
         _ => None,
     }
 }
@@ -172,6 +185,7 @@ fn is_daemon_root_flag(value: &OsStr) -> bool {
                 | "--check-existing-root-owner"
                 | "--discard-incomplete-data-root"
                 | "--retain-file"
+                | "--prepare-source"
         )
     )
 }
@@ -183,16 +197,72 @@ fn validate_path(value: &OsStr) -> Result<(), &'static str> {
     Ok(())
 }
 
-fn parse(arguments: &[OsString]) -> Result<Parsed, &'static str> {
+fn local_invocation(arguments: &[OsString]) -> Option<Parsed> {
     if arguments.is_empty() {
-        return Ok(Parsed::Help);
+        return Some(Parsed::Help);
     }
     if arguments.len() == 1 && (is_help_flag(&arguments[0]) || is_help_command(&arguments[0])) {
-        return Ok(Parsed::Help);
+        return Some(Parsed::Help);
     }
     if arguments.len() == 1 && (is_version_flag(&arguments[0]) || is_version_command(&arguments[0]))
     {
-        return Ok(Parsed::Version);
+        return Some(Parsed::Version);
+    }
+    None
+}
+fn path_option(arguments: &[OsString], index: usize) -> Result<&OsString, &'static str> {
+    let value = arguments.get(index + 1).ok_or("USAGE_ERROR")?;
+    validate_path(value)?;
+    if is_help_flag(value) || is_version_flag(value) || is_daemon_root_flag(value) {
+        return Err("USAGE_ERROR");
+    }
+    Ok(value)
+}
+fn source_id_option(
+    arguments: &[OsString],
+    index: usize,
+    command: RootCommand,
+) -> Result<(&OsString, &str), &'static str> {
+    if !matches!(command, RootCommand::PrepareSource) {
+        return Err("USAGE_ERROR");
+    }
+    let value = arguments.get(index + 1).ok_or("USAGE_ERROR")?;
+    let source_id = value.to_str().ok_or("USAGE_ERROR")?;
+    if !uuid_text(source_id) {
+        return Err("USAGE_ERROR");
+    }
+    Ok((value, source_id))
+}
+fn unit_option(
+    arguments: &[OsString],
+    index: usize,
+    command: RootCommand,
+) -> Result<(&OsString, u64), &'static str> {
+    if !matches!(command, RootCommand::PrepareSource) {
+        return Err("USAGE_ERROR");
+    }
+    let value = arguments.get(index + 1).ok_or("USAGE_ERROR")?;
+    let unit = value
+        .to_str()
+        .and_then(|s| canonical_decimal(s, true))
+        .ok_or("USAGE_ERROR")?;
+    Ok((value, unit))
+}
+const fn valid_source_selection(
+    command: RootCommand,
+    file: bool,
+    request: &PreparationRequest,
+) -> bool {
+    let id = request.source_id.is_some();
+    match command {
+        RootCommand::RetainFile => file && !id,
+        RootCommand::PrepareSource => id && !file,
+        _ => !file && !id,
+    }
+}
+fn parse(arguments: &[OsString]) -> Result<Parsed, &'static str> {
+    if let Some(local) = local_invocation(arguments) {
+        return Ok(local);
     }
     let Some(root_command) = command(&arguments[0]) else {
         return Err("UNKNOWN_COMMAND");
@@ -204,6 +274,7 @@ fn parse(arguments: &[OsString]) -> Result<Parsed, &'static str> {
     let mut positional_root_seen = false;
     let mut config_seen = false;
     let mut source_file_seen = false;
+    let mut preparation = PreparationRequest::default();
     let mut index = 1;
     while index < arguments.len() {
         let argument = &arguments[index];
@@ -217,22 +288,14 @@ fn parse(arguments: &[OsString]) -> Result<Parsed, &'static str> {
             if daemon.is_some() {
                 return Err("USAGE_ERROR");
             }
-            let value = arguments.get(index + 1).ok_or("USAGE_ERROR")?;
-            validate_path(value)?;
-            if is_help_flag(value) || is_version_flag(value) || is_daemon_root_flag(value) {
-                return Err("USAGE_ERROR");
-            }
+            let value = path_option(arguments, index)?;
             daemon = Some(PathBuf::from(value));
             index += 2;
         } else if argument == OsStr::new("--data-root") {
             if data_root_seen || positional_root_seen {
                 return Err("USAGE_ERROR");
             }
-            let value = arguments.get(index + 1).ok_or("USAGE_ERROR")?;
-            validate_path(value)?;
-            if is_help_flag(value) || is_version_flag(value) || is_daemon_root_flag(value) {
-                return Err("USAGE_ERROR");
-            }
+            let value = path_option(arguments, index)?;
             data_root_seen = true;
             settings.push(argument.clone());
             settings.push(value.clone());
@@ -241,11 +304,7 @@ fn parse(arguments: &[OsString]) -> Result<Parsed, &'static str> {
             if config_seen {
                 return Err("USAGE_ERROR");
             }
-            let value = arguments.get(index + 1).ok_or("USAGE_ERROR")?;
-            validate_path(value)?;
-            if is_help_flag(value) || is_version_flag(value) || is_daemon_root_flag(value) {
-                return Err("USAGE_ERROR");
-            }
+            let value = path_option(arguments, index)?;
             config_seen = true;
             settings.push(argument.clone());
             settings.push(value.clone());
@@ -259,6 +318,24 @@ fn parse(arguments: &[OsString]) -> Result<Parsed, &'static str> {
             settings.push(OsString::from("--source-file"));
             settings.push(value.clone());
             source_file_seen = true;
+            index += 2;
+        } else if argument == OsStr::new("--source-id") {
+            if preparation.source_id.is_some() {
+                return Err("USAGE_ERROR");
+            }
+            let (value, source_id) = source_id_option(arguments, index, root_command)?;
+            settings.push(argument.clone());
+            settings.push(value.clone());
+            preparation.source_id = Some(source_id.to_owned());
+            index += 2;
+        } else if argument == OsStr::new("--unit") {
+            if preparation.unit.is_some() {
+                return Err("USAGE_ERROR");
+            }
+            let (value, unit) = unit_option(arguments, index, root_command)?;
+            settings.push(argument.clone());
+            settings.push(value.clone());
+            preparation.unit = Some(unit);
             index += 2;
         } else if argument
             .to_str()
@@ -275,13 +352,14 @@ fn parse(arguments: &[OsString]) -> Result<Parsed, &'static str> {
             index += 1;
         }
     }
-    if matches!(root_command, RootCommand::RetainFile) != source_file_seen {
+    if !valid_source_selection(root_command, source_file_seen, &preparation) {
         return Err("USAGE_ERROR");
     }
     Ok(Parsed::Root {
         command: root_command,
         settings,
         daemon,
+        preparation,
     })
 }
 
@@ -307,8 +385,12 @@ fn daemon_path(explicit: Option<PathBuf>) -> Result<PathBuf, &'static str> {
         .unwrap_or_else(|| PathBuf::from(executable_name)))
 }
 
-fn capture_stream(mut reader: impl Read, deadline: Instant) -> Result<Captured, ChildFailure> {
-    let mut bytes = Vec::with_capacity(MAX_CAPTURE_BYTES);
+fn capture_stream(
+    mut reader: impl Read,
+    deadline: Instant,
+    maximum: usize,
+) -> Result<Captured, ChildFailure> {
+    let mut bytes = Vec::with_capacity(maximum);
     let mut buffer = [0_u8; 8 * 1024];
     let mut exceeded = false;
     loop {
@@ -324,7 +406,7 @@ fn capture_stream(mut reader: impl Read, deadline: Instant) -> Result<Captured, 
         if count == 0 {
             break;
         }
-        let remaining = MAX_CAPTURE_BYTES.saturating_sub(bytes.len());
+        let remaining = maximum.saturating_sub(bytes.len());
         let keep = remaining.min(count);
         bytes.extend_from_slice(&buffer[..keep]);
         exceeded |= keep < count;
@@ -336,12 +418,13 @@ fn spawn_reader(
     reader: impl Read + Send + 'static,
     name: &'static str,
     deadline: Instant,
+    maximum: usize,
 ) -> Result<OutputReader, ChildFailure> {
     let (completed, completion) = mpsc::sync_channel(1);
     let thread = thread::Builder::new()
         .name(name.to_owned())
         .spawn(move || {
-            let result = capture_stream(reader, deadline);
+            let result = capture_stream(reader, deadline, maximum);
             let _ = completed.send(result);
         })
         .map_err(|_| ChildFailure::OutputSetup)?;
@@ -433,7 +516,13 @@ fn capture_child(
         stop_and_reap(&mut child);
         return Err(ChildFailure::StdoutUnavailable);
     };
-    let Ok(stdout_reader) = spawn_reader(stdout, "eliot-searchd-stdout", deadline) else {
+    let stdout_limit = if matches!(command, RootCommand::PrepareSource) {
+        MAX_PREPARATION_RESPONSE_BYTES
+    } else {
+        MAX_CAPTURE_BYTES
+    };
+    let Ok(stdout_reader) = spawn_reader(stdout, "eliot-searchd-stdout", deadline, stdout_limit)
+    else {
         stop_and_reap(&mut child);
         return Err(ChildFailure::OutputSetup);
     };
@@ -442,7 +531,9 @@ fn capture_child(
         stop_and_reap(&mut child);
         return Err(ChildFailure::StderrUnavailable);
     };
-    let Ok(stderr_reader) = spawn_reader(stderr, "eliot-searchd-stderr", deadline) else {
+    let Ok(stderr_reader) =
+        spawn_reader(stderr, "eliot-searchd-stderr", deadline, MAX_CAPTURE_BYTES)
+    else {
         stop_and_reap(&mut child);
         return Err(ChildFailure::OutputSetup);
     };
@@ -485,7 +576,7 @@ fn validated_snapshot(bytes: &[u8], command: RootCommand) -> Option<&str> {
     }
     let states: &[&str] = match command {
         RootCommand::Initialize | RootCommand::CheckExistingOwner => &["current"],
-        RootCommand::RetainFile => return None,
+        RootCommand::RetainFile | RootCommand::PrepareSource => return None,
         RootCommand::Inspect | RootCommand::DiscardIncomplete => &[
             "absent",
             "empty",
@@ -583,9 +674,20 @@ fn validated_daemon_error(bytes: &[u8]) -> Option<&str> {
     Some(line)
 }
 
-fn validated_response(output: &ChildOutput, command: RootCommand) -> Option<DaemonResponse<'_>> {
+fn validated_response<'a>(
+    output: &'a ChildOutput,
+    command: RootCommand,
+    preparation: &PreparationRequest,
+) -> Option<DaemonResponse<'a>> {
     if output.stderr.bytes.is_empty() {
-        if matches!(command, RootCommand::RetainFile) {
+        if matches!(command, RootCommand::PrepareSource) {
+            crate::prepared_response::validate(
+                &output.stdout.bytes,
+                preparation.source_id.as_deref()?,
+                preparation.unit.unwrap_or(0),
+            )
+            .map(DaemonResponse::Prepared)
+        } else if matches!(command, RootCommand::RetainFile) {
             validated_retained(&output.stdout.bytes, command).map(DaemonResponse::Retained)
         } else {
             validated_snapshot(&output.stdout.bytes, command).map(DaemonResponse::Snapshot)
@@ -616,6 +718,7 @@ fn print_help() {
         "  eliot-search check-existing-root-owner [ROOT] [--data-root ROOT] [--config-file PATH] [--daemon PATH]\n",
         "  eliot-search discard-incomplete-data-root [ROOT] [--data-root ROOT] [--config-file PATH] [--daemon PATH]\n",
         "  eliot-search retain-file --file PATH [ROOT] [--data-root ROOT] [--config-file PATH] [--daemon PATH]\n",
+        "  eliot-search prepare-source --source-id UUID [--unit N] [--data-root ROOT] [--config-file PATH] [--daemon PATH]\n",
     ));
 }
 
@@ -629,12 +732,13 @@ pub fn run_main() -> i32 {
         Ok(parsed) => parsed,
         Err(error) => return emit_error(error),
     };
-    let (command, settings, explicit_daemon) = match parsed {
+    let (command, settings, explicit_daemon, preparation) = match parsed {
         Parsed::Root {
             command,
             settings,
             daemon,
-        } => (command, settings, daemon),
+            preparation,
+        } => (command, settings, daemon, preparation),
         Parsed::Help => {
             print_help();
             return 0;
@@ -661,16 +765,16 @@ pub fn run_main() -> i32 {
             return emit_error_status(failure.code(), failure.exit_code());
         }
     };
-    let Some(response) = validated_response(&output, command) else {
+    let Some(response) = validated_response(&output, command, &preparation) else {
         return emit_error("DAEMON_RESULT_UNKNOWN");
     };
     let (written, exit_code) = match (output.status.success(), response) {
-        (true, DaemonResponse::Snapshot(snapshot)) => {
-            (write_line(&mut std::io::stdout().lock(), snapshot), 0)
-        }
-        (true, DaemonResponse::Retained(result)) => {
-            (write_line(&mut std::io::stdout().lock(), result), 0)
-        }
+        (
+            true,
+            DaemonResponse::Snapshot(result)
+            | DaemonResponse::Retained(result)
+            | DaemonResponse::Prepared(result),
+        ) => (write_line(&mut std::io::stdout().lock(), result), 0),
         (false, DaemonResponse::Error(error)) => (
             write_line(&mut std::io::stderr().lock(), error),
             output.status.code().unwrap_or(1),

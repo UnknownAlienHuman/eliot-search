@@ -26,9 +26,20 @@ The source read is capped at 8 MiB. A real empty file is retained as a zero-leng
 
 A stale source-row or registration guard preserves the newer logical current row and its immutable object. The rejected object may remain unreferenced. A stale writable transaction need not preserve physical control.redb bytes. Read-only capture and pre-write observation/refusal are separate boundaries.
 
-read_source_object uses the addressed retained bytes even after the live source changes. Missing or corrupt objects fail; the reader does not fall back to the live path or recreate the object. Native evidence includes a directory-junction refusal; the regular-file symlink case was NOT_RUN because Windows returned privilege error 1314. Registration-only stale-CAS coverage uses an external fixture transition, not an implemented unregister/re-add command.
+read_object uses the addressed retained bytes even after the live source changes. Missing or corrupt objects fail; the reader does not fall back to the live path or recreate the object. S1 native evidence includes a directory-junction refusal; the regular-file symlink case was NOT_RUN because Windows returned privilege error 1314. S1 registration-only stale-CAS coverage uses an external fixture transition, not an implemented unregister/re-add command.
 
-No preparation, unitization, Git acquisition, inventory, reconciliation, Qdrant work, or search is part of S1. Next P1 must turn verified retained UTF-8 into one preparation product with bounded unit ranges, store the complete artifact through the shared object owner, and install a guarded current preparation outcome. Artifact and outcome belong to one connected result.
+## Retained-only preparation
+
+P1 adds one separate command through the existing owned child:
+
+    eliot-search prepare-source --source-id UUID --data-root "C:\example\root"
+    eliot-search prepare-source --source-id UUID --unit 1 --data-root "C:\example\root"
+
+Use the SourceId returned by retain-file. The daemon resolves the current source and selected settings in CONTROL, reads the verified retained Source ObjectRef, calls prepare_utf8, stores the complete Prepared artifact and decodes its retained bytes before guarded current-outcome installation. It emits one complete selected stored unit with actual text/ranges. The original pathname may have changed or disappeared; it is never reopened. Retain-file does not automatically prepare.
+
+PreparationSettings affects output identity; fail-only execution ceilings do not. Settings selection is idempotent and prepare-source preserves an existing selection. Empty UTF-8 produces a complete zero-unit artifact; binary/invalid UTF-8 and selected ceiling refusals are distinct bound Gaps. Missing/corrupt retained objects, stale completion, cancellation and deadline remain errors. A missing/corrupt current Ready artifact is never rebuilt implicitly.
+
+[Unitizer](../search-prep/search-unitizer/FUNCTIONS.md) owns the complete artifact and borrowed decoder; [CONTROL](../search-control-redb/FUNCTIONS.md#current-preparation) owns settings/outcome revisions and atomic expected-outcome CAS. Q1 publication and verified search remain unconnected. Git acquisition, inventory and reconciliation are later work.
 
 ## Ownership
 
@@ -36,7 +47,8 @@ No preparation, unitization, Git acquisition, inventory, reconciliation, Qdrant 
 |---|---|
 | Explicit no-execute file acquisition and native identity | [Safe reader](search-safe-reader/FUNCTIONS.md) |
 | Plain immutable bytes and verified object readback | [Object store](search-revision-store/FUNCTIONS.md) |
-| Current source value types | [Source rows](search-source-registry/FUNCTIONS.md) |
-| Namespace, locator index, and atomic CAS in control/control.redb | [Control](../search-control-redb/FUNCTIONS.md) |
+| Current source/ObjectRef/settings values | [Source values](search-source-registry/FUNCTIONS.md) |
+| Namespace, locator index, source/preparation CAS in control/control.redb | [Control](../search-control-redb/FUNCTIONS.md) |
+| Exact UTF-8 and complete artifact/unit ranges | [Materializer](../search-prep/search-materializer/FUNCTIONS.md), [Unitizer](../search-prep/search-unitizer/FUNCTIONS.md) |
 | Root exclusion and shared no-clobber publication | [Root](../search-runtime/search-runtime-owner/FUNCTIONS.md) |
 | Actual daemon and CLI caller | [Daemon](../../bins/eliot-searchd/FUNCTIONS.md), [CLI](../../bins/eliot-search/FUNCTIONS.md) |

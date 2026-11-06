@@ -1,5 +1,5 @@
 # Immutable plain-object store
 
-This owner stores the exact acquired source buffer beneath the existing PlainRootGuard object directory. It uses the root owner's same-parent no-clobber publisher, a format-versioned source ObjectRef, exact byte length, and BLAKE3 content address.
+This owner stores exact Source bytes and complete Prepared artifacts beneath PlainRootGuard.object_dir using the root owner's same-parent no-clobber publisher, version/kind, exact byte length and maintained BLAKE3.
 
-store_source_bytes publishes the original allocation, then read_source_object reads the final object back into a bounded buffer and independently verifies its length and BLAKE3 digest before control may install a source head. Old objects are immutable and remain available when a current head advances.
+store_object borrows a slice and read_object verifies the final retained object's length/hash before CONTROL may install a source or preparation head. Old objects remain immutable when a head advances. See [FUNCTIONS.md](FUNCTIONS.md) for explicit Source/Prepared bounds and actual daemon consumers.

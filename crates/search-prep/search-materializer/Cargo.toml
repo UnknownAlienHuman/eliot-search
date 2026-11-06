@@ -10,17 +10,5 @@ readme = "README.md"
 [lib]
 path = "src/lib.rs"
 
-[dependencies]
-blake3 = {
-    version = "=1.8.2",
-    default-features = false,
-    features = ["std", "pure", "zeroize"],
-}
-search-contracts.workspace = true
-search-domain.workspace = true
-search-ports.workspace = true
-pulldown-cmark.workspace = true
-quick-xml.workspace = true
-
 [lints]
 workspace = true

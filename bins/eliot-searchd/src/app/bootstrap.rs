@@ -5,6 +5,7 @@ use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
+use search_contracts::SourceId;
 use serde::Deserialize;
 
 use super::{RootCommand, RootInvocation};
@@ -26,6 +27,8 @@ pub(super) struct RootCli {
     data_root: Option<PathBuf>,
     config_file: Option<PathBuf>,
     source_file: Option<PathBuf>,
+    source_id: Option<SourceId>,
+    unit: Option<usize>,
 }
 
 #[derive(Default)]
@@ -66,6 +69,7 @@ fn is_command(value: &OsStr) -> Option<RootCommand> {
         "--check-existing-root-owner" => Some(RootCommand::CheckExistingOwner),
         "--discard-incomplete-data-root" => Some(RootCommand::DiscardIncomplete),
         "--retain-file" => Some(RootCommand::RetainFile),
+        "--prepare-source" => Some(RootCommand::PrepareSource),
         _ => None,
     }
 }
@@ -95,6 +99,15 @@ fn option_value<'a>(
     Ok(value)
 }
 
+fn unit_index(value: &OsStr) -> Result<usize, String> {
+    let text = value.to_str().ok_or_else(|| invalid("unit"))?;
+    let parsed = text.parse::<usize>().map_err(|_| invalid("unit"))?;
+    if parsed.to_string() != text {
+        return Err(invalid("unit"));
+    }
+    Ok(parsed)
+}
+
 pub(super) fn parse(arguments: &[OsString]) -> Result<Parsed, String> {
     if arguments.is_empty() {
         return Ok(Parsed::Help);
@@ -111,6 +124,8 @@ pub(super) fn parse(arguments: &[OsString]) -> Result<Parsed, String> {
     let mut data_root = None;
     let mut config_file = None;
     let mut source_file = None;
+    let mut source_id = None;
+    let mut unit = None;
     let mut positional_root = None;
     let mut index = 0;
     while index < arguments.len() {
@@ -144,6 +159,21 @@ pub(super) fn parse(arguments: &[OsString]) -> Result<Parsed, String> {
             let value = option_value(arguments, index, "source_file_value")?;
             source_file = Some(bounded_path(value, "source_file")?);
             index += 2;
+        } else if argument == OsStr::new("--source-id") {
+            if source_id.is_some() {
+                return Err(invalid("source_id_duplicate"));
+            }
+            let value = option_value(arguments, index, "source_id")?
+                .to_str()
+                .ok_or_else(|| invalid("source_id"))?;
+            source_id = Some(SourceId::parse(value).map_err(|_| invalid("source_id"))?);
+            index += 2;
+        } else if argument == OsStr::new("--unit") {
+            if unit.is_some() {
+                return Err(invalid("unit_duplicate"));
+            }
+            unit = Some(unit_index(option_value(arguments, index, "unit")?)?);
+            index += 2;
         } else if argument
             .to_str()
             .is_some_and(|value| value.starts_with("--"))
@@ -162,6 +192,11 @@ pub(super) fn parse(arguments: &[OsString]) -> Result<Parsed, String> {
     if (command == RootCommand::RetainFile) != source_file.is_some() {
         return Err(invalid("source_file_required"));
     }
+    if (command == RootCommand::PrepareSource) != source_id.is_some()
+        || (unit.is_some() && command != RootCommand::PrepareSource)
+    {
+        return Err(invalid("source_id_or_unit"));
+    }
     if data_root.is_some() && positional_root.is_some() {
         return Err(invalid("data_root_duplicate"));
     }
@@ -170,6 +205,8 @@ pub(super) fn parse(arguments: &[OsString]) -> Result<Parsed, String> {
         data_root: data_root.or(positional_root),
         config_file,
         source_file,
+        source_id,
+        unit,
     }))
 }
 
@@ -253,5 +290,7 @@ pub(super) fn resolve(cli: RootCli, startup_cwd: &Path) -> Result<RootInvocation
         source_file: cli
             .source_file
             .map(|path| resolve_layer_path(&path, startup_cwd)),
+        source_id: cli.source_id,
+        unit: cli.unit,
     })
 }
