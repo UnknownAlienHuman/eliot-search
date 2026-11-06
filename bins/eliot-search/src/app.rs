@@ -59,7 +59,14 @@ enum Parsed {
         command: RootCommand,
         settings: Vec<OsString>,
         daemon: Option<PathBuf>,
+        preparation: PreparationRequest,
     },
+}
+
+#[derive(Default)]
+struct PreparationRequest {
+    source_id: Option<String>,
+    unit: Option<u64>,
 }
 
 struct Captured {
@@ -211,25 +218,42 @@ fn path_option(arguments: &[OsString], index: usize) -> Result<&OsString, &'stat
     }
     Ok(value)
 }
-fn source_id_option(arguments: &[OsString], index: usize) -> Result<&OsString, &'static str> {
-    let value = arguments.get(index + 1).ok_or("USAGE_ERROR")?;
-    if !value.to_str().is_some_and(uuid_text) {
+fn source_id_option(
+    arguments: &[OsString],
+    index: usize,
+    command: RootCommand,
+) -> Result<(&OsString, &str), &'static str> {
+    if !matches!(command, RootCommand::PrepareSource) {
         return Err("USAGE_ERROR");
     }
-    Ok(value)
-}
-fn unit_option(arguments: &[OsString], index: usize) -> Result<&OsString, &'static str> {
     let value = arguments.get(index + 1).ok_or("USAGE_ERROR")?;
-    if value
+    let source_id = value.to_str().ok_or("USAGE_ERROR")?;
+    if !uuid_text(source_id) {
+        return Err("USAGE_ERROR");
+    }
+    Ok((value, source_id))
+}
+fn unit_option(
+    arguments: &[OsString],
+    index: usize,
+    command: RootCommand,
+) -> Result<(&OsString, u64), &'static str> {
+    if !matches!(command, RootCommand::PrepareSource) {
+        return Err("USAGE_ERROR");
+    }
+    let value = arguments.get(index + 1).ok_or("USAGE_ERROR")?;
+    let unit = value
         .to_str()
         .and_then(|s| canonical_decimal(s, true))
-        .is_none()
-    {
-        return Err("USAGE_ERROR");
-    }
-    Ok(value)
+        .ok_or("USAGE_ERROR")?;
+    Ok((value, unit))
 }
-const fn valid_source_selection(command: RootCommand, file: bool, id: bool) -> bool {
+const fn valid_source_selection(
+    command: RootCommand,
+    file: bool,
+    request: &PreparationRequest,
+) -> bool {
+    let id = request.source_id.is_some();
     match command {
         RootCommand::RetainFile => file && !id,
         RootCommand::PrepareSource => id && !file,
@@ -250,8 +274,7 @@ fn parse(arguments: &[OsString]) -> Result<Parsed, &'static str> {
     let mut positional_root_seen = false;
     let mut config_seen = false;
     let mut source_file_seen = false;
-    let mut source_id_seen = false;
-    let mut unit_seen = false;
+    let mut preparation = PreparationRequest::default();
     let mut index = 1;
     while index < arguments.len() {
         let argument = &arguments[index];
@@ -297,22 +320,22 @@ fn parse(arguments: &[OsString]) -> Result<Parsed, &'static str> {
             source_file_seen = true;
             index += 2;
         } else if argument == OsStr::new("--source-id") {
-            if source_id_seen || !matches!(root_command, RootCommand::PrepareSource) {
+            if preparation.source_id.is_some() {
                 return Err("USAGE_ERROR");
             }
-            let value = source_id_option(arguments, index)?;
+            let (value, source_id) = source_id_option(arguments, index, root_command)?;
             settings.push(argument.clone());
             settings.push(value.clone());
-            source_id_seen = true;
+            preparation.source_id = Some(source_id.to_owned());
             index += 2;
         } else if argument == OsStr::new("--unit") {
-            if unit_seen || !matches!(root_command, RootCommand::PrepareSource) {
+            if preparation.unit.is_some() {
                 return Err("USAGE_ERROR");
             }
-            let value = unit_option(arguments, index)?;
+            let (value, unit) = unit_option(arguments, index, root_command)?;
             settings.push(argument.clone());
             settings.push(value.clone());
-            unit_seen = true;
+            preparation.unit = Some(unit);
             index += 2;
         } else if argument
             .to_str()
@@ -329,13 +352,14 @@ fn parse(arguments: &[OsString]) -> Result<Parsed, &'static str> {
             index += 1;
         }
     }
-    if !valid_source_selection(root_command, source_file_seen, source_id_seen) {
+    if !valid_source_selection(root_command, source_file_seen, &preparation) {
         return Err("USAGE_ERROR");
     }
     Ok(Parsed::Root {
         command: root_command,
         settings,
         daemon,
+        preparation,
     })
 }
 
@@ -653,20 +677,16 @@ fn validated_daemon_error(bytes: &[u8]) -> Option<&str> {
 fn validated_response<'a>(
     output: &'a ChildOutput,
     command: RootCommand,
-    settings: &[OsString],
+    preparation: &PreparationRequest,
 ) -> Option<DaemonResponse<'a>> {
     if output.stderr.bytes.is_empty() {
         if matches!(command, RootCommand::PrepareSource) {
-            let source = settings
-                .windows(2)
-                .find(|p| p[0] == OsStr::new("--source-id"))?[1]
-                .to_str()?;
-            let unit = settings
-                .windows(2)
-                .find(|p| p[0] == OsStr::new("--unit"))
-                .map_or(Some(0), |p| p[1].to_str()?.parse::<u64>().ok())?;
-            crate::prepared_response::validate(&output.stdout.bytes, source, unit)
-                .map(DaemonResponse::Prepared)
+            crate::prepared_response::validate(
+                &output.stdout.bytes,
+                preparation.source_id.as_deref()?,
+                preparation.unit.unwrap_or(0),
+            )
+            .map(DaemonResponse::Prepared)
         } else if matches!(command, RootCommand::RetainFile) {
             validated_retained(&output.stdout.bytes, command).map(DaemonResponse::Retained)
         } else {
@@ -712,12 +732,13 @@ pub fn run_main() -> i32 {
         Ok(parsed) => parsed,
         Err(error) => return emit_error(error),
     };
-    let (command, settings, explicit_daemon) = match parsed {
+    let (command, settings, explicit_daemon, preparation) = match parsed {
         Parsed::Root {
             command,
             settings,
             daemon,
-        } => (command, settings, daemon),
+            preparation,
+        } => (command, settings, daemon, preparation),
         Parsed::Help => {
             print_help();
             return 0;
@@ -744,7 +765,7 @@ pub fn run_main() -> i32 {
             return emit_error_status(failure.code(), failure.exit_code());
         }
     };
-    let Some(response) = validated_response(&output, command, &settings) else {
+    let Some(response) = validated_response(&output, command, &preparation) else {
         return emit_error("DAEMON_RESULT_UNKNOWN");
     };
     let (written, exit_code) = match (output.status.success(), response) {
