@@ -1,8 +1,8 @@
 # Code entrypoints and change map
 
 This map describes the current filesystem after the root cut. Current binaries expose root operations and one
-explicit retained-file operation. The source path is implemented but awaits its designated native verification;
-this map does not qualify that behavior or the future source-to-Qdrant product.
+explicit retained-file operation. Native binary and library cases have distinct exact-source scopes in the [registry](../audit/ANALYSIS_REGISTRY.md#evidence-status);
+S1 final gates/builds/basic execution passed at 06bb6877. This map does not qualify the future source-to-Qdrant product.
 The [owner map](README.md#owners) defines responsibilities; a row does not require keeping a crate.
 
 ## Real binaries

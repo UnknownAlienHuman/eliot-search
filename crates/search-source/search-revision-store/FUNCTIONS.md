@@ -4,7 +4,7 @@
 
 | Symbol | Behavior |
 |---|---|
-| store_source_bytes | Consumes the one acquired Vec, computes a maintained BLAKE3 digest and exact length, publishes a version-1 source object without clobbering, then invokes read_source_object before returning ObjectRef. |
+| store_source_bytes | Borrows the original acquired bytes as a slice, computes a maintained BLAKE3 digest and exact length, publishes a version-1 source object without clobbering, then invokes read_source_object before returning ObjectRef. |
 | read_source_object | Reads only the addressed retained object, checks its actual length and BLAKE3 digest, and returns the exact verified retained bytes. |
 | ObjectRef | Carries format version, source kind, digest, and byte length. It carries no key, cipher, receipt, residency, or security profile. |
 

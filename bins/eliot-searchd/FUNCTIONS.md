@@ -8,7 +8,7 @@ The daemon still owns the same native invocation capture, bootstrap settings, ro
 2. Open the existing root with open_plain and retain PlainRootGuard.
 3. Capture a read-only current-source guard from the same root control.redb.
 4. Call search-safe-reader acquire_file once for the selected path.
-5. Move the acquired Vec to search-revision-store, publish one versioned source ObjectRef beneath guard.object_dir, and read the object back to verify exact bytes, length, and BLAKE3.
+5. Supply the acquired buffer as a byte slice to search-revision-store, publish one versioned source ObjectRef beneath guard.object_dir, and read the object back to verify exact bytes, length, and BLAKE3.
 6. Commit one CurrentSourceRecord with namespace, random SourceId, NativeFileKey, ObjectRef, and row/registration CAS in the same control.redb.
 7. Emit a compact factual JSON result only after the row commit. It reports IDs, revisions, file key, ObjectRef fields, and verified readback; it does not report search evidence.
 
@@ -16,4 +16,4 @@ The command has an 8 MiB bound and no execute, network, Git, inventory, watcher,
 
 ## Verification state
 
-This source path is implemented on the source branch but is not yet runtime-qualified. The designated verifier owns the locked check/Clippy and native CLI capture, retained readback, mutation, stale-CAS, and refusal cases.
+See the [Source recipe](../../crates/search-source/README.md) for the retained-byte/current-row contract and the [registry](../../docs/audit/ANALYSIS_REGISTRY.md#evidence-status) for exact binary/library revisions, executed native cases, NOT_RUN boundaries and final gate results. Read-only refusal byte preservation must not be extended to a stale writable CAS transaction.

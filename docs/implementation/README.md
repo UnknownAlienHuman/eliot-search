@@ -6,8 +6,8 @@ This page owns delivery order and cross-owner values. Use [code map](CODE_MAP.md
 
 ## Connected path
 
-The current binaries expose the four root operator operations only. The following source-to-query path and
-Stages 2–5 are future integration work, not available commands or a qualification claim.
+The current binaries expose the four root operator operations and retain-file. The first retained-file/current-row
+part of Stage 2 is connected; preparation, Qdrant publication, framed queries and later stages remain future work.
 
 ```text
 selected source → stable acquired bytes → immutable ObjectRef/current SourceRecord
@@ -91,7 +91,9 @@ registry; this delivery sequence is not a second status ledger.
 <a id="2-walking-skeleton--one-file-to-one-cli-result"></a>
 ### 2. One file to one CLI result
 
-Coordinator #264. The first S1 slice is connected in the current source branch: one explicit local file → one stable native-handle read → plain ObjectRef publication and verified readback → guarded CurrentSourceRecord in the same control/control.redb → factual CLI result. The implementation is present; locked checks and native runtime cases remain NOT_RUN until the designated verifier completes them.
+Coordinator #264. The first S1 slice is connected: one explicit local file → one stable native-handle read → plain ObjectRef publication and verified readback → guarded CurrentSourceRecord in the same control/control.redb → factual CLI result. S1 Windows debug final gates/builds/basic execution passed at 06bb6877; earlier binary and deeper library native outcomes remain separately bound to their revisions in the [registry](../audit/ANALYSIS_REGISTRY.md#evidence-status). P1 is the next ready connected result.
+
+Next P1 must consume the verified retained input, create one owned UTF-8 preparation product and bounded unit ranges, store the complete prepared artifact through the shared object writer, and install a guarded current preparation outcome. Artifact production and the guarded outcome belong to the same connected slice.
 
 The rest of Stage 2 continues from that source row through materialization/unitization, a fresh vectorless Qdrant collection, the scoring-text index, InsertOnly/readback/canary, matching current/evidence commit, PublishedView, TextQuery, and a retained excerpt. Upgrade exact Qdrant client/server/schema and real consumers together at that code cut. Use lexical/bridge owner settings and the operator-started local server. A fresh root without a published generation is buildable, not a corrupt root or a successful empty search.
 

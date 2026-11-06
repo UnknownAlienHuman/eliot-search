@@ -1,10 +1,17 @@
 # Sources — one retained-body path
 
-S1 connects one explicitly selected local file through a stable opened-handle read, immutable plain storage, and a guarded current source row. The CLI reports the source identity, ObjectRef, native file key, revisions, and verified retained readback only after the row commit.
+S1 connects one explicitly selected local file through a stable opened-handle read, immutable plain storage, and a guarded current source row. The CLI reports the source identity, ObjectRef, native file key, revisions, and verified retained readback only after the row commit. Exact-source gates and native coverage are recorded in the [work register](../../docs/audit/ANALYSIS_REGISTRY.md#evidence-status).
 
 The connected operation is:
 
 explicit file selection → read-only source-row capture → one bounded same-handle read → plain ObjectRef publication and byte readback → one source-row CAS in control/control.redb → factual CLI result
+
+The actual commands, using an already-current root, are:
+
+    eliot-search retain-file --file "C:\example\input.txt" --data-root "C:\example\root"
+    eliot-searchd --retain-file --source-file "C:\example\input.txt" --data-root "C:\example\root"
+
+These are placeholder paths. The CLI uses the existing owned daemon child; it does not open the source itself.
 
 The source read is capped at 8 MiB. A real empty file is retained as a zero-length object. Missing files, unsupported native identity, changed handles, corrupt objects, unsupported control schemas, and stale CAS outcomes are errors.
 
@@ -15,9 +22,13 @@ The source read is capped at 8 MiB. A real empty file is retained as a zero-leng
 - NativeFileKey records the opened file's platform identity. It is neither SourceId nor content identity.
 - ObjectRef uses format version, source kind, exact byte length, and the maintained BLAKE3 digest.
 - The current row and registration revisions guard stale completion atomically. Replacing a head never deletes its old immutable object.
-- The acquired buffer is transferred to the object writer. No mutable source path is reopened for retention.
+- The original acquired buffer supplies the object writer through a byte slice. No mutable source path is reopened for retention.
 
-No preparation, unitization, Git acquisition, inventory, reconciliation, Qdrant work, or search is part of S1. P1 remains the next connected product stage.
+A stale source-row or registration guard preserves the newer logical current row and its immutable object. The rejected object may remain unreferenced. A stale writable transaction need not preserve physical control.redb bytes. Read-only capture and pre-write observation/refusal are separate boundaries.
+
+read_source_object uses the addressed retained bytes even after the live source changes. Missing or corrupt objects fail; the reader does not fall back to the live path or recreate the object. Native evidence includes a directory-junction refusal; the regular-file symlink case was NOT_RUN because Windows returned privilege error 1314. Registration-only stale-CAS coverage uses an external fixture transition, not an implemented unregister/re-add command.
+
+No preparation, unitization, Git acquisition, inventory, reconciliation, Qdrant work, or search is part of S1. Next P1 must turn verified retained UTF-8 into one preparation product with bounded unit ranges, store the complete artifact through the shared object owner, and install a guarded current preparation outcome. Artifact and outcome belong to one connected result.
 
 ## Ownership
 
