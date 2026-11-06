@@ -51,7 +51,7 @@ Preserve user originals/keys and unpublished branches.
 <a id="changed-documentation"></a>
 ## Cleanup delivered
 
-The selected root/control/both-binary closures physically removed 706 obsolete files, approximately 163,000 lines.
+The selected root/control/both-binary closures physically removed 705 obsolete files from base 6a7dfc1c to source ad8cc9e8, approximately 163,000 lines.
 Legacy initializers/producers and exclusive fixtures are deleted, not retained behind cfg(test).
 Current root operations use the same control/control.redb format through the control owner and redb 4.5.0;
 the old 2.6 implementation is removed. The vendor data-safety patch exposes persistent-savepoint information
