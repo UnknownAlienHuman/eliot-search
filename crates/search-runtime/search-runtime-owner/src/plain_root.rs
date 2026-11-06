@@ -15,7 +15,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 
 use search_control_redb::plain_control::{
-    initialize_plain_control, inspect_plain_control, plain_control_is_empty, PlainControlError,
+    PlainControlError, initialize_plain_control, inspect_plain_control, plain_control_is_empty,
 };
 use tempfile::Builder;
 
@@ -126,11 +126,45 @@ impl PlainRootGuard {
         self.path.join(OBJECT_DIR)
     }
 
+    /// Publishes one bounded object basename through the root's shared
+    /// same-parent, no-clobber file publisher.
+    ///
+    /// `final_name` and `stage_name` must be local basenames. The object
+    /// publisher passes the exact acquired bytes; an existing final file is
+    /// reused only after byte-for-byte readback.
+    pub fn publish_object_noclobber(
+        &self,
+        final_name: &str,
+        stage_name: &str,
+        bytes: &[u8],
+        maximum_bytes: u64,
+        deadline: Instant,
+        cancellation: &AtomicBool,
+    ) -> PlainRootResult<()> {
+        if !valid_local_name(final_name) || !valid_local_name(stage_name) {
+            return Err(PlainRootError::InvalidPath);
+        }
+        let destination = self.object_dir().join(final_name);
+        publish_noclobber(
+            &destination,
+            stage_name,
+            bytes,
+            maximum_bytes,
+            OperationContext::new(deadline, cancellation),
+        )
+    }
+
     /// A returned guard always owns a validated current root.
     #[must_use]
     pub const fn is_current(&self) -> bool {
         true
     }
+}
+
+fn valid_local_name(name: &str) -> bool {
+    !name.is_empty()
+        && !matches!(name, "." | "..")
+        && Path::new(name).file_name() == Some(OsStr::new(name))
 }
 
 /// Bounded, content-free errors for root operations.

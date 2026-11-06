@@ -11,10 +11,14 @@ readme = "README.md"
 path = "src/lib.rs"
 
 [dependencies]
-search-contracts.workspace = true
-search-domain.workspace = true
-search-ports.workspace = true
-search-config.workspace = true
+search-source-registry.workspace = true
+
+[target."cfg(windows)".dependencies]
+winapi-util = "=0.1.11"
+windows-sys = { version = "=0.61.2", features = ["Win32_Foundation", "Win32_Storage_FileSystem"] }
+
+[target."cfg(unix)".dependencies]
+libc = "=0.2.189"
 
 [lints]
 workspace = true

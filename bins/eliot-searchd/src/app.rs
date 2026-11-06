@@ -12,12 +12,13 @@ use crate::native_root_command;
 const MAX_ARGUMENTS: usize = 256;
 const MAX_ARGUMENT_BYTES: usize = 256 * 1024;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Eq, PartialEq)]
 pub enum RootCommand {
     Inspect,
     Initialize,
     CheckExistingOwner,
     DiscardIncomplete,
+    RetainFile,
 }
 
 impl RootCommand {
@@ -27,6 +28,7 @@ impl RootCommand {
             Self::Initialize => "initialize-data-root",
             Self::CheckExistingOwner => "check-existing-root-owner",
             Self::DiscardIncomplete => "discard-incomplete-data-root",
+            Self::RetainFile => "retain-file",
         }
     }
 }
@@ -34,6 +36,7 @@ impl RootCommand {
 pub struct RootInvocation {
     pub(crate) command: RootCommand,
     pub(crate) data_root: PathBuf,
+    pub(crate) source_file: Option<PathBuf>,
 }
 
 fn emit_error(code: &str) -> ExitCode {
@@ -66,6 +69,7 @@ fn print_help() {
         "  eliot-searchd --initialize-data-root [ROOT] [--data-root ROOT] [--config-file PATH]\n",
         "  eliot-searchd --check-existing-root-owner [ROOT] [--data-root ROOT] [--config-file PATH]\n",
         "  eliot-searchd --discard-incomplete-data-root [ROOT] [--data-root ROOT] [--config-file PATH]\n",
+        "  eliot-searchd --retain-file --source-file PATH [ROOT] [--data-root ROOT] [--config-file PATH]\n",
     ));
 }
 

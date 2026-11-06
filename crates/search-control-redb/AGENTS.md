@@ -1,17 +1,5 @@
-# Plain root control storage
+# Working on root control
 
-Use [FUNCTIONS.md](FUNCTIONS.md). This crate currently owns only the plain-root format marker and the three
-operations in `plain_control`; keep the public module path and bounded error semantics stable with consumers.
+Preserve plain_control_meta, vendor redb 4.5.0, root initialization, read-only inspection, savepoint checks, empty-probe bounds, and incomplete-root discard behavior.
 
-Initialization and semantic-empty probing require the caller's root exclusion and owned unfinished-init marker.
-Ordinary format inspection must stay read-only, without catalogue enumeration or a whole-file size ceiling.
-Read-only empty proofs are bounded before enumeration. A preformat retry may write only the exact proven empty
-file after its reader closes, must abort redb repair, and must not overwrite an existing application format.
-Empty proofs must exclude persistent savepoints in the stable system snapshot; current table absence alone
-does not establish that earlier committed source data is unretained.
-
-Keep the original deadline/cancellation inputs and distinguish unavailable I/O from corrupt or unsupported data.
-Preserve unsupported original files. Do not restore legacy journals, migration/authority/DEK frameworks, test-only
-compatibility producers, source bodies, another search store, or dependencies for removed APIs.
-
-Source-only checks do not establish native handle behavior, cancellation recovery or runtime qualification.
+Current source namespace, locator index, and source rows live in the same control/control.redb file. Capture is read-only before file I/O. The short source-row transaction follows verified object readback and atomically compares the namespace, source ID, row revision, registration revision, and locator binding. New current tables are ordinary Current-root data; do not call the unfinished-root empty probe during source operations or introduce a second database.

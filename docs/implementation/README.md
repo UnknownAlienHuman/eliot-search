@@ -6,8 +6,8 @@ This page owns delivery order and cross-owner values. Use [code map](CODE_MAP.md
 
 ## Connected path
 
-The current binaries expose the four root operator operations only. The following source-to-query path and
-Stages 2–5 are future integration work, not available commands or a qualification claim.
+The current binaries expose the four root operator operations and retain-file. The first retained-file/current-row
+part of Stage 2 is connected; preparation, Qdrant publication, framed queries and later stages remain future work.
 
 ```text
 selected source → stable acquired bytes → immutable ObjectRef/current SourceRecord
@@ -68,7 +68,7 @@ inspect, initialize, check-existing-owner or explicit incomplete-init discard. T
 subcommands; the daemon uses matching --operation flags. See the
 [actual dispatch map](CODE_MAP.md#existing-dispatch-to-replace) and exact syntax in the
 [CLI](../../bins/eliot-search/FUNCTIONS.md#capture-and-dispatch) and
-[daemon](../../bins/eliot-searchd/FUNCTIONS.md#current-entrypoints-and-removal-seams) recipes.
+[daemon](../../bins/eliot-searchd/FUNCTIONS.md) recipes.
 
 Only data_root is consumed from bounded file/environment/CLI settings. Diagnostics use fixed output bounds;
 there is no accepted diagnostic_limit setting, storage-mode selector or external initialization ID.
@@ -91,21 +91,13 @@ registry; this delivery sequence is not a second status ledger.
 <a id="2-walking-skeleton--one-file-to-one-cli-result"></a>
 ### 2. One file to one CLI result
 
-Coordinator #264. One explicit local file → stable read → plain ObjectRef/current row → materialize/unitize →
-fresh vectorless Qdrant collection → explicit scoring text index → InsertOnly/readback/canary → matching current
-and evidence commit → PublishedView → TextQuery → retained excerpt → CLI.
+Coordinator #264. The first S1 slice is connected: one explicit local file → one stable native-handle read → plain ObjectRef publication and verified readback → guarded CurrentSourceRecord in the same control/control.redb → factual CLI result. S1 Windows debug final gates/builds/basic execution passed at 06bb6877; earlier binary and deeper library native outcomes remain separately bound to their revisions in the [registry](../audit/ANALYSIS_REGISTRY.md#evidence-status). P1 is the next ready connected result.
 
-Upgrade exact Qdrant client/server/schema and their real consumers together. The selected scoring-text path
-requires its documented APIs; pin and qualify the exact adopted patches at that future code cut.
-Use lexical/bridge owner settings, not copied tables. Keep final owners' persistent references, not a throwaway demo.
-Connect to the operator-started local server; no supervisor construction or key lease. A fresh root without a
-published generation is buildable, not a corrupt root or a successful empty search; the bridge owns those cases.
-This stage must connect an actual owned-child framed path for one search request; the current root child is
-not a framed search session. Live paging/windows arrive in Stage 4. Do not add a temporary line protocol or
-require full interactive behavior to deliver the first retained excerpt.
-No broad inventory, watcher, paging, encryption, permission system, point mutation or cleanup platform first.
-Complete when default binaries return real retained evidence through Qdrant; missing/corrupt evidence is not a card.
+Next P1 must consume the verified retained input, create one owned UTF-8 preparation product and bounded unit ranges, store the complete prepared artifact through the shared object writer, and install a guarded current preparation outcome. Artifact production and the guarded outcome belong to the same connected slice.
 
+The rest of Stage 2 continues from that source row through materialization/unitization, a fresh vectorless Qdrant collection, the scoring-text index, InsertOnly/readback/canary, matching current/evidence commit, PublishedView, TextQuery, and a retained excerpt. Upgrade exact Qdrant client/server/schema and real consumers together at that code cut. Use lexical/bridge owner settings and the operator-started local server. A fresh root without a published generation is buildable, not a corrupt root or a successful empty search.
+
+The first source command uses the existing root-owned one-shot child. It does not add a temporary line protocol. Live paging/windows arrive in Stage 4. Broad inventory, watchers, encryption, permission systems, point mutation, and cleanup remain later scope. Missing or corrupt retained evidence is not a card. S1 implementation alone does not complete Stage 2 or the product.
 <a id="3a-fresh-generation-convergence"></a>
 ### 3A. Fresh-generation convergence
 

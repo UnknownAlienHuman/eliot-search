@@ -1,7 +1,8 @@
 # Quickstart status
 
 The four root operator commands are qualified for Windows debug artifacts with Rust 1.98.0 at source
-ad8cc9e8fa498d43b644246af3b7f4900890317a. This is not an installed baseline or a connected Search product.
+ad8cc9e8fa498d43b644246af3b7f4900890317a. S1 final Windows debug checks, strict Clippy, builds and basic retained-file
+execution passed at 06bb6877487d7e3caac9d955be855c86dec1a1b5. This is not an installed baseline or a connected Search product.
 See the [exact source and verification scope](docs/audit/ANALYSIS_REGISTRY.md#evidence-status).
 
 ## Root operator commands
@@ -34,6 +35,18 @@ The CLI selects its child using --daemon PATH, then ELIOT_SEARCHD_BIN, then a si
 For an explicit matching pair:
 
     eliot-search inspect-data-root --data-root "C:\example\root" --daemon "C:\example\bin\eliot-searchd.exe"
+
+## Retain one file
+
+Use an already-initialized current root and an explicit local file; paths below are placeholders.
+
+    eliot-search retain-file --file "C:\example\input.txt" --data-root "C:\example\root"
+    eliot-searchd --retain-file --source-file "C:\example\input.txt" --data-root "C:\example\root"
+
+The 8 MiB operation returns source identity, revisions, native file identity and the verified ObjectRef after
+the current source row commits. It does not return a prepared artifact, index, query or excerpt.
+[Source ownership](crates/search-source/README.md) defines the retained-reader and stale-CAS boundaries;
+the [registry](docs/audit/ANALYSIS_REGISTRY.md#evidence-status) separates the final 06bb gate/basic run from earlier native scopes.
 
 ## File, environment and CLI settings
 
@@ -73,8 +86,9 @@ the ad8 recovery/config batch and records the exact checked revisions.
 
 ## First persistent path
 
-Source acquisition, plain object retention/current rows, preparation, Qdrant publication and verified search
-remain unconnected. Next is one bounded, no-execute file acquisition → plain ObjectRef → guarded CurrentSourceRecord
-in the same control database. The later [one-file path](docs/implementation/README.md#2-walking-skeleton--one-file-to-one-cli-result)
-must connect preparation, Qdrant and a retained excerpt through real callers. Root qualification does not
-complete that goal.
+One explicit file is connected through no-execute acquisition, verified plain ObjectRef storage and a guarded
+CurrentSourceRecord in the same control database. Scoped S1 is complete. Next P1 must produce
+and store the complete preparation artifact and install its guarded current outcome; preparation, Qdrant publication
+and verified search remain unconnected. The later [one-file path](docs/implementation/README.md#2-walking-skeleton--one-file-to-one-cli-result)
+must connect preparation, Qdrant and a retained excerpt through real callers. Retained-file operation evidence
+does not complete that goal or qualify an installed baseline.

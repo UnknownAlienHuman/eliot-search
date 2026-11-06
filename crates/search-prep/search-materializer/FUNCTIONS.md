@@ -34,7 +34,7 @@ Raw/Parsed/Plan/Permit/Receipt family.
 | Install outcome | Captured non-reset source/registration/settings guard and expected current outcome | Apply in one short transaction; stale completion cannot overwrite a newer head or downgrade usable output. |
 | Retry a gap | Actual failed condition and bounded retry timing | A relaxed limit or newly available selected extractor may permit retry without a source edit; unchanged permanent failures do not busy-loop. |
 
-The [source-row owner](../../search-source/search-source-registry/FUNCTIONS.md#current-state-and-conditional-application)
+The [source-row owner](../../search-source/search-source-registry/FUNCTIONS.md#concurrency-contract)
 defines the compare/set guard, including A→B→A and remove/re-add. It is not transform identity. A new operation may
 reuse still-correct pure output after checking its new binding; an old task does not regain ownership.
 

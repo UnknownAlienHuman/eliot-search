@@ -64,7 +64,7 @@ and immutable prior register; do not call old evidence a current-main or end-to-
 
 [Publication](../../crates/search-index-qdrant/search-publication/FUNCTIONS.md) owns mutation uncertainty and whole-
 generation cleanup; [selection](../../crates/search-query/search-access/FUNCTIONS.md) owns candidate versus IDF scope.
-[Git acquisition](../../crates/search-source/search-safe-reader/FUNCTIONS.md#concrete-git-path) retains the controlled-
+Historical Git acquisition retains the controlled-
 child recipe and R060's narrowly executed hook diagnostic. [Client](../../crates/search-provider-client/FUNCTIONS.md)
 retains Tokio I/O evidence. Re-read only the source relevant to a changed assumption.
 Application crypto/key-management donors are not selected under [local scope](../architecture/LOCAL_SCOPE.md).
