@@ -27,6 +27,8 @@ pub enum BackendError {
     PointMismatch,
     /// A response lacks required fields or has invalid routing data.
     MalformedResponse,
+    /// No exact positive saved-point readiness nomination was established.
+    ReadinessNotProven,
     /// Cancellation was observed before dispatch, or during a read.
     Cancelled,
     /// The absolute deadline expired before dispatch, or during a read.
@@ -56,6 +58,7 @@ impl BackendError {
             Self::SchemaMismatch => "BACKEND_SCHEMA_MISMATCH",
             Self::PointMismatch => "BACKEND_POINT_MISMATCH",
             Self::MalformedResponse => "BACKEND_RESPONSE_MALFORMED",
+            Self::ReadinessNotProven => "BACKEND_READINESS_NOT_PROVEN",
             Self::Cancelled => "BACKEND_CANCELLED",
             Self::Deadline => "BACKEND_DEADLINE",
             Self::Transport => "BACKEND_TRANSPORT_FAILED",

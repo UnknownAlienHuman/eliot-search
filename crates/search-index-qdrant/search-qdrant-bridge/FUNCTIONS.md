@@ -224,6 +224,21 @@ change creates a new never-reused collection. Generation-bound IDs suffice; no s
 identity. Retry repeats identical InsertOnly input and accepts only exact matching readback. Failed/uncertain
 collections are never served or name-reused.
 
+The publication readiness operation is verify_canary(name, expected PointInput, saved query word, original
+deadline/cancellation). It is independent of the optional user query and validates one actual saved unit word,
+not a locally reproduced token stream. The word must be a complete nonempty bounded ASCII-alphabetic identifier
+from that text, with no adjacent alphanumeric character or underscore. Under the selected profile, the official
+Code tokenizer uses the same subword/joined path for documents and ranking queries, with no stopword/stemmer/
+length clipping. Source: Qdrant commit 222b2e44ab1c3f17e8246396ead6558e45041df7,
+tokenizers/code.rs:10-25,87-116,133-150; tokenizers/mod.rs:262-266; tokenizers/tokens_processor.rs:55-62.
+
+The real TextQuery has a HasId singleton candidate filter, limit 1, whole-generation IDF corpus=None, source_id-only
+payload and vectors=false. Success requires exactly the expected point/source routing and finite positive server
+score. Singleton order makes no tie assumption. Empty/nonpositive results return ReadinessNotProven; they never
+prove a tokenless corpus or permit publication. Missing candidate selection for a nonzero corpus likewise cannot
+be relabelled successful empty. A true zero-point generation instead requires exact zero count plus complete saved
+inventory/evidence/schema validation, without a sentinel or readiness RPC. User query_text behavior is unchanged.
+
 Qdrant text statistics can include stale updated/deleted data until segment optimization. Stage 3B, if selected,
 qualifies scoring convergence in addition to mutation readback.
 

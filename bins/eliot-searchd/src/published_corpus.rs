@@ -279,28 +279,26 @@ fn verify_and_query(
     deadline: Instant,
     cancel: &AtomicBool,
 ) -> Result<Vec<Hit>, &'static str> {
+    control::validate_generation(path, generation, deadline, cancel)
+        .map_err(PublicationError::code)?;
     let collection = generation.collection();
     backend
         .verify_schema(&collection, deadline, cancel)
         .map_err(BackendError::code)?;
-    let mut first_text = None;
+    let mut canary = None;
     let mut point_count = 0_u64;
     for number in 0..generation.page_count {
         check(deadline, cancel)?;
         let page = control::read_upload_page(path, generation, number, deadline, cancel)
             .map_err(PublicationError::code)?;
-        if first_text.is_none()
-            && let Some(point) = page.points.first()
-        {
-            let mut end = point.retrieval_text.len().min(MAX_QUERY_BYTES);
-            while !point.retrieval_text.is_char_boundary(end) {
-                end -= 1;
-            }
-            first_text = Some(point.retrieval_text[..end].to_owned());
-        }
         backend
             .verify_points(&collection, &inputs(&page), deadline, cancel)
             .map_err(BackendError::code)?;
+        if canary.is_none() {
+            canary = page.points.iter().find_map(|point| {
+                canary_query(&point.retrieval_text).map(|query| (point.clone(), query.to_owned()))
+            });
+        }
         point_count = point_count
             .checked_add(u64::try_from(page.points.len()).map_err(|_| "PUBLICATION_LIMIT")?)
             .ok_or("PUBLICATION_LIMIT")?;
@@ -314,19 +312,37 @@ fn verify_and_query(
     if point_count == 0 {
         return Ok(Vec::new());
     }
-    let text = request
-        .query
-        .as_deref()
-        .or(first_text.as_deref())
-        .ok_or("PUBLICATION_CORRUPT")?;
-    let hits = backend
-        .query_text(&collection, text, request.limit, deadline, cancel)
+    let (point, query) = canary.ok_or("PUBLICATION_READINESS_NOT_PROVEN")?;
+    backend
+        .verify_canary(
+            &collection,
+            PointInput {
+                id: point.id,
+                source_id: point.evidence.source_id,
+                retrieval_text: &point.retrieval_text,
+            },
+            &query,
+            deadline,
+            cancel,
+        )
         .map_err(BackendError::code)?;
-    if request.query.is_some() {
-        Ok(hits)
-    } else {
-        Ok(Vec::new())
-    }
+    request.query.as_deref().map_or_else(
+        || Ok(Vec::new()),
+        |text| {
+            backend
+                .query_text(&collection, text, request.limit, deadline, cancel)
+                .map_err(BackendError::code)
+        },
+    )
+}
+
+fn canary_query(text: &str) -> Option<&str> {
+    // Select an existing complete ASCII word under the fixed Code/BM25 profile.
+    // This does not reconstruct tokenization, aliases or scores, and does not establish
+    // that all other text is tokenless. No candidate means readiness remains unproven.
+    text.split_ascii_whitespace().find(|word| {
+        word.len() <= MAX_QUERY_BYTES && word.bytes().all(|byte| byte.is_ascii_alphabetic())
+    })
 }
 fn cleanup(
     backend: &Backend,

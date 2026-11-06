@@ -1,6 +1,7 @@
 //! Fixed corpus inputs, upload pages, evidence and conditional generation visibility.
 
 mod codec;
+mod verify;
 
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -903,6 +904,30 @@ pub fn read_upload_page(
     })
 }
 
+/// Checks every saved source, page and evidence binding from one native read-only snapshot.
+///
+/// # Errors
+/// Rejects missing/orphan rows, altered bindings, incomplete ranges, stale generation identity,
+/// corruption, limits and I/O independently of whether a user query returns any hits.
+pub fn validate_generation(
+    path: &Path,
+    generation: &Generation,
+    deadline: Instant,
+    cancel: &AtomicBool,
+) -> Result<()> {
+    observe(path, deadline, cancel, |tx| {
+        let state = read_state(tx)?;
+        if !(state.current.as_ref() == Some(generation)
+            || state.pending.as_ref().is_some_and(|pending| {
+                pending.capture_complete && &pending.generation == generation
+            }))
+        {
+            return Err(PublicationError::Stale);
+        }
+        verify::generation(tx, generation, deadline, cancel)
+    })
+}
+
 /// Records the single mutation BEFORE dispatch; a crash retains its uncertainty.
 ///
 /// # Errors
@@ -1300,21 +1325,7 @@ pub fn open_published(
     let generation = read_state(&transaction)?
         .current
         .ok_or(PublicationError::NotPublished)?;
-    drop(
-        transaction
-            .open_table(SOURCES)
-            .map_err(|_| PublicationError::Corrupt)?,
-    );
-    drop(
-        transaction
-            .open_table(EVIDENCE)
-            .map_err(|_| PublicationError::Corrupt)?,
-    );
-    drop(
-        transaction
-            .open_table(PAGES)
-            .map_err(|_| PublicationError::Corrupt)?,
-    );
+    verify::generation(&transaction, &generation, deadline, cancel)?;
     check(deadline, cancel)?;
     Ok(PublishedView {
         generation,

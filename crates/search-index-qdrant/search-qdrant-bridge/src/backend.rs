@@ -18,6 +18,7 @@ use tonic::{Code, Request, Response, Status};
 
 use crate::{BackendError, BackendLimits};
 
+mod canary;
 mod collections;
 mod points;
 mod query;
