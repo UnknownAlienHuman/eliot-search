@@ -12,9 +12,8 @@ path = "src/lib.rs"
 
 [dependencies]
 search-contracts.workspace = true
-search-domain.workspace = true
-search-ports.workspace = true
-search-config.workspace = true
+serde.workspace = true
+serde_json.workspace = true
 
 [lints]
 workspace = true

@@ -291,6 +291,8 @@ checksum = "252afb9ae5eaa683babdc6a068b3f5726eb19e05070c731f9b2a23a7c3e8ed34"
 name = "eliot-search"
 version = "0.0.0"
 dependencies = [
+ "search-provider-client",
+ "search-provider-protocol",
  "search-source-registry",
  "serde_json",
 ]
@@ -301,6 +303,7 @@ version = "0.0.0"
 dependencies = [
  "search-contracts",
  "search-control-redb",
+ "search-provider-protocol",
  "search-qdrant-bridge",
  "search-revision-store",
  "search-runtime-owner",
@@ -309,6 +312,7 @@ dependencies = [
  "search-unitizer",
  "serde",
  "serde_json",
+ "tokio",
  "toml",
 ]
 
@@ -889,16 +893,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "search-candidate-validator"
-version = "0.0.0"
-dependencies = [
- "search-access",
- "search-contracts",
- "search-domain",
- "search-ports",
-]
-
-[[package]]
 name = "search-code-enricher"
 version = "0.0.0"
 dependencies = [
@@ -1043,28 +1037,17 @@ dependencies = [
 name = "search-provider-client"
 version = "0.0.0"
 dependencies = [
- "blake3",
- "search-contracts",
- "search-ports",
  "search-provider-protocol",
- "search-provider-transport-windows",
+ "tokio",
 ]
 
 [[package]]
 name = "search-provider-protocol"
 version = "0.0.0"
 dependencies = [
- "search-config",
  "search-contracts",
- "search-domain",
- "search-ports",
-]
-
-[[package]]
-name = "search-provider-transport-windows"
-version = "0.0.0"
-dependencies = [
- "search-provider-protocol",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -1096,18 +1079,6 @@ dependencies = [
  "search-config",
  "search-contracts",
  "search-domain",
- "search-ports",
-]
-
-[[package]]
-name = "search-result-projector"
-version = "0.0.0"
-dependencies = [
- "search-access",
- "search-candidate-validator",
- "search-contracts",
- "search-domain",
- "search-handles",
  "search-ports",
 ]
 
@@ -1274,6 +1245,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8fadd59c855ef2080decdef8ff161eb6661b86933c9d82e5ba29dc602a55aba"
 
 [[package]]
+name = "signal-hook-registry"
+version = "1.4.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c4db69cba1110affc0e9f7bcd48bbf87b3f4fc7c61fc9155afd4c469eb3d6c1b"
+dependencies = [
+ "errno",
+ "libc",
+]
+
+[[package]]
 name = "simd-adler32"
 version = "0.3.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1383,6 +1364,7 @@ dependencies = [
  "libc",
  "mio",
  "pin-project-lite",
+ "signal-hook-registry",
  "socket2",
  "tokio-macros",
  "windows-sys 0.61.2",

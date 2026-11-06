@@ -1,105 +1,47 @@
-# Provider client — one serviced session, not another protocol platform
+# One native owned-child query
 
-[Protocol](../search-provider-protocol/FUNCTIONS.md) owns framing, cancellation, clock origins and terminal races.
-[CLI](../../bins/eliot-search/FUNCTIONS.md) owns invocation/presentation. This file selects the client mechanisms;
-names from old code are inspection seams, not an API catalogue.
+## Public consumer
 
-## Inspected paths
+`QueryClient::new()` constructs one Tokio 1.53.1 current-thread I/O runtime outside an async context.
+`query_owned_child(&mut self, executable: &Path, args: &[OsString], request: SearchRequest,
+deadline: Instant, cancelled: &AtomicBool)` returns QueryCompletion or content-free ClientError.
+The CLI supplies native invocation settings, starts the original deadline before setup and owns safe rendering.
 
-R022 (`ff59f930`) and R023 (`305ccab1`) established:
+The CLI explicitly calls enable_ctrl_c() before its query. Other callers leave signal handling disabled.
+The maintained Tokio listener is first polled and registered before child spawn, then the same pinned future
+remains in the existing I/O loop. A separate child process group routes terminal Ctrl-C through the parent
+and its correlated Cancel/cleanup/reap path. Tokio's opt-in signal disposition lasts for the CLI process.
 
-| Source | Finding |
-|---|---|
-| typed.rs / typed/io.rs | Useful incremental input and fail-stop state, wrapped in pairing/profile/grants. Whole-record writes monopolize the mutable session. |
-| typed/state.rs and protocol/session.rs | Completed IDs fill a replay set and can block Cancel. Cancel sending is capped by the oldest data deadline. |
-| CLI provider_client.rs | Reexports the typed client but delegates its ProviderSession to a separate legacy core; constructs duplicate owned requests. |
-| CLI native_registered.rs / typed/native.rs / state/grant.rs | Compatibility bootstrap checks installation coordinates, then stores no trusted installation; mandatory first grant rejects it. Anchored NativeClientExpectations is a different path. |
-| CLI provider_client/local.rs | Pipe opener exists but is not called from the inspected CLI dispatch. A declaration is not an installed handler. |
-| CLI core verifier/exchange | Digest covers a synthetic status/request/sequence receipt, not displayed payload. Ordinary lines are printed before terminal/ack. |
+QueryCompletion carries the complete validated Terminal, retained diagnostics and diagnostics_truncated.
+No child or pipe escapes. Complete success requires a successful observed child exit. Application Failed and
+Cancelled remain typed terminals. A spawn/transport/truncation/deadline/reap failure never becomes an empty result.
 
-R024 (`676135f4`) finishes the named CLI response/transport/cancellation helpers and native/grant source tails.
-The line reader correctly retains a partial response, original counters and one cleanup allowance across a
-diagnostic timeout. DeadlineCancellation applies only to Health/Version, not arbitrary Search work. The daemon's
-canonical reader starts a request clock on an empty poll, and its serving quantum does not bound whole-record
-writes. These are source findings, not exercised product behavior.
+## Actual I/O and cleanup
 
-Do not preserve the old protocol merely to reuse those small correct mechanisms. Conversely, do not discard
-partial-frame continuity, source scope, error meaning or child ownership when removing old ceremony.
+The client owns one Tokio child with piped stdin/stdout/stderr and kill_on_drop as unwind fallback. One select loop
+services cancellation-safe reads/writes, explicit outbound byte positions, incremental FrameBuffer state,
+child wait, a fixed deadline and cancellation checks. No timeout worker or query worker is spawned here.
 
-## Selected replacement
+Remaining milliseconds are sampled again while no request byte has been written. Once a write advances,
+that exact frame/cursor remains. Cancellation during a partial Query closes the connection and reaps its child;
+after a complete Query write it sends one correlated Cancel without inserting control into another frame.
+At local deadline a finite separate cleanup allowance may send control but never renews query work.
+A complete terminal already in flight retains its meaning; one-shot closure ends the input reader.
 
-Keep one owned connection, its finite buffers, one active data request, bounded control state and a non-reused
-session-local ID counter. Remove completed-request data. No replay set, grant history, compatibility facade or
-new scheduling framework. Counter exhaustion closes instead of aliasing an old request.
+Stderr is drained alongside stdout and child waiting. At 64 KiB retained bytes the loop keeps draining/discarding
+excess, avoiding diagnostic backpressure. Captured bytes are untrusted and must pass the CLI display boundary.
 
-The current CLI and one-shot/session modes use this same client. A synchronous outward call may wait on it, but
-cannot run write-all/read-until-terminal while preventing control. Do not hold a session-wide mutex across I/O.
+On full terminal validation the client closes its stdin and waits for stdout/stderr EOF and child exit.
+Unexpected trailing stdout fails. Every ordinary return path performs an explicit observed wait; failure
+requests child termination then awaits reap. A kill request or kill_on_drop alone supplies no exit evidence.
+The two-second cleanup allowance bounds graceful servicing; the final OS wait is observed rather than detached
+or described as a hard OS timing guarantee. Independent Qdrant/server processes are never managed by this client.
 
-Use already pinned **Tokio 1.53.1** for the parent's spawned-child I/O and process waiting. Add only the direct
-features needed by that real caller during Cargo cutover; no version upgrade or second runtime per command.
-Take ChildStdin/ChildStdout/optional ChildStderr into the one session owner. Service both directions and captured
-diagnostics concurrently, with finite application buffers. When diagnostic retention fills, keep draining and
-discard excess bytes or terminate/reap the owned child; a full diagnostic buffer must not block the child on
-stderr while its parent waits for stdout/exit. Captured bytes remain untrusted and go through the
-[CLI display boundary](../../bins/eliot-search/FUNCTIONS.md#untrusted-display-text), never raw terminal forwarding.
-Command::output/wait_with_output remain collecting APIs, not bounded-capture shortcuts.
+## Removal and checks
 
-Keep prefix/body positions and outbound byte position in the session, outside disposable futures. In a select
-loop use cancellation-safe read/write calls and advance by their returned count. Do not recreate read_exact or
-write_all after another branch wins: their internal progress would be lost or resent. If the whole connection
-is deliberately discarded, abandoning partial state is fine; it is not fine when reusing the stream. The
-protocol recipe determines when to finish the frame and when to close.
+The former typed pairing/profile/grant/MAC/replay/TCP/native endpoint client and its exclusive example/fixtures
+are physically retired, along with the Windows named-pipe adapter package. Generic local framing remains at
+the protocol owner with its real daemon/CLI consumers. Root/S1/P1/Q1 argv operations retain their existing route.
 
-A single event loop still stops if one branch blocks its thread. Do not put synchronous OS reads, large transforms
-or backend waits directly into it and call the loop concurrent. Reuse bounded workers already required by the
-real operation; retain ownership until they stop. No detached blocking task per timeout.
-
-## Child and input lifetime
-
-The client session owns the child and exactly one cleanup boundary. Enable kill_on_drop as a last-resort fallback,
-not proof of reaping. Explicit cleanup closes owned stdin, observes a finite graceful wait, requests termination
-when necessary and observes/reaps exit. Tokio start_kill requests termination; kill().await also waits. Neither
-an issued kill nor dropping a handle is a hard timing/rollback guarantee. Do not kill an independent daemon.
-
-Child pipe handles are not the CLI's console stdin or the daemon's inherited stdin. Tokio stdin uses a blocking
-reader that cannot be cancelled; dropping its future can leave runtime shutdown waiting for input. Do not move
-that problem into spawn_blocking or create a reader per request. For the standalone CLI, one process-lifetime
-terminal reader with a bounded command handoff is sufficient: control can signal cancellation directly, the
-reader owns no child/store guard, and process exit rather than an indefinite join ends a blocked console read.
-A reusable library must not silently inherit that process-exit policy. In the child daemon, inherited input has
-one process-scoped reader; parent EOF/close and owned-child termination are the explicit fallback for blocked I/O.
-This does not certify platform timing, crash cleanup or server-side cancellation of external effects.
-
-## Reuse and removal boundaries
-
-Retain length-before-allocation, incremental framed input, typed correlation, complete terminal validation,
-truthful partial/gap results and fail-stop damaged-stream handling. Native pipe flush must not become blocking
-FlushFileBuffers or a delivery receipt. Do not globally discard live windows on an ordinary pre-write application
-error; protocol distinguishes request outcome from failed transport.
-
-Remove pairing/profile/grant constructors, synthetic registration producers, MAC/replay state, TCP/token/endpoint
-features and duplicate request/client models with their real callers. The
-[local removal map](../../docs/architecture/LOCAL_SCOPE.md#remove-legacy-security-wiring) permits removing unused
-public OS-secret/key wiring after caller checks. Preserve user bytes/keys, actual shared file/lock helpers and
-unpublished #598 work; these are not a reason to retain a general key layer or add encrypted consumers.
-Validate borrowed fields, construct one current request and retain actual wire-input validation; no second
-request-model or validation crate. Do not repair a retired bootstrap just to keep its constructor usable.
-
-## Evidence and remaining cutover
-
-Exact source read: tokio-rs/tokio tag tokio-1.53.1,
-[stdin.rs](https://github.com/tokio-rs/tokio/blob/tokio-1.53.1/tokio/src/io/stdin.rs),
-[read_exact.rs](https://github.com/tokio-rs/tokio/blob/tokio-1.53.1/tokio/src/io/util/read_exact.rs),
-[write_all.rs](https://github.com/tokio-rs/tokio/blob/tokio-1.53.1/tokio/src/io/util/write_all.rs).
-API references: [process](https://docs.rs/tokio/1.53.1/tokio/process/index.html),
-[Child](https://docs.rs/tokio/1.53.1/tokio/process/struct.Child.html),
-[select](https://docs.rs/tokio/1.53.1/tokio/macro.select.html), read 2026-10-23.
-These identify mechanisms and limitations, not a working transport in this repository.
-
-After the connected production cut, run minimal pinned compiler/Clippy on the client and actual CLI/daemon
-binaries. Later cases cover persistent partial-frame state, idle then short request, long sessions without
-history growth, simultaneous backpressure, cancellation/terminal races, diagnostic bounds and child cleanup.
-R027/R028's [daemon caller map](../../bins/eliot-searchd/FUNCTIONS.md#inspected-callers-and-effects) now supplies
-the named native/query/publication/rebuild removal boundaries. Use it with the actual receiving owner, preserving
-shared root/storage effects. R028 removes only unreferenced CLI source copies; the serviced transport remains
-implementation work. No broad directory deletion follows from these helper inspections.
+The designated verifier owns one lock resolution and minimal locked protocol/client plus both-binary
+check/strict Clippy feedback. Native qualification uses the actual search consumer; no dummy provider is added.

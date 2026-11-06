@@ -22,6 +22,7 @@ pub enum RootCommand {
     RetainFile,
     PrepareSource,
     PublishPrepared,
+    Search,
 }
 
 impl RootCommand {
@@ -34,6 +35,7 @@ impl RootCommand {
             Self::RetainFile => "retain-file",
             Self::PrepareSource => "prepare-source",
             Self::PublishPrepared => "publish-prepared",
+            Self::Search => "search",
         }
     }
 }
@@ -45,6 +47,7 @@ pub struct RootInvocation {
     pub(crate) source_id: Option<SourceId>,
     pub(crate) unit: Option<usize>,
     pub(crate) publication: Option<PublicationRequest>,
+    pub(crate) search_endpoint: Option<String>,
 }
 
 pub struct PublicationRequest {
@@ -86,6 +89,7 @@ fn print_help() {
         "  eliot-searchd --retain-file --source-file PATH [ROOT] [--data-root ROOT] [--config-file PATH]\n",
         "  eliot-searchd --prepare-source --source-id UUID [--unit N] [--data-root ROOT] [--config-file PATH]\n",
         "  eliot-searchd --publish-prepared --qdrant-url URL [--query TEXT] [--limit N] [--data-root ROOT] [--config-file PATH]\n",
+        "  eliot-searchd --search-stdio --qdrant-url URL [--data-root ROOT] [--config-file PATH]\n",
     ));
 }
 
@@ -115,7 +119,7 @@ pub fn run_main() -> ExitCode {
             let Ok(startup_cwd) = std::env::current_dir() else {
                 return emit_error("BOOTSTRAP_SETTINGS_INVALID:startup_cwd");
             };
-            let invocation = match bootstrap::resolve(cli, &startup_cwd) {
+            let invocation = match bootstrap::resolve(*cli, &startup_cwd) {
                 Ok(invocation) => invocation,
                 Err(error) => return emit_error(&error),
             };

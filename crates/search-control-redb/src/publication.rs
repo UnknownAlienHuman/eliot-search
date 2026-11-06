@@ -99,6 +99,15 @@ pub struct CapturedSource {
     pub preparation: CurrentPreparation,
 }
 
+/// Point evidence and decoder expectations read from the same immutable published snapshot.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ResolvedPoint {
+    /// Validated authoritative point/source/object/range binding.
+    pub evidence: PointEvidence,
+    /// The exact published source and preparation selection, never latest current preparation.
+    pub captured: CapturedSource,
+}
+
 /// Immutable generation identity and actual complete content dimensions.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -1260,7 +1269,7 @@ impl PublishedView {
     ///
     /// # Errors
     /// Missing/corrupt metadata is an error, never an invented hit or empty result.
-    pub fn evidence(&self, id: [u8; 16]) -> Result<PointEvidence> {
+    pub fn resolve_point(&self, id: [u8; 16]) -> Result<ResolvedPoint> {
         if id[..8] != self.generation.sequence.to_be_bytes() {
             return Err(PublicationError::Corrupt);
         }
@@ -1293,7 +1302,10 @@ impl PublishedView {
         {
             return Err(PublicationError::Corrupt);
         }
-        Ok(evidence)
+        Ok(ResolvedPoint {
+            evidence,
+            captured: entry.captured,
+        })
     }
 
     /// Closes the snapshot before any subsequent writer is opened.

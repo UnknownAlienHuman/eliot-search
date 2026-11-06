@@ -19,7 +19,7 @@ const DATA_ROOT_ENV: &[u8] = b"ELIOT_SEARCH__BOOTSTRAP__DATA_ROOT";
 pub(super) enum Parsed {
     Help,
     Version,
-    Root(RootCli),
+    Root(Box<RootCli>),
 }
 
 pub(super) struct RootCli {
@@ -30,6 +30,7 @@ pub(super) struct RootCli {
     source_id: Option<SourceId>,
     unit: Option<usize>,
     publication: Option<PublicationRequest>,
+    search_endpoint: Option<String>,
 }
 
 #[derive(Default)]
@@ -72,6 +73,7 @@ fn is_command(value: &OsStr) -> Option<RootCommand> {
         "--retain-file" => Some(RootCommand::RetainFile),
         "--prepare-source" => Some(RootCommand::PrepareSource),
         "--publish-prepared" => Some(RootCommand::PublishPrepared),
+        "--search-stdio" => Some(RootCommand::Search),
         _ => None,
     }
 }
@@ -147,18 +149,30 @@ impl PublicationOptions {
         }
         Ok(true)
     }
-    fn finish(self, command: RootCommand) -> Result<Option<PublicationRequest>, String> {
+    fn finish(
+        self,
+        command: RootCommand,
+    ) -> Result<(Option<PublicationRequest>, Option<String>), String> {
+        if command == RootCommand::Search {
+            if self.endpoint.is_none() || self.query.is_some() || self.limit.is_some() {
+                return Err(invalid("search_startup"));
+            }
+            return Ok((None, self.endpoint));
+        }
         if (command == RootCommand::PublishPrepared) != self.endpoint.is_some()
             || (self.query.is_some() && command != RootCommand::PublishPrepared)
             || (self.limit.is_some() && self.query.is_none())
         {
             return Err(invalid("publication_selection"));
         }
-        Ok(self.endpoint.map(|endpoint| PublicationRequest {
-            endpoint,
-            query: self.query,
-            limit: self.limit.unwrap_or(10),
-        }))
+        Ok((
+            self.endpoint.map(|endpoint| PublicationRequest {
+                endpoint,
+                query: self.query,
+                limit: self.limit.unwrap_or(10),
+            }),
+            None,
+        ))
     }
 }
 
@@ -179,16 +193,23 @@ fn validate_source_selection(
     Ok(())
 }
 
-pub(super) fn parse(arguments: &[OsString]) -> Result<Parsed, String> {
+fn local_invocation(arguments: &[OsString]) -> Option<Parsed> {
     if arguments.is_empty() {
-        return Ok(Parsed::Help);
+        return Some(Parsed::Help);
     }
     if arguments.len() == 1 && (is_help_flag(&arguments[0]) || is_help_command(&arguments[0])) {
-        return Ok(Parsed::Help);
+        return Some(Parsed::Help);
     }
     if arguments.len() == 1 && (is_version_flag(&arguments[0]) || is_version_command(&arguments[0]))
     {
-        return Ok(Parsed::Version);
+        return Some(Parsed::Version);
+    }
+    None
+}
+
+pub(super) fn parse(arguments: &[OsString]) -> Result<Parsed, String> {
+    if let Some(local) = local_invocation(arguments) {
+        return Ok(local);
     }
 
     let mut command = None;
@@ -263,7 +284,7 @@ pub(super) fn parse(arguments: &[OsString]) -> Result<Parsed, String> {
     }
 
     let command = command.ok_or_else(|| "UNKNOWN_ARGUMENT".to_owned())?;
-    let publication = publication.finish(command)?;
+    let (publication, search_endpoint) = publication.finish(command)?;
     validate_source_selection(
         command,
         source_file.is_some(),
@@ -273,7 +294,7 @@ pub(super) fn parse(arguments: &[OsString]) -> Result<Parsed, String> {
     if data_root.is_some() && positional_root.is_some() {
         return Err(invalid("data_root_duplicate"));
     }
-    Ok(Parsed::Root(RootCli {
+    Ok(Parsed::Root(Box::new(RootCli {
         command,
         data_root: data_root.or(positional_root),
         config_file,
@@ -281,7 +302,8 @@ pub(super) fn parse(arguments: &[OsString]) -> Result<Parsed, String> {
         source_id,
         unit,
         publication,
-    }))
+        search_endpoint,
+    })))
 }
 
 fn resolve_layer_path(path: &Path, base: &Path) -> PathBuf {
@@ -367,5 +389,6 @@ pub(super) fn resolve(cli: RootCli, startup_cwd: &Path) -> Result<RootInvocation
         source_id: cli.source_id,
         unit: cli.unit,
         publication: cli.publication,
+        search_endpoint: cli.search_endpoint,
     })
 }

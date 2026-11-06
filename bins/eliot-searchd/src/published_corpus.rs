@@ -454,7 +454,10 @@ fn response(
         .try_reserve_exact(hits.len())
         .map_err(|_| "PUBLICATION_ALLOCATION_FAILED")?;
     for hit in hits {
-        let e = view.evidence(hit.id).map_err(PublicationError::code)?;
+        let e = view
+            .resolve_point(hit.id)
+            .map_err(PublicationError::code)?
+            .evidence;
         if e.source_id != hit.source_id || !hit.score.is_finite() {
             return Err("PUBLICATION_HIT_MISMATCH");
         }
@@ -471,7 +474,7 @@ fn response(
         "query_performed":request.query.is_some() && g.point_count != 0,"hits":resolved}),
     )
 }
-fn api_key() -> Result<Option<String>, &'static str> {
+pub fn api_key() -> Result<Option<String>, &'static str> {
     let Some(value) = std::env::var_os("ELIOT_QDRANT_API_KEY") else {
         return Ok(None);
     };

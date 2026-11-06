@@ -1,93 +1,39 @@
-//! Bounded authenticated local-provider protocol semantics.
-//!
-//! This package performs no socket, pipe, filesystem, process, or secret-store
-//! I/O. Transport adapters supply complete finite frames, ceremony material
-//! and cryptographic proof digests; this package validates limits,
-//! sequencing, replay, progress, pairing, envelopes and session lifecycle
-//! before a daemon admits work.
-//!
-//! Layer order, bottom to top:
-//!
-//! 1. [`frame`] — canonical `u32`-LE length plus UTF-8 JSON over
-//!    `search-contracts`, 8 MiB ceiling, no compression, no fragments.
-//! 2. [`negotiation`] — exact major/minor hello negotiation on the canonical
-//!    `ProtocolVersion` / `ProtocolRange` (never duplicated here).
-//! 3. [`pairing`] — pairing kernel (#73): non-zero ceremony material,
-//!    domain-separated proof transcripts, closed ceremony state machine,
-//!    single-use challenge ledger. Keyed digests are computed by the
-//!    secret-owning daemon adapter over the exact transcripts built here.
-//! 4. [`pairing_wire`] — canonical bounded challenge/proof records used after
-//!    the ordinary typed hello and before the authenticated transport profile.
-//! 5. [`endpoint_name`] — canonical bounded per-installation IPC name; platform
-//!    adapters map it into a local namespace without adding authority.
-//! 6. [`native_endpoint`] — bounded authenticated local endpoint descriptors
-//!    and exact provider-credential locator material.
-//! 7. [`request`] — authenticated envelopes (#89): per-request proof bound
-//!    to version, server nonce, request ID, closed command and body digest,
-//!    strict fixed-size decoding, 32-in-flight registry, explicit deadlines.
-//! 8. [`grant`] — canonical bounded standalone-grant request body containing
-//!    requested ceilings only; binding and operation identity remain server-side.
-//! 9. [`binding`] — session composition: pairing-first sequencing enforced
-//!    in code; envelope admission requires the ceremony token.
-//!
-//! The public entry module is [`api`]; the crate root re-exports the same
-//! surface unchanged.
-
+//! One bounded query and correlated cancellation over owned-child stdio.
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
-#![allow(
-    clippy::doc_markdown,
-    clippy::large_enum_variant,
-    clippy::manual_let_else,
-    clippy::match_same_arms,
-    clippy::missing_const_for_fn,
-    clippy::missing_errors_doc,
-    clippy::module_name_repetitions,
-    clippy::must_use_candidate,
-    clippy::needless_pass_by_value,
-    clippy::option_if_let_else,
-    clippy::similar_names,
-    clippy::struct_excessive_bools,
-    clippy::too_many_arguments,
-    clippy::too_many_lines,
-    clippy::trivially_copy_pass_by_ref
-)]
+#![allow(clippy::missing_errors_doc, clippy::module_name_repetitions)]
 
-pub mod api;
-pub mod binding;
-pub mod cancel;
-pub mod cleanup;
-pub mod config;
-pub mod endpoint_name;
-pub mod error;
-pub mod frame;
-pub mod grant;
-mod indexed;
-pub mod negotiation;
-pub mod native_endpoint;
-pub mod pairing;
-pub mod pairing_wire;
-pub mod progress;
-pub mod request;
-pub mod session;
-pub mod terminal;
+mod dto;
+mod error;
+mod frame;
 
-/// Canonical transport payload owned by `search-contracts`.
-pub use search_contracts::protocol::{JsonFramePayload, ProviderEnvelope};
-/// Canonical protocol identity owned by `search-contracts`.
-///
-/// Norm #89 forbids duplicate canonical `ProtocolVersion` / `ProtocolRange`
-/// definitions: this package re-exports the canonical types instead of
-/// defining its own single-`u16` versions.
-pub use search_contracts::{ProtocolRange, ProtocolVersion, RequestId};
-
-pub use api::*;
-
-/// Additive progressive evidence/orientation frame wire schema (#213).
-pub use frame::{
-    decode_evidence_frame, decode_evidence_request, decode_evidence_result, decode_orient_scope_request,
-    decode_retrieve_evidence_request, encode_evidence_frame, encode_evidence_request, encode_evidence_result,
-    encode_orient_scope_request, encode_retrieve_evidence_request, evidence_frame_order,
-    peek_evidence_frame, EVIDENCE_FRAME_SCHEMA_VERSION, EVIDENCE_RECIPE_SCHEMA_VERSION,
-    EvidenceRecipeRequestV2, EvidenceRecipeResultV2,
+pub use dto::{
+    ClientFrame, EvidenceMetadata, FailureCode, ObjectKindDto, ObjectRefDto, QueryOutcome,
+    SearchGap, SearchHit, SearchItem, SearchRequest, StopReason, Terminal,
 };
+pub use error::ProtocolError;
+pub use frame::{
+    FrameBuffer, decode_client_frame, decode_terminal_frame, encode_client_frame,
+    encode_terminal_frame, prepare_complete,
+};
+pub use search_contracts::MAX_FRAME_BYTES;
+
+/// Four-byte little-endian body-length prefix.
+pub const FRAME_PREFIX_BYTES: usize = 4;
+/// Complete terminal body allowance; the shared frame ceiling includes its prefix.
+pub const MAX_BODY_BYTES: usize = MAX_FRAME_BYTES - FRAME_PREFIX_BYTES;
+/// Exact UTF-8 query-byte ceiling of the real backend.
+pub const MAX_QUERY_BYTES: usize = 4096;
+/// Maximum nominations, including explicit missing-object gaps.
+pub const MAX_ITEMS: usize = 64;
+/// Maximum complete prepared unit text; text is never shortened to fit output.
+pub const MAX_UNIT_TEXT_BYTES: usize = 65_536;
+/// Original one-shot operation allowance, transmitted as a remaining duration.
+pub const MAX_REMAINING_MS: u64 = 120_000;
+/// Finite request-frame allowance including worst-case JSON query escaping.
+pub const MAX_CLIENT_FRAME_BYTES: usize = 6 * MAX_QUERY_BYTES + 4096;
+/// This one-query child uses one nonzero correlation identity.
+pub const QUERY_REQUEST_ID: u64 = 1;
+
+#[cfg(test)]
+mod tests;

@@ -1,16 +1,8 @@
-# search-provider-protocol
+# Local query wire
 
-One bounded typed exchange between the current client and actual daemon handlers. The
-[implementation map](FUNCTIONS.md) is the single definition of framing, cancellation, deadlines and session
-lifetime. Read it with the [project implementation](../../docs/implementation/README.md).
+One parent-owned daemon child accepts one Query (request ID 1) and correlated Cancel frames over stdio.
+A frame is a four-byte little-endian JSON body length followed by bounded Serde JSON. The shared 8 MiB
+ceiling includes the prefix. Stdout contains one terminal; diagnostics use stderr.
 
-Retain prefix-before-allocation framing, typed Serde records, request correlation and fail-stop partial I/O.
-Remove the parallel recipe/grant/pairing/manual-codec/replay systems when their callers move.
-
-Child stdio supports both a one-shot request and a live multi-request session through the same wire. Only a
-live session can return reusable window locators. One active request does not mean the control reader may
-stop receiving Cancel/EOF. A sync API and a clock check are not an interruptible-I/O implementation.
-
-Do not reproduce the FUNCTIONS algorithm or enumerate future DTOs here. Optional clients/features add code
-only with a real selected consumer. No protocol version, dependency or product behavior was changed by this
-documentation correction.
+See [FUNCTIONS.md](FUNCTIONS.md) for the actual DTOs, whole-item output bound and validation.
+There is no authentication, pairing, grant, MAC, replay or endpoint protocol.
