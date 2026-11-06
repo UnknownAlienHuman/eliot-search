@@ -3,6 +3,7 @@
 #![forbid(unsafe_code)]
 
 mod app;
+mod prepared_response;
 
 fn main() {
     // Timed-out stdio readers may still be blocked on inherited pipe handles.

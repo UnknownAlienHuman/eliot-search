@@ -16,11 +16,9 @@ members = [
     "crates/search-prep/search-unitizer",
     "crates/search-prep/search-code-enricher",
     "crates/search-lexical",
-    "crates/search-index-qdrant/search-projection-planner",
     "crates/search-index-qdrant/search-point-identity",
     "crates/search-index-qdrant/search-qdrant-supervisor",
     "crates/search-index-qdrant/search-qdrant-bridge",
-    "crates/search-index-qdrant/search-publication",
     "crates/search-index-qdrant/search-epoch-pins",
     "crates/search-index-qdrant/search-index-reclaimer",
     "crates/search-query/search-access",
@@ -66,11 +64,9 @@ search-materializer = { path = "crates/search-prep/search-materializer" }
 search-unitizer = { path = "crates/search-prep/search-unitizer" }
 search-code-enricher = { path = "crates/search-prep/search-code-enricher" }
 search-lexical = { path = "crates/search-lexical" }
-search-projection-planner = { path = "crates/search-index-qdrant/search-projection-planner" }
 search-point-identity = { path = "crates/search-index-qdrant/search-point-identity" }
 search-qdrant-supervisor = { path = "crates/search-index-qdrant/search-qdrant-supervisor" }
 search-qdrant-bridge = { path = "crates/search-index-qdrant/search-qdrant-bridge" }
-search-publication = { path = "crates/search-index-qdrant/search-publication" }
 search-epoch-pins = { path = "crates/search-index-qdrant/search-epoch-pins" }
 search-index-reclaimer = { path = "crates/search-index-qdrant/search-index-reclaimer" }
 search-access = { path = "crates/search-query/search-access" }
@@ -104,6 +100,7 @@ sha2 = { version = "=0.10.9", default-features = false }
 # Cargo ignores build metadata in requirements; locked artifact/checksum bind spec-1.1.0.
 toml_parser = { version = "=1.1.4", default-features = false, features = ["std"] }
 serde = { version = "=1.0.229", default-features = false, features = ["std", "derive"] }
+serde_json = { version = "=1.0.154", default-features = false, features = ["std"] }
 toml = { version = "=0.9.12", default-features = false, features = ["parse", "serde", "std"] }
 
 # #412: one reviewed byte-glob mechanism, private to admission's v2 owner.

@@ -1,22 +1,13 @@
 # search-materializer
 
-Turn exact retained bytes into the selected text representation, coordinates and explicit gaps.
-[FUNCTIONS.md](FUNCTIONS.md) owns the algorithm; the [preparation map](../README.md) routes adjacent work.
+The selected exact UTF-8 transform consumes the verified retained byte allocation and returns one
+`MaterializedText` containing unchanged text and its attached logical-line inventory.
+[FUNCTIONS.md](FUNCTIONS.md) owns the input, execution and saved-artifact rules.
 
-## One preparation pass
-
-Start with the [first connected format](FUNCTIONS.md#first-connected-format), then pass its owned product to
-unitization. Filesystem publication belongs to the shared object store, not another materializer writer.
+The adjacent [unitizer](../search-unitizer/README.md) consumes this product directly and encodes the
+complete prepared representation. Source/object I/O and conditional current-outcome installation
+belong to their existing owners.
 
 <a id="allocation-discipline"></a>
-## Memory and reuse
-
-[Read limits](FUNCTIONS.md#enforce-the-execution-limit-before-acquisition) and
-[artifact acceptance](FUNCTIONS.md#prepared-artifact-acceptance) define what is checked and when.
-Do not read “validate a saved artifact” as “rerun its parser on every load.”
-
-## Current duplication
-
-The [pinned earlier source map](https://github.com/UnknownAlienHuman/eliot-search/blob/d83e1e27d27768b9803b5fd809c1631ff4cf73d7/crates/search-prep/search-materializer/FUNCTIONS.md#inspected-source-useful-work-and-actual-defects)
-records duplicate writers, missing reader budget propagation and profile/empty-input defects. Recheck actual
-callers at the code cut; preserve useful decoding/maps, not the legacy pipeline or historical file-size targets.
+No normalization buffer, receipt-bound revision adapter, parser registry or preparation writer remains.
+Other formats require a selected end-to-end consumer before their implementation returns.

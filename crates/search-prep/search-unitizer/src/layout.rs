@@ -1,201 +1,118 @@
-//! Receipt-free layout shared by retained-revision and DIRECT adapters.
+//! Line-preferred ranges over the original materializer-owned inventory.
 
-use crate::{SourceLineSpan, UnitizationError, UnitizationLimits};
+use std::sync::atomic::AtomicBool;
+use std::time::Instant;
 
-#[path = "layout_manifest.rs"]
-mod manifest;
+use search_materializer::{LineSpan, MaterializedText};
+use search_source_registry::PreparationSettings;
 
-/// A range into one exact materialized text, not a source or revision identity.
+use crate::PreparationError;
+use crate::PreparationLimits;
+use crate::prepared::check;
+
+/// A text descriptor in exact source and identical representation byte coordinates.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct UnitSpan {
-    /// Inclusive source-byte start.
+    /// Inclusive source/representation byte start.
     pub source_start: usize,
-    /// Exclusive source-byte end.
+    /// Exclusive source/representation byte end.
     pub source_end: usize,
     /// Inclusive zero-based logical line index.
     pub logical_line_start: u64,
     /// Exclusive zero-based logical line index.
     pub logical_line_end: u64,
-    /// Whether the start is a full logical-line boundary.
+    /// Whether the start is a complete logical-line boundary.
     pub starts_at_line_boundary: bool,
-    /// Whether the end is a full logical-line boundary.
+    /// Whether the end is a complete logical-line boundary.
     pub ends_at_line_boundary: bool,
 }
 
-/// Computes exact contiguous unit ranges without copying source text.
-///
-/// Empty text requires an empty inventory and produces no units. Non-empty
-/// inventories must describe the actual logical lines, not just cover the bytes.
-/// The algorithm is O(bytes + units * log(lines)), with bounded output allocation.
-/// It performs no I/O, receipt issuance, hashing or authorization.
 pub fn unitize_text(
-    text: &str,
-    lines: &[SourceLineSpan],
-    limits: UnitizationLimits,
-) -> Result<Vec<UnitSpan>, UnitizationError> {
-    unitize_text_checked(text, lines, limits, |_| Ok(()))
-}
-
-/// The same layout algorithm with live checkpoints before scan/output work.
-/// The callback receives the number of spans about to be allocated.
-pub fn unitize_text_checked(
-    text: &str,
-    lines: &[SourceLineSpan],
-    limits: UnitizationLimits,
-    mut checkpoint: impl FnMut(usize) -> Result<(), UnitizationError>,
-) -> Result<Vec<UnitSpan>, UnitizationError> {
-    checkpoint(0)?;
-    let limits = limits.validate()?;
-    validate_text(text, lines, limits, &mut checkpoint)?;
+    product: &MaterializedText,
+    settings: PreparationSettings,
+    limits: PreparationLimits,
+    deadline: Instant,
+    cancelled: &AtomicBool,
+) -> Result<Vec<UnitSpan>, PreparationError> {
+    let text = product.text();
+    let lines = product.lines();
+    let preferred = usize::try_from(settings.preferred_unit_bytes)
+        .map_err(|_| PreparationError::OffsetOverflow)?;
+    let hard =
+        usize::try_from(settings.max_unit_bytes).map_err(|_| PreparationError::OffsetOverflow)?;
     let mut units = Vec::new();
     let mut start = 0;
     while start < text.len() {
-        checkpoint(
-            units
-                .len()
-                .checked_add(1)
-                .ok_or(UnitizationError::OffsetOverflow)?,
-        )?;
+        check(deadline, cancelled)?;
         if units.len() >= limits.max_units {
-            return Err(UnitizationError::TooManyUnits);
+            return Err(PreparationError::TooManyUnits);
         }
-        let end = choose_end(text, lines, start, limits)?;
-        if end <= start {
-            return Err(UnitizationError::NoProgress);
+        let end = choose_end(text, lines, start, preferred, hard)?;
+        if end <= start || end - start > hard {
+            return Err(PreparationError::UnitTooLarge);
         }
-        if end - start > limits.max_unit_bytes {
-            return Err(UnitizationError::UnitTooLarge);
-        }
-        let start64 = u64::try_from(start).map_err(|_| UnitizationError::OffsetOverflow)?;
-        let end64 = u64::try_from(end).map_err(|_| UnitizationError::OffsetOverflow)?;
-        let first_line = lines.partition_point(|line| line.source_end <= start64);
-        let last_line = lines.partition_point(|line| line.source_end < end64);
-        if first_line >= lines.len() || last_line >= lines.len() {
-            return Err(UnitizationError::LineCoverageMismatch);
+        let start64 = u64::try_from(start).map_err(|_| PreparationError::OffsetOverflow)?;
+        let end64 = u64::try_from(end).map_err(|_| PreparationError::OffsetOverflow)?;
+        let first = lines
+            .get(lines.partition_point(|line| line.source_end <= start64))
+            .ok_or(PreparationError::InvalidArtifact)?;
+        let last = lines
+            .get(lines.partition_point(|line| line.source_end < end64))
+            .ok_or(PreparationError::InvalidArtifact)?;
+        if units.len() == units.capacity() {
+            let additional = units.capacity().max(16).min(limits.max_units - units.len());
+            units
+                .try_reserve_exact(additional)
+                .map_err(|_| PreparationError::AllocationFailed)?;
         }
         units.push(UnitSpan {
             source_start: start,
             source_end: end,
-            logical_line_start: lines[first_line].line_index,
-            logical_line_end: lines[last_line]
+            logical_line_start: first.line_index,
+            logical_line_end: last
                 .line_index
                 .checked_add(1)
-                .ok_or(UnitizationError::OffsetOverflow)?,
-            starts_at_line_boundary: lines[first_line].source_start == start64,
-            ends_at_line_boundary: lines[last_line].source_end == end64,
+                .ok_or(PreparationError::OffsetOverflow)?,
+            starts_at_line_boundary: first.source_start == start64,
+            ends_at_line_boundary: last.source_end == end64,
         });
         start = end;
     }
-    // Each iteration begins exactly at the previous end and advances. Together
-    // with this final equality this establishes no gaps, overlaps or lost bytes.
-    if start != text.len() {
-        return Err(UnitizationError::UnitCoverageMismatch);
-    }
-    checkpoint(units.len())?;
+    check(deadline, cancelled)?;
     Ok(units)
-}
-
-fn validate_text(
-    text: &str,
-    lines: &[SourceLineSpan],
-    limits: UnitizationLimits,
-    checkpoint: &mut impl FnMut(usize) -> Result<(), UnitizationError>,
-) -> Result<(), UnitizationError> {
-    if text.len() > limits.max_input_bytes {
-        return Err(UnitizationError::InputTooLarge);
-    }
-    if lines.len() > limits.max_lines || (lines.is_empty() != text.is_empty()) {
-        return Err(UnitizationError::InvalidLineInventory);
-    }
-    let bytes = text.as_bytes();
-    let mut cursor = 0;
-    for (index, line) in lines.iter().enumerate() {
-        checkpoint(0)?;
-        if line.line_index != u64::try_from(index).map_err(|_| UnitizationError::OffsetOverflow)? {
-            return Err(UnitizationError::LineIndexMismatch);
-        }
-        let start =
-            usize::try_from(line.source_start).map_err(|_| UnitizationError::OffsetOverflow)?;
-        let end = usize::try_from(line.source_end).map_err(|_| UnitizationError::OffsetOverflow)?;
-        let content_end =
-            usize::try_from(line.content_end).map_err(|_| UnitizationError::OffsetOverflow)?;
-        if start != cursor
-            || start >= end
-            || content_end < start
-            || content_end > end
-            || end > bytes.len()
-        {
-            return Err(UnitizationError::InvalidLineSpan);
-        }
-        if !text.is_char_boundary(start)
-            || !text.is_char_boundary(content_end)
-            || !text.is_char_boundary(end)
-        {
-            return Err(UnitizationError::InvalidUtf8Boundary);
-        }
-        match bytes.get(content_end..end) {
-            Some(b"" | b"\n" | b"\r" | b"\r\n") => {}
-            _ => return Err(UnitizationError::InvalidLineEnding),
-        }
-        cursor = end;
-    }
-    if cursor != bytes.len() {
-        return Err(UnitizationError::LineCoverageMismatch);
-    }
-    for (index, line) in lines.iter().enumerate() {
-        checkpoint(0)?;
-        // Conversions and ranges were checked in the first pass.
-        let start =
-            usize::try_from(line.source_start).map_err(|_| UnitizationError::OffsetOverflow)?;
-        let end = usize::try_from(line.source_end).map_err(|_| UnitizationError::OffsetOverflow)?;
-        let content_end =
-            usize::try_from(line.content_end).map_err(|_| UnitizationError::OffsetOverflow)?;
-        for chunk in bytes[start..content_end].chunks(256) {
-            checkpoint(0)?;
-            if chunk.iter().any(|byte| matches!(byte, b'\r' | b'\n')) {
-                return Err(UnitizationError::InvalidLineEnding);
-            }
-        }
-        if (content_end == end && index + 1 != lines.len())
-            || (bytes.get(content_end..end) == Some(b"\r".as_slice())
-                && bytes.get(end) == Some(&b'\n'))
-        {
-            return Err(UnitizationError::InvalidLineEnding);
-        }
-    }
-    Ok(())
 }
 
 fn choose_end(
     text: &str,
-    lines: &[SourceLineSpan],
+    lines: &[LineSpan],
     start: usize,
-    limits: UnitizationLimits,
-) -> Result<usize, UnitizationError> {
+    preferred_bytes: usize,
+    hard_bytes: usize,
+) -> Result<usize, PreparationError> {
     let preferred = start
-        .checked_add(limits.preferred_unit_bytes)
-        .ok_or(UnitizationError::OffsetOverflow)?
+        .checked_add(preferred_bytes)
+        .ok_or(PreparationError::OffsetOverflow)?
         .min(text.len());
     let hard = start
-        .checked_add(limits.max_unit_bytes)
-        .ok_or(UnitizationError::OffsetOverflow)?
+        .checked_add(hard_bytes)
+        .ok_or(PreparationError::OffsetOverflow)?
         .min(text.len());
-    if hard == text.len() && text.len() - start <= limits.preferred_unit_bytes {
+    if hard == text.len() && text.len() - start <= preferred_bytes {
         return Ok(text.len());
     }
-    let preferred64 = u64::try_from(preferred).map_err(|_| UnitizationError::OffsetOverflow)?;
-    let start64 = u64::try_from(start).map_err(|_| UnitizationError::OffsetOverflow)?;
-    let hard64 = u64::try_from(hard).map_err(|_| UnitizationError::OffsetOverflow)?;
+    let preferred64 = u64::try_from(preferred).map_err(|_| PreparationError::OffsetOverflow)?;
+    let start64 = u64::try_from(start).map_err(|_| PreparationError::OffsetOverflow)?;
+    let hard64 = u64::try_from(hard).map_err(|_| PreparationError::OffsetOverflow)?;
     let after = lines.partition_point(|line| line.source_end <= preferred64);
     if let Some(line) = after.checked_sub(1).and_then(|index| lines.get(index))
         && line.source_end > start64
     {
-        return usize::try_from(line.source_end).map_err(|_| UnitizationError::OffsetOverflow);
+        return usize::try_from(line.source_end).map_err(|_| PreparationError::OffsetOverflow);
     }
     if let Some(line) = lines.get(after)
         && line.source_end <= hard64
     {
-        return usize::try_from(line.source_end).map_err(|_| UnitizationError::OffsetOverflow);
+        return usize::try_from(line.source_end).map_err(|_| PreparationError::OffsetOverflow);
     }
     let mut end = preferred;
     while end > start && !text.is_char_boundary(end) {
@@ -204,13 +121,13 @@ fn choose_end(
     if end <= start {
         end = start
             .checked_add(1)
-            .ok_or(UnitizationError::OffsetOverflow)?;
+            .ok_or(PreparationError::OffsetOverflow)?;
         while end <= hard && !text.is_char_boundary(end) {
             end += 1;
         }
     }
     if end <= start || end > hard {
-        return Err(UnitizationError::NoProgress);
+        return Err(PreparationError::UnitTooLarge);
     }
     Ok(end)
 }

@@ -290,17 +290,24 @@ checksum = "252afb9ae5eaa683babdc6a068b3f5726eb19e05070c731f9b2a23a7c3e8ed34"
 [[package]]
 name = "eliot-search"
 version = "0.0.0"
+dependencies = [
+ "search-source-registry",
+ "serde_json",
+]
 
 [[package]]
 name = "eliot-searchd"
 version = "0.0.0"
 dependencies = [
+ "search-contracts",
  "search-control-redb",
  "search-revision-store",
  "search-runtime-owner",
  "search-safe-reader",
  "search-source-registry",
+ "search-unitizer",
  "serde",
+ "serde_json",
  "toml",
 ]
 
@@ -789,17 +796,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pulldown-cmark"
-version = "0.13.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "83c41efbf8f90ac44de7f3a868f0867851d261b56291732d0cbf7cceaaeb55a6"
-dependencies = [
- "bitflags",
- "memchr",
- "unicase",
-]
-
-[[package]]
 name = "qdrant-client"
 version = "1.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -816,15 +812,6 @@ dependencies = [
  "tokio",
  "tonic",
  "tonic-prost",
-]
-
-[[package]]
-name = "quick-xml"
-version = "0.42.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "41b1177fdf999d2321d3fb46ff47159d9c1fb9ad66a4879f8c50a0b504615e9b"
-dependencies = [
- "memchr",
 ]
 
 [[package]]
@@ -1091,14 +1078,6 @@ dependencies = [
 [[package]]
 name = "search-materializer"
 version = "0.0.0"
-dependencies = [
- "blake3",
- "pulldown-cmark",
- "quick-xml",
- "search-contracts",
- "search-domain",
- "search-ports",
-]
 
 [[package]]
 name = "search-os-secrets"
@@ -1126,7 +1105,6 @@ dependencies = [
  "search-domain",
  "search-lexical",
  "search-ports",
- "search-unitizer",
 ]
 
 [[package]]
@@ -1142,19 +1120,6 @@ name = "search-ports"
 version = "0.0.0"
 dependencies = [
  "search-contracts",
-]
-
-[[package]]
-name = "search-projection-planner"
-version = "0.0.0"
-dependencies = [
- "blake3",
- "search-contracts",
- "search-domain",
- "search-materializer",
- "search-point-identity",
- "search-ports",
- "search-unitizer",
 ]
 
 [[package]]
@@ -1183,19 +1148,6 @@ name = "search-provider-transport-windows"
 version = "0.0.0"
 dependencies = [
  "search-provider-protocol",
-]
-
-[[package]]
-name = "search-publication"
-version = "0.0.0"
-dependencies = [
- "search-contracts",
- "search-domain",
- "search-materializer",
- "search-point-identity",
- "search-ports",
- "search-projection-planner",
- "search-unitizer",
 ]
 
 [[package]]
@@ -1319,10 +1271,8 @@ name = "search-unitizer"
 version = "0.0.0"
 dependencies = [
  "blake3",
- "search-contracts",
- "search-domain",
  "search-materializer",
- "search-ports",
+ "search-source-registry",
 ]
 
 [[package]]
@@ -1382,6 +1332,19 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 3.0.5",
+]
+
+[[package]]
+name = "serde_json"
+version = "1.0.154"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e7e9cc8b1b85264074fbcc02a88680c4096b1e47df8f739dceb03bf482f04bd6"
+dependencies = [
+ "itoa",
+ "memchr",
+ "serde",
+ "serde_core",
+ "zmij",
 ]
 
 [[package]]
@@ -1734,12 +1697,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6f5e870be6c3b371b77fe0ee0bafb859fa4964b4404c27de1d380043c4dda20"
 
 [[package]]
-name = "unicase"
-version = "2.10.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "357cc3acc6a036009fd6c973ed009037c732d60d0b4f6c673e9041497482a28f"
-
-[[package]]
 name = "unicode-ident"
 version = "1.0.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1901,3 +1858,9 @@ name = "zlib-rs"
 version = "0.6.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "34b31d188d9d685a4f9c7b46d6e36631b07058d2cfe190267adce54dc230bf12"
+
+[[package]]
+name = "zmij"
+version = "1.0.23"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "29666d0abbfad1e3dc4dcf6144730dd3a3ab225bbbdac83319345b1b44ccfc1b"

@@ -14,5 +14,9 @@ readme = "README.md"
 name = "eliot-search"
 path = "src/entry.rs"
 
+[dependencies]
+serde_json.workspace = true
+search-source-registry.workspace = true
+
 [lints]
 workspace = true

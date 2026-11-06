@@ -9,7 +9,7 @@ use std::time::Instant;
 
 use redb_plain::{
     Database, ReadOnlyDatabase, ReadTransaction, ReadableDatabase, ReadableTable, TableDefinition,
-    TableHandle,
+    TableHandle, WriteTransaction,
 };
 use search_contracts::{Blake3Digest32, SourceId, SourceNamespaceId};
 use search_source_registry::{
@@ -21,13 +21,16 @@ const META_TABLE_NAME: &str = "plain_control_meta";
 const SOURCE_STATE_NAME: &str = "source_state";
 const SOURCE_ROWS_NAME: &str = "current_source_rows";
 const SOURCE_LOCATORS_NAME: &str = "current_source_locators";
-const SOURCE_SCHEMA_VERSION: &[u8] = &[1];
-const SCHEMA_VERSION_KEY: &str = "schema_version";
-const NAMESPACE_KEY: &str = "source_namespace_id";
+pub(super) const SOURCE_SCHEMA_VERSION: &[u8] = &[1];
+pub(super) const SCHEMA_VERSION_KEY: &str = "schema_version";
+pub(super) const NAMESPACE_KEY: &str = "source_namespace_id";
+pub(super) const PREPARATION_TABLE_NAME: &str = "current_preparations";
 const MAX_LOCATOR_BYTES: usize = 32 * 1024;
 
-const SOURCE_STATE: TableDefinition<&str, &[u8]> = TableDefinition::new(SOURCE_STATE_NAME);
-const SOURCE_ROWS: TableDefinition<&[u8], &[u8]> = TableDefinition::new(SOURCE_ROWS_NAME);
+pub(super) const SOURCE_STATE: TableDefinition<&str, &[u8]> =
+    TableDefinition::new(SOURCE_STATE_NAME);
+pub(super) const SOURCE_ROWS: TableDefinition<&[u8], &[u8]> =
+    TableDefinition::new(SOURCE_ROWS_NAME);
 const SOURCE_LOCATORS: TableDefinition<&[u8], &[u8]> = TableDefinition::new(SOURCE_LOCATORS_NAME);
 
 /// Content-free source-control failures.
@@ -57,6 +60,7 @@ pub enum SourceControlError {
 
 impl SourceControlError {
     /// Stable content-free machine error code.
+    #[must_use]
     pub const fn code(self) -> &'static str {
         match self {
             Self::InvalidLocator => "SOURCE_LOCATOR_INVALID",
@@ -126,7 +130,10 @@ fn locator_bytes(path: &Path) -> Result<Vec<u8>, SourceControlError> {
     Ok(bytes)
 }
 
-fn catalogue_names(mut names: Vec<String>, has_multimap: bool) -> Result<bool, SourceControlError> {
+pub(super) fn catalogue_names(
+    mut names: Vec<String>,
+    has_multimap: bool,
+) -> Result<bool, SourceControlError> {
     if has_multimap {
         return Err(SourceControlError::UnsupportedSchema);
     }
@@ -140,6 +147,11 @@ fn catalogue_names(mut names: Vec<String>, has_multimap: bool) -> Result<bool, S
         SOURCE_ROWS_NAME.to_owned(),
         SOURCE_LOCATORS_NAME.to_owned(),
     ];
+    expected.sort_unstable();
+    if names == expected {
+        return Ok(true);
+    }
+    expected.push(PREPARATION_TABLE_NAME.to_owned());
     expected.sort_unstable();
     if names == expected {
         Ok(true)
@@ -224,7 +236,7 @@ fn encode_record(record: &CurrentSourceRecord) -> Result<Vec<u8>, SourceControlE
     Ok(bytes)
 }
 
-fn decode_record(bytes: &[u8]) -> Result<CurrentSourceRecord, SourceControlError> {
+pub(super) fn decode_record(bytes: &[u8]) -> Result<CurrentSourceRecord, SourceControlError> {
     let mut decoder = Decoder { bytes, cursor: 0 };
     if decoder.u8()? != 1 {
         return Err(SourceControlError::UnsupportedSchema);
@@ -266,6 +278,7 @@ fn decode_record(bytes: &[u8]) -> Result<CurrentSourceRecord, SourceControlError
         || row_revision == 0
         || registration_revision == 0
         || format_version != SOURCE_OBJECT_FORMAT_VERSION
+        || kind != ObjectKind::Source
         || byte_length > MAX_SOURCE_OBJECT_BYTES
     {
         return Err(SourceControlError::Corrupt);
@@ -286,7 +299,7 @@ fn decode_record(bytes: &[u8]) -> Result<CurrentSourceRecord, SourceControlError
     })
 }
 
-fn read_namespace(
+pub(super) fn read_namespace(
     transaction: &ReadTransaction,
 ) -> Result<Option<SourceNamespaceId>, SourceControlError> {
     let table = transaction
@@ -310,6 +323,24 @@ fn read_namespace(
         }
         _ => Err(SourceControlError::Corrupt),
     }
+}
+
+pub(super) fn read_source_by_id(
+    transaction: &ReadTransaction,
+    id: SourceId,
+) -> Result<Option<CurrentSourceRecord>, SourceControlError> {
+    let rows = transaction
+        .open_table(SOURCE_ROWS)
+        .map_err(|_| SourceControlError::Corrupt)?;
+    let value = rows
+        .get(id.as_bytes().as_slice())
+        .map_err(|_| SourceControlError::Database)?;
+    let Some(value) = value else { return Ok(None) };
+    let source = decode_record(value.value())?;
+    if source.source_id != id {
+        return Err(SourceControlError::Corrupt);
+    }
+    Ok(Some(source))
 }
 
 fn load_locator_row(
@@ -344,6 +375,9 @@ fn load_locator_row(
 }
 
 /// Captures the current registration guard before external file I/O.
+///
+/// # Errors
+/// Returns an error for invalid locators, unsupported/corrupt state, random-source failure or I/O.
 pub fn capture_current_source(
     control_path: &Path,
     selected_file: &Path,
@@ -410,28 +444,17 @@ pub fn capture_current_source(
     })
 }
 
-/// Commits one exact, already-retained source head with an atomic row/registration CAS.
-pub fn commit_current_source(
-    control_path: &Path,
-    capture: SourceCapture,
-    file_key: NativeFileKey,
-    object_ref: ObjectRef,
-    deadline: Instant,
-    cancellation: &AtomicBool,
-) -> Result<CurrentSourceRecord, SourceControlError> {
-    check(deadline, cancellation)?;
-    let database = Database::open(control_path).map_err(|_| SourceControlError::Database)?;
-    let transaction = database
-        .begin_write()
-        .map_err(|_| SourceControlError::Database)?;
-    check(deadline, cancellation)?;
-    let mut state = transaction
+fn source_revisions(
+    transaction: &WriteTransaction,
+    capture: &SourceCapture,
+) -> Result<(u64, u64), SourceControlError> {
+    let state = transaction
         .open_table(SOURCE_STATE)
         .map_err(|_| SourceControlError::Database)?;
-    let mut rows = transaction
+    let rows = transaction
         .open_table(SOURCE_ROWS)
         .map_err(|_| SourceControlError::Database)?;
-    let mut locators = transaction
+    let locators = transaction
         .open_table(SOURCE_LOCATORS)
         .map_err(|_| SourceControlError::Database)?;
 
@@ -452,7 +475,7 @@ pub fn commit_current_source(
     let existing_locator = locators
         .get(capture.locator.as_slice())
         .map_err(|_| SourceControlError::Database)?;
-    let (row_revision, registration_revision) = match (
+    match (
         capture.expected_row_revision,
         capture.expected_registration_revision,
         existing_locator,
@@ -465,7 +488,7 @@ pub fn commit_current_source(
             {
                 return Err(SourceControlError::Stale);
             }
-            (1, 1)
+            Ok((1, 1))
         }
         (Some(expected_row), Some(expected_registration), Some(source_id))
             if source_id.value() == capture.source_id.as_bytes() =>
@@ -483,22 +506,52 @@ pub fn commit_current_source(
             {
                 return Err(SourceControlError::Stale);
             }
-            (
+            Ok((
                 expected_row
                     .checked_add(1)
                     .ok_or(SourceControlError::RevisionExhausted)?,
                 expected_registration,
-            )
+            ))
         }
-        _ => return Err(SourceControlError::Stale),
-    };
+        _ => Err(SourceControlError::Stale),
+    }
+}
+
+/// Commits one exact, already-retained source head with an atomic row/registration CAS.
+///
+/// # Errors
+/// Returns Stale for changed guards, or an explicit encoding, revision, cancellation or I/O error.
+pub fn commit_current_source(
+    control_path: &Path,
+    capture: SourceCapture,
+    file_key: NativeFileKey,
+    object_ref: ObjectRef,
+    deadline: Instant,
+    cancellation: &AtomicBool,
+) -> Result<CurrentSourceRecord, SourceControlError> {
+    check(deadline, cancellation)?;
+    let database = Database::open(control_path).map_err(|_| SourceControlError::Database)?;
+    let transaction = database
+        .begin_write()
+        .map_err(|_| SourceControlError::Database)?;
+    check(deadline, cancellation)?;
+    let (row_revision, registration_revision) = source_revisions(&transaction, &capture)?;
+    let mut state = transaction
+        .open_table(SOURCE_STATE)
+        .map_err(|_| SourceControlError::Database)?;
+    let mut rows = transaction
+        .open_table(SOURCE_ROWS)
+        .map_err(|_| SourceControlError::Database)?;
+    let mut locators = transaction
+        .open_table(SOURCE_LOCATORS)
+        .map_err(|_| SourceControlError::Database)?;
 
     let record = CurrentSourceRecord {
         source_namespace_id: capture.source_namespace_id,
         source_id: capture.source_id,
         row_revision,
         registration_revision,
-        locator: capture.locator.clone(),
+        locator: capture.locator,
         file_key,
         object_ref,
     };
@@ -518,7 +571,7 @@ pub fn commit_current_source(
         .map_err(|_| SourceControlError::Database)?;
     locators
         .insert(
-            capture.locator.as_slice(),
+            record.locator.as_slice(),
             capture.source_id.as_bytes().as_slice(),
         )
         .map_err(|_| SourceControlError::Database)?;
@@ -526,15 +579,14 @@ pub fn commit_current_source(
     drop(rows);
     drop(state);
     check(deadline, cancellation)?;
-    match transaction.commit() {
-        Ok(()) => Ok(record),
-        Err(_) => {
-            drop(database);
-            match load_current_source(control_path, &record.locator, deadline, cancellation) {
-                Ok(Some(observed)) if observed == record => Ok(record),
-                Ok(Some(_)) => Err(SourceControlError::Stale),
-                Ok(None) | Err(_) => Err(SourceControlError::Database),
-            }
+    if transaction.commit().is_ok() {
+        Ok(record)
+    } else {
+        drop(database);
+        match load_current_source(control_path, &record.locator, deadline, cancellation) {
+            Ok(Some(observed)) if observed == record => Ok(record),
+            Ok(Some(_)) => Err(SourceControlError::Stale),
+            Ok(None) | Err(_) => Err(SourceControlError::Database),
         }
     }
 }

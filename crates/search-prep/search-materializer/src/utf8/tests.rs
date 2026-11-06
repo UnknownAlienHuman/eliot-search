@@ -1,145 +1,85 @@
+use std::sync::atomic::AtomicBool;
+use std::time::{Duration, Instant};
+
 use super::*;
-use crate::error::MaterializationError;
-use search_contracts::{Blake3Digest32, NonZeroRevision, OpaqueId, ReceiptRef};
+use crate::MaterializationError;
 
-fn retained(bytes: &[u8]) -> RetainedRevision {
-    RetainedRevision::new(
-        OpaqueId::new("source:test").expect("source"),
-        NonZeroRevision::new(1).expect("revision"),
-        Some(Blake3Digest32::from_bytes(*blake3::hash(bytes).as_bytes())),
-        u64::try_from(bytes.len()).expect("length"),
-        bytes.to_vec(),
-        Some(ReceiptRef::new("receipt:revision").expect("receipt")),
+fn limits() -> MaterializationLimits {
+    MaterializationLimits {
+        max_input_bytes: 1024,
+        max_output_bytes: 1024,
+        max_lines: 64,
+    }
+}
+
+#[test]
+fn unchanged_unicode_reuses_the_input_allocation_and_exact_lines() {
+    let bytes = "α\r\nβ\nγ\rδ".as_bytes().to_vec();
+    let pointer = bytes.as_ptr();
+    let product = materialize_utf8(
+        bytes,
+        limits(),
+        Instant::now() + Duration::from_secs(1),
+        &AtomicBool::new(false),
     )
-}
-
-#[test]
-fn exact_utf8_bytes_are_preserved() {
-    let bytes = "alpha\r\nbeta\nγ".as_bytes();
-    let result = materialize(retained(bytes), DEFAULT_MATERIALIZATION_LIMITS).expect("materialize");
-    assert_eq!(result.bytes(), bytes);
-    assert_eq!(result.receipt.input_bytes, result.receipt.output_bytes);
-}
-
-#[test]
-fn line_endings_and_offsets_are_exact() {
-    let result = materialize(retained(b"a\r\nb\nc\rd"), DEFAULT_MATERIALIZATION_LIMITS)
-        .expect("materialize");
-    assert_eq!(result.lines.len(), 4);
+    .unwrap();
+    assert_eq!(product.text().as_ptr(), pointer);
+    assert_eq!(product.text(), "α\r\nβ\nγ\rδ");
     assert_eq!(
-        (
-            result.lines[0].source_start,
-            result.lines[0].content_end,
-            result.lines[0].source_end
-        ),
-        (0, 1, 3)
+        product
+            .lines()
+            .iter()
+            .map(|line| (line.source_start, line.content_end, line.source_end))
+            .collect::<Vec<_>>(),
+        [(0, 2, 4), (4, 6, 7), (7, 9, 10), (10, 12, 12)]
     );
-    assert_eq!(result.lines[0].ending, LineEnding::CrLf);
-    assert_eq!(result.lines[1].ending, LineEnding::Lf);
-    assert_eq!(result.lines[2].ending, LineEnding::Cr);
-    assert_eq!(result.lines[3].ending, LineEnding::None);
-    assert!(result.receipt.line_endings.is_mixed());
 }
 
 #[test]
-fn final_terminator_does_not_create_phantom_line() {
-    let result =
-        materialize(retained(b"a\n"), DEFAULT_MATERIALIZATION_LIMITS).expect("materialize");
-    assert_eq!(result.lines.len(), 1);
-    assert_eq!(result.lines[0].ending, LineEnding::Lf);
-    assert_eq!(result.receipt.line_endings.unterminated, 0);
+fn empty_and_final_terminator_do_not_manufacture_lines() {
+    let deadline = Instant::now() + Duration::from_secs(1);
+    let cancel = AtomicBool::new(false);
+    let empty = materialize_utf8(Vec::new(), limits(), deadline, &cancel).unwrap();
+    assert!(empty.text().is_empty());
+    assert!(empty.lines().is_empty());
+    let terminated = materialize_utf8(b"a\n".to_vec(), limits(), deadline, &cancel).unwrap();
+    assert_eq!(terminated.lines().len(), 1);
 }
 
 #[test]
-fn invalid_utf8_is_rejected() {
+fn content_refusals_remain_distinct() {
+    let deadline = Instant::now() + Duration::from_secs(1);
+    let cancel = AtomicBool::new(false);
     assert_eq!(
-        materialize(retained(&[0xff, 0xfe]), DEFAULT_MATERIALIZATION_LIMITS),
+        materialize_utf8(b"a\0b".to_vec(), limits(), deadline, &cancel),
+        Err(MaterializationError::BinaryContent)
+    );
+    assert_eq!(
+        materialize_utf8(vec![0xff], limits(), deadline, &cancel),
         Err(MaterializationError::InvalidUtf8)
     );
 }
 
 #[test]
-fn nul_content_is_rejected_as_binary() {
+fn execution_limits_and_cancellation_are_not_content_refusals() {
+    let deadline = Instant::now() + Duration::from_secs(1);
+    let mut caps = limits();
+    caps.max_lines = 1;
     assert_eq!(
-        materialize(retained(b"a\0b"), DEFAULT_MATERIALIZATION_LIMITS),
-        Err(MaterializationError::BinaryContent)
-    );
-}
-
-#[test]
-fn byte_count_mismatch_is_rejected() {
-    let mut input = retained(b"abc");
-    input.byte_count = 2;
-    assert_eq!(
-        materialize(input, DEFAULT_MATERIALIZATION_LIMITS),
-        Err(MaterializationError::InputLengthMismatch)
-    );
-}
-
-#[test]
-fn content_digest_mismatch_is_rejected() {
-    let mut input = retained(b"exact bytes");
-    input.content_digest = Some(Blake3Digest32::from_bytes([0xA5; 32]));
-    assert_eq!(
-        materialize(input, DEFAULT_MATERIALIZATION_LIMITS),
-        Err(MaterializationError::RevisionDigestMismatch)
-    );
-}
-
-#[test]
-fn line_limit_is_fail_closed() {
-    let limits = MaterializationLimits {
-        max_lines: 1,
-        ..DEFAULT_MATERIALIZATION_LIMITS
-    };
-    assert_eq!(
-        materialize(retained(b"a\nb"), limits),
+        materialize_utf8(b"a\nb".to_vec(), caps, deadline, &AtomicBool::new(false)),
         Err(MaterializationError::TooManyLines)
     );
-}
-
-#[test]
-fn debug_output_does_not_dump_source_text() {
-    let input = retained(b"sensitive source text");
-    assert!(!format!("{input:?}").contains("sensitive source text"));
-    let result = materialize(input, DEFAULT_MATERIALIZATION_LIMITS).expect("materialize");
-    assert!(!format!("{result:?}").contains("sensitive source text"));
-    assert!(format!("{result:?}").contains("UTF-8 bytes"));
-}
-
-#[test]
-fn receipt_free_and_bound_paths_use_identical_mapping() {
-    for bytes in [b"a\r\nb\nc\rd".as_slice(), "αβ\n𐀀".as_bytes(), b"\n\n"] {
-        let plain = materialize_utf8(bytes.to_vec(), DEFAULT_MATERIALIZATION_LIMITS).unwrap();
-        let bound = materialize(retained(bytes), DEFAULT_MATERIALIZATION_LIMITS).unwrap();
-        assert_eq!(plain.text(), bound.text());
-        assert_eq!(plain.lines(), bound.lines.as_slice());
-        assert_eq!(plain.line_endings(), bound.receipt.line_endings);
-    }
-}
-
-#[test]
-fn empty_text_does_not_create_a_revision_receipt() {
-    let text = materialize_utf8(Vec::new(), DEFAULT_MATERIALIZATION_LIMITS).unwrap();
-    assert!(text.text().is_empty());
-    assert!(text.lines().is_empty());
     assert_eq!(
-        materialize(retained(b""), DEFAULT_MATERIALIZATION_LIMITS),
-        Err(MaterializationError::EmptyInput)
+        materialize_utf8(Vec::new(), limits(), deadline, &AtomicBool::new(true)),
+        Err(MaterializationError::Cancelled)
     );
-}
-
-#[test]
-fn byte_preparation_keeps_finite_limits_and_redacted_debug() {
-    let limits = MaterializationLimits {
-        max_input_bytes: 2,
-        ..DEFAULT_MATERIALIZATION_LIMITS
-    };
     assert_eq!(
-        materialize_utf8(b"abc".to_vec(), limits),
-        Err(MaterializationError::InputTooLarge)
+        materialize_utf8(
+            Vec::new(),
+            limits(),
+            Instant::now(),
+            &AtomicBool::new(false)
+        ),
+        Err(MaterializationError::Deadline)
     );
-    let text =
-        materialize_utf8(b"private-sentinel".to_vec(), DEFAULT_MATERIALIZATION_LIMITS).unwrap();
-    assert!(!format!("{text:?}").contains("private-sentinel"));
 }

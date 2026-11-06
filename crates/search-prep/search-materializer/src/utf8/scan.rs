@@ -1,97 +1,108 @@
-//! Exact UTF-8 byte validation and logical-line scanning.
+//! Bounded binary classification and exact logical-line scanning.
 
-use super::model::{LineEnding, LineEndingEvidence, LineSpan, MaterializationLimits};
-use crate::error::MaterializationError;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Instant;
 
-pub(super) const fn check_byte_limits(
-    length: usize,
-    limits: MaterializationLimits,
-) -> Result<(), MaterializationError> {
-    if length > limits.max_input_bytes {
-        return Err(MaterializationError::InputTooLarge);
+use super::model::{LineSpan, MaterializationLimits};
+use crate::MaterializationError;
+
+pub(super) fn check(deadline: Instant, cancelled: &AtomicBool) -> Result<(), MaterializationError> {
+    if cancelled.load(Ordering::Relaxed) {
+        return Err(MaterializationError::Cancelled);
     }
-    if length > limits.max_output_bytes {
-        return Err(MaterializationError::OutputTooLarge);
+    if Instant::now() >= deadline {
+        return Err(MaterializationError::Deadline);
     }
     Ok(())
 }
 
-pub(super) fn reject_binary_controls(bytes: &[u8]) -> Result<(), MaterializationError> {
-    if bytes.contains(&0) {
-        return Err(MaterializationError::BinaryContent);
-    }
-    let disallowed_controls = bytes
-        .iter()
-        .filter(|byte| **byte < 0x20 && !matches!(**byte, b'\t' | b'\n' | b'\r' | 0x0c))
-        .count();
+pub(super) fn reject_binary_controls(
+    bytes: &[u8],
+    deadline: Instant,
+    cancelled: &AtomicBool,
+) -> Result<(), MaterializationError> {
     let threshold = bytes.len().div_ceil(100).max(4);
-    if disallowed_controls >= threshold {
-        Err(MaterializationError::BinaryContent)
-    } else {
-        Ok(())
+    let mut controls = 0;
+    for chunk in bytes.chunks(1024) {
+        check(deadline, cancelled)?;
+        for byte in chunk {
+            if *byte == 0 {
+                return Err(MaterializationError::BinaryContent);
+            }
+            if *byte < 0x20 && !matches!(*byte, b'\t' | b'\n' | b'\r' | 0x0c) {
+                controls += 1;
+                if controls >= threshold {
+                    return Err(MaterializationError::BinaryContent);
+                }
+            }
+        }
     }
+    Ok(())
 }
 
 pub(super) fn scan_lines(
     bytes: &[u8],
     limits: MaterializationLimits,
-) -> Result<(Vec<LineSpan>, LineEndingEvidence), MaterializationError> {
+    deadline: Instant,
+    cancelled: &AtomicBool,
+) -> Result<Vec<LineSpan>, MaterializationError> {
     let mut lines = Vec::new();
-    let mut evidence = LineEndingEvidence::default();
-    let mut start = 0_usize;
-    let mut index = 0_usize;
+    let mut start = 0;
+    let mut index = 0;
     while index < bytes.len() {
-        let ending = match bytes[index] {
-            b'\n' => Some((LineEnding::Lf, 1_usize)),
-            b'\r' if bytes.get(index + 1) == Some(&b'\n') => Some((LineEnding::CrLf, 2_usize)),
-            b'\r' => Some((LineEnding::Cr, 1_usize)),
-            _ => None,
-        };
-        let Some((ending, terminator_bytes)) = ending else {
-            index += 1;
-            continue;
-        };
-        if lines.len() >= limits.max_lines {
-            return Err(MaterializationError::TooManyLines);
+        if index.is_multiple_of(1024) {
+            check(deadline, cancelled)?;
         }
-        let content_end = index;
-        let source_end = index
-            .checked_add(terminator_bytes)
+        let terminator = match bytes[index] {
+            b'\r' if bytes.get(index + 1) == Some(&b'\n') => 2,
+            b'\n' | b'\r' => 1,
+            _ => {
+                index += 1;
+                continue;
+            }
+        };
+        let end = index
+            .checked_add(terminator)
             .ok_or(MaterializationError::OffsetOverflow)?;
-        lines.push(LineSpan {
-            line_index: u64::try_from(lines.len())
-                .map_err(|_| MaterializationError::OffsetOverflow)?,
-            source_start: u64::try_from(start).map_err(|_| MaterializationError::OffsetOverflow)?,
-            source_end: u64::try_from(source_end)
-                .map_err(|_| MaterializationError::OffsetOverflow)?,
-            content_end: u64::try_from(content_end)
-                .map_err(|_| MaterializationError::OffsetOverflow)?,
-            ending,
-        });
-        match ending {
-            LineEnding::Lf => evidence.lf += 1,
-            LineEnding::CrLf => evidence.crlf += 1,
-            LineEnding::Cr => evidence.cr += 1,
-            LineEnding::None => {}
-        }
-        start = source_end;
-        index = source_end;
+        push_line(&mut lines, start, index, end, limits.max_lines)?;
+        start = end;
+        index = end;
     }
     if start < bytes.len() {
-        if lines.len() >= limits.max_lines {
-            return Err(MaterializationError::TooManyLines);
-        }
-        lines.push(LineSpan {
-            line_index: u64::try_from(lines.len())
-                .map_err(|_| MaterializationError::OffsetOverflow)?,
-            source_start: u64::try_from(start).map_err(|_| MaterializationError::OffsetOverflow)?,
-            source_end: u64::try_from(bytes.len())
-                .map_err(|_| MaterializationError::OffsetOverflow)?,
-            content_end: u64::try_from(bytes.len())
-                .map_err(|_| MaterializationError::OffsetOverflow)?,
-            ending: LineEnding::None,
-        });
-        evidence.unterminated += 1;
+        push_line(
+            &mut lines,
+            start,
+            bytes.len(),
+            bytes.len(),
+            limits.max_lines,
+        )?;
     }
-    Ok((lines, evidence))
+    check(deadline, cancelled)?;
+    Ok(lines)
+}
+
+fn push_line(
+    lines: &mut Vec<LineSpan>,
+    start: usize,
+    content_end: usize,
+    end: usize,
+    maximum: usize,
+) -> Result<(), MaterializationError> {
+    if lines.len() >= maximum {
+        return Err(MaterializationError::TooManyLines);
+    }
+    if lines.len() == lines.capacity() {
+        let additional = lines.capacity().max(16).min(maximum - lines.len());
+        lines
+            .try_reserve_exact(additional)
+            .map_err(|_| MaterializationError::AllocationFailed)?;
+    }
+    lines.push(LineSpan {
+        line_index: u64::try_from(lines.len()).map_err(|_| MaterializationError::OffsetOverflow)?,
+        source_start: u64::try_from(start).map_err(|_| MaterializationError::OffsetOverflow)?,
+        source_end: u64::try_from(end).map_err(|_| MaterializationError::OffsetOverflow)?,
+        content_end: u64::try_from(content_end)
+            .map_err(|_| MaterializationError::OffsetOverflow)?,
+    });
+    Ok(())
 }

@@ -1,68 +1,15 @@
-//! Deterministic exact-range unitization for materialized UTF-8 revisions.
-//!
-//! Pure layout and receipt-bound unitization share one implementation. Layouts
-//! neither admit a source nor create a persistence or qualification receipt.
+//! Complete exact UTF-8 prepared artifacts over verified retained source bytes.
 
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
-#![allow(
-    clippy::missing_errors_doc,
-    clippy::module_name_repetitions,
-    clippy::must_use_candidate,
-    clippy::too_many_lines
-)]
 
 mod error;
-pub use error::UnitizationError;
-
-mod unitization;
-pub use unitization::{
-    DEFAULT_UNITIZATION_LIMITS, SourceLineSpan, TextUnit, UnitIdentity, UnitizationInput,
-    UnitizationLimits, UnitizationReceipt, UnitizationResult, unitize,
-};
-
 mod layout;
-pub use layout::{UnitSpan, unitize_text};
+mod prepared;
 
-mod manifest;
-pub use manifest::{
-    CanonicalUnitManifestBytes, MAX_UNITIZER_PROFILE_NAME_BYTES, MaterializerProvenance,
-    UNIT_MANIFEST_DIGEST_ALGORITHM, UNIT_MANIFEST_FORMAT, UNIT_MANIFEST_VERSION, UnitDescriptor,
-    UnitManifest, UnitManifestDiff, UnitManifestVerificationReceipt, UnitizerProfileChange,
-    UnitizerProfileDescriptor, UnitizerProfileId, ValidatedUnitizerProfile, build_unit_manifest,
-    canonicalize_unit_manifest, classify_unitizer_profile_change, decode_unit_manifest,
-    diff_unit_manifests, manifest_digest, unitizer_profile_digest, validate_unitizer_profile,
-    verify_unit_manifest,
-};
-pub use manifest::{
-    UnitSetInput, UnitizationBudget, V3AnchorPolicy, V3AttachmentPolicy, V3EmptyPolicy,
-    V3OmissionPolicy, V3OverlapPolicy, V3RepresentationKind, V3SourceBinding,
-    V3UnitizerProfileDescriptor, ValidatedV3UnitizerProfile, VerifiedUnitSet,
-    prepare_unit_set_input, validate_v3_unitizer_profile,
-};
-
-#[cfg(test)]
-use search_contracts::{Blake3Digest32, NonZeroRevision, OpaqueId, ReceiptRef};
-
-mod markdown_unitset;
-pub use markdown_unitset::{
-    CanonicalMarkdownUnitManifestBytes, MAX_MARKDOWN_UNITIZER_LIMITS, MarkdownInlineObservation,
-    MarkdownMappedValue, MarkdownSourceBinding, MarkdownStructuralUnit, MarkdownUnitManifest,
-    MarkdownUnitizationBudget, MarkdownUnitizationError, MarkdownUnitizationSource,
-    MarkdownUnitizationUsage, MarkdownUnitizerLimits, MarkdownUnitizerProfile,
-    VerifiedMarkdownUnitSet, canonicalize_markdown_unit_manifest, decode_markdown_unit_manifest,
-    unitize_markdown, verify_markdown_unit_manifest,
-};
-
-mod jats_unitset;
-pub use jats_unitset::{
-    CanonicalJatsUnitManifestBytes, JatsMappedValue, JatsSourceBinding, JatsStructuralUnit,
-    JatsUnitAttribute, JatsUnitComment, JatsUnitManifest, JatsUnitSpan, JatsUnitText,
-    JatsUnitizationBudget, JatsUnitizationError, JatsUnitizationSource, JatsUnitizationUsage,
-    JatsUnitizerLimits, JatsUnitizerProfile, MAX_JATS_UNITIZER_LIMITS, VerifiedJatsUnitSet,
-    canonicalize_jats_unit_manifest, decode_jats_unit_manifest, unitize_jats,
-    verify_jats_unit_manifest,
-};
+pub use error::PreparationError;
+pub use layout::UnitSpan;
+pub use prepared::{PreparationLimits, PreparedUtf8, decode_prepared_utf8, prepare_utf8};
 
 #[cfg(test)]
 mod tests;

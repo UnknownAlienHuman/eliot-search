@@ -77,27 +77,38 @@ fn hex(bytes: &[u8]) -> String {
     output
 }
 
-fn object_name(reference: ObjectRef) -> Result<String, ObjectStoreError> {
+fn object_name(reference: ObjectRef, maximum_bytes: u64) -> Result<String, ObjectStoreError> {
     if reference.format_version != SOURCE_OBJECT_FORMAT_VERSION
-        || reference.kind != ObjectKind::Source
-        || reference.byte_length > MAX_SOURCE_OBJECT_BYTES
+        || maximum_bytes == 0
+        || reference.byte_length > maximum_bytes
+        || (reference.kind == ObjectKind::Source && reference.byte_length > MAX_SOURCE_OBJECT_BYTES)
     {
         return Err(ObjectStoreError::InvalidReference);
     }
     Ok(format!(
-        "v{}-source-{}",
+        "v{}-{}-{}",
         reference.format_version,
+        reference.kind.name(),
         hex(reference.digest.as_bytes())
     ))
 }
 
-fn reference(bytes: &[u8]) -> Result<ObjectRef, ObjectStoreError> {
+fn reference(
+    kind: ObjectKind,
+    bytes: &[u8],
+    maximum_bytes: u64,
+) -> Result<ObjectRef, ObjectStoreError> {
     let byte_length = u64::try_from(bytes.len()).map_err(|_| ObjectStoreError::InvalidReference)?;
-    if byte_length > MAX_SOURCE_OBJECT_BYTES {
+    if byte_length > maximum_bytes {
         return Err(ObjectStoreError::InvalidReference);
     }
     let digest = Blake3Digest32::from_bytes(*blake3::hash(bytes).as_bytes());
-    Ok(ObjectRef::source(digest, byte_length))
+    let reference = match kind {
+        ObjectKind::Source => ObjectRef::source(digest, byte_length),
+        ObjectKind::Prepared => ObjectRef::prepared(digest, byte_length),
+    };
+    object_name(reference, maximum_bytes)?;
+    Ok(reference)
 }
 
 /// Publishes bytes from the acquired buffer and independently verifies the final object.
@@ -107,31 +118,26 @@ fn reference(bytes: &[u8]) -> Result<ObjectRef, ObjectStoreError> {
 /// Returns an [`ObjectStoreError`] if the bytes exceed the object bound,
 /// no-clobber publication fails, read-back verification fails, or cancellation
 /// or the deadline is observed.
-pub fn store_source_bytes(
+pub fn store_object(
     root: &PlainRootGuard,
+    kind: ObjectKind,
     bytes: &[u8],
+    maximum_bytes: u64,
     deadline: Instant,
     cancellation: &AtomicBool,
 ) -> Result<ObjectRef, ObjectStoreError> {
     check(deadline, cancellation)?;
-    let reference = reference(bytes)?;
-    let name = object_name(reference)?;
+    let reference = reference(kind, bytes, maximum_bytes)?;
+    let name = object_name(reference, maximum_bytes)?;
     let stage = format!(".{name}.stage");
-    root.publish_object_noclobber(
-        &name,
-        &stage,
-        bytes,
-        MAX_SOURCE_OBJECT_BYTES,
-        deadline,
-        cancellation,
-    )
-    .map_err(|error| match error {
-        PlainRootError::AlreadyExists => ObjectStoreError::ImmutableConflict,
-        PlainRootError::Deadline => ObjectStoreError::Deadline,
-        PlainRootError::Cancelled => ObjectStoreError::Cancelled,
-        _ => ObjectStoreError::PublishFailed,
-    })?;
-    let readback = read_source_object(root, reference, deadline, cancellation)?;
+    root.publish_object_noclobber(&name, &stage, bytes, maximum_bytes, deadline, cancellation)
+        .map_err(|error| match error {
+            PlainRootError::AlreadyExists => ObjectStoreError::ImmutableConflict,
+            PlainRootError::Deadline => ObjectStoreError::Deadline,
+            PlainRootError::Cancelled => ObjectStoreError::Cancelled,
+            _ => ObjectStoreError::PublishFailed,
+        })?;
+    let readback = read_object(root, reference, maximum_bytes, deadline, cancellation)?;
     if u64::try_from(readback.len()).ok() != Some(reference.byte_length) {
         return Err(ObjectStoreError::IntegrityFailure);
     }
@@ -145,14 +151,17 @@ pub fn store_source_bytes(
 /// Returns an [`ObjectStoreError`] if the reference is invalid, the object is
 /// missing or not a regular file, its bytes fail integrity verification, a
 /// bounded read or allocation fails, or cancellation or the deadline is observed.
-pub fn read_source_object(
+pub fn read_object(
     root: &PlainRootGuard,
     reference: ObjectRef,
+    maximum_bytes: u64,
     deadline: Instant,
     cancellation: &AtomicBool,
 ) -> Result<Vec<u8>, ObjectStoreError> {
     check(deadline, cancellation)?;
-    let path = root.object_dir().join(object_name(reference)?);
+    let path = root
+        .object_dir()
+        .join(object_name(reference, maximum_bytes)?);
     let metadata = fs::symlink_metadata(&path).map_err(|error| {
         if error.kind() == io::ErrorKind::NotFound {
             ObjectStoreError::Missing
@@ -163,7 +172,7 @@ pub fn read_source_object(
     if !metadata.is_file() || metadata.file_type().is_symlink() {
         return Err(ObjectStoreError::NotRegularFile);
     }
-    if metadata.len() != reference.byte_length || metadata.len() > MAX_SOURCE_OBJECT_BYTES {
+    if metadata.len() != reference.byte_length || metadata.len() > maximum_bytes {
         return Err(ObjectStoreError::IntegrityFailure);
     }
     let file = File::open(path).map_err(|_| ObjectStoreError::Io)?;

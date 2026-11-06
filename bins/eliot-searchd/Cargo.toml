@@ -15,12 +15,15 @@ name = "eliot-searchd"
 path = "src/entry.rs"
 
 [dependencies]
+search-contracts.workspace = true
 search-control-redb.workspace = true
 search-revision-store.workspace = true
 search-runtime-owner.workspace = true
 search-safe-reader.workspace = true
 serde.workspace = true
 search-source-registry.workspace = true
+search-unitizer.workspace = true
+serde_json.workspace = true
 toml.workspace = true
 
 [lints]

@@ -11,11 +11,55 @@ pub const SOURCE_OBJECT_FORMAT_VERSION: u16 = 1;
 /// Bounded byte length accepted by the first source object format.
 pub const MAX_SOURCE_OBJECT_BYTES: u64 = 8 * 1024 * 1024;
 
+/// Largest complete unit emitted by the first prepared-source CLI.
+pub const MAX_PREPARATION_UNIT_BYTES: u32 = 64 * 1024;
+
+/// Worst-case JSON escaping for one full 64 KiB unit plus closed metadata and framing.
+pub const MAX_PREPARATION_RESPONSE_BYTES: usize = 6 * 64 * 1024 + 4096;
+
+/// Output-affecting settings for unchanged UTF-8 and line-preferred units.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct PreparationSettings {
+    /// Exact UTF-8 materialization algorithm version.
+    pub utf8_version: u16,
+    /// Line-preferred unitization algorithm version.
+    pub line_unitizer_version: u16,
+    /// Preferred unit byte size before line-boundary adjustment.
+    pub preferred_unit_bytes: u32,
+    /// Hard complete-unit byte ceiling.
+    pub max_unit_bytes: u32,
+}
+
+impl Default for PreparationSettings {
+    fn default() -> Self {
+        Self {
+            utf8_version: 1,
+            line_unitizer_version: 1,
+            preferred_unit_bytes: 16 * 1024,
+            max_unit_bytes: MAX_PREPARATION_UNIT_BYTES,
+        }
+    }
+}
+
+impl PreparationSettings {
+    /// Whether these settings belong to the supported bounded v1 algorithms.
+    #[must_use]
+    pub const fn is_supported(self) -> bool {
+        self.utf8_version == 1
+            && self.line_unitizer_version == 1
+            && self.preferred_unit_bytes > 0
+            && self.preferred_unit_bytes <= self.max_unit_bytes
+            && self.max_unit_bytes <= MAX_PREPARATION_UNIT_BYTES
+    }
+}
+
 /// Content kind stored in an [`ObjectRef`].
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ObjectKind {
     /// Exact acquired source-file bytes.
     Source,
+    /// Complete prepared representation and its bounded unit descriptors.
+    Prepared,
 }
 
 impl ObjectKind {
@@ -24,6 +68,7 @@ impl ObjectKind {
     pub const fn tag(self) -> u8 {
         match self {
             Self::Source => 1,
+            Self::Prepared => 2,
         }
     }
 
@@ -32,7 +77,17 @@ impl ObjectKind {
     pub const fn from_tag(tag: u8) -> Option<Self> {
         match tag {
             1 => Some(Self::Source),
+            2 => Some(Self::Prepared),
             _ => None,
+        }
+    }
+
+    /// Fixed filesystem and response name for this content kind.
+    #[must_use]
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::Source => "source",
+            Self::Prepared => "prepared",
         }
     }
 }
@@ -57,6 +112,17 @@ impl ObjectRef {
         Self {
             format_version: SOURCE_OBJECT_FORMAT_VERSION,
             kind: ObjectKind::Source,
+            digest,
+            byte_length,
+        }
+    }
+
+    /// Creates a reference to a complete prepared artifact.
+    #[must_use]
+    pub const fn prepared(digest: Blake3Digest32, byte_length: u64) -> Self {
+        Self {
+            format_version: SOURCE_OBJECT_FORMAT_VERSION,
+            kind: ObjectKind::Prepared,
             digest,
             byte_length,
         }

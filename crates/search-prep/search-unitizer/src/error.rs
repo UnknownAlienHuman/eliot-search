@@ -1,100 +1,95 @@
-//! Closed content-free unitization failures.
+//! Explicit content, execution and saved-artifact failures.
 
-use core::fmt;
+use std::fmt;
 
-/// Closed content-free unitization failure.
-#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
-pub enum UnitizationError {
-    /// Limits are zero or internally inconsistent.
-    InvalidLimits,
-    /// Materialized UTF-8 input is empty.
-    EmptyInput,
-    /// Materialized input exceeds its finite byte ceiling.
+use search_materializer::MaterializationError;
+
+/// A preparation refusal or operation failure, never a fabricated empty result.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PreparationError {
+    /// The exact input was refused by the binary-control policy.
+    BinaryContent,
+    /// The exact input is not UTF-8.
+    InvalidUtf8,
+    /// The input exceeds its execution byte ceiling.
     InputTooLarge,
-    /// Line inventory is empty or exceeds its finite ceiling.
-    InvalidLineInventory,
-    /// Line indices are not contiguous from zero.
-    LineIndexMismatch,
-    /// Line spans do not cover the exact input contiguously.
-    LineCoverageMismatch,
-    /// A line span is inverted or outside the exact input.
-    InvalidLineSpan,
-    /// A line terminator or content span differs from exact source bytes.
-    InvalidLineEnding,
-    /// A line or split boundary is not a UTF-8 character boundary.
-    InvalidUtf8Boundary,
-    /// Unit count exceeds its finite ceiling.
+    /// The representation exceeds its execution byte ceiling.
+    OutputTooLarge,
+    /// The line inventory exceeds its execution ceiling.
+    TooManyLines,
+    /// The descriptor inventory exceeds its execution ceiling.
     TooManyUnits,
-    /// No non-empty safe unit boundary can be selected.
-    NoProgress,
-    /// Unit exceeds its hard byte ceiling.
+    /// A Unicode scalar cannot fit within the selected hard unit size.
     UnitTooLarge,
-    /// Unit ranges contain a gap, overlap, or duplicate bytes.
-    UnitCoverageMismatch,
-    /// Byte or index conversion overflowed.
+    /// The complete encoding exceeds its execution byte ceiling.
+    EncodedTooLarge,
+    /// The selected transform versions or chunk settings are unsupported.
+    InvalidSettings,
+    /// An execution ceiling is zero.
+    InvalidLimits,
+    /// A bounded allocation failed.
+    AllocationFailed,
+    /// A coordinate or allocation size cannot be represented.
     OffsetOverflow,
-    /// Live cancellation prevents a complete unit set.
+    /// Cancellation was observed.
     Cancelled,
-    /// The monotonic operation deadline has elapsed.
-    DeadlineExceeded,
-    /// Accounted work exceeds the finite call budget.
-    WorkBudgetExceeded,
-    /// Required content-free materialization receipt is absent.
-    MissingMaterializationReceipt,
-    /// Unitizer profile descriptor is malformed or unsupported.
-    UnitizerProfileInvalid,
-    /// Unitizer profile identity is not the accepted profile.
-    UnitizerProfileMismatch,
-    /// Unit manifest binding is incomplete for the claimed provenance.
-    UnitManifestIncomplete,
-    /// Legacy unit-manifest v1/v2 must be rebuilt, never relabelled as v3.
-    UnitManifestLegacyUnsupported,
-    /// A recomputed unit or manifest digest differs from the stored manifest.
-    UnitManifestDigestMismatch,
-    /// A stored manifest is internally inconsistent across rebuilds.
-    UnitizationNondeterministic,
-    /// Distinct full occurrence commitments derived the same truncated `UnitId`.
-    IdentityCollision,
+    /// The original deadline expired.
+    Deadline,
+    /// Saved framing, UTF-8, counts or descriptors are invalid.
+    InvalidArtifact,
+    /// Source, registration, input or transform binding differs.
+    BindingMismatch,
+    /// Representation bytes do not match the exact retained input digest.
+    IntegrityFailure,
 }
 
-impl UnitizationError {
-    /// Stable machine-readable reason code.
+impl PreparationError {
+    /// Stable content-free machine error code.
     #[must_use]
     pub const fn code(self) -> &'static str {
         match self {
-            Self::InvalidLimits => "UNITIZATION_INVALID_LIMITS",
-            Self::EmptyInput => "UNITIZATION_EMPTY_INPUT",
-            Self::InputTooLarge => "UNITIZATION_INPUT_TOO_LARGE",
-            Self::InvalidLineInventory => "UNITIZATION_INVALID_LINE_INVENTORY",
-            Self::LineIndexMismatch => "UNITIZATION_LINE_INDEX_MISMATCH",
-            Self::LineCoverageMismatch => "UNITIZATION_LINE_COVERAGE_MISMATCH",
-            Self::InvalidLineSpan => "UNITIZATION_INVALID_LINE_SPAN",
-            Self::InvalidLineEnding => "UNITIZATION_INVALID_LINE_ENDING",
-            Self::InvalidUtf8Boundary => "UNITIZATION_INVALID_UTF8_BOUNDARY",
-            Self::TooManyUnits => "UNITIZATION_TOO_MANY_UNITS",
-            Self::NoProgress => "UNITIZATION_NO_PROGRESS",
-            Self::UnitTooLarge => "UNITIZATION_UNIT_TOO_LARGE",
-            Self::UnitCoverageMismatch => "UNITIZATION_UNIT_COVERAGE_MISMATCH",
-            Self::OffsetOverflow => "UNITIZATION_OFFSET_OVERFLOW",
-            Self::Cancelled => "UNITIZATION_CANCELLED",
-            Self::DeadlineExceeded => "UNITIZATION_DEADLINE_EXCEEDED",
-            Self::WorkBudgetExceeded => "UNITIZATION_WORK_BUDGET_EXCEEDED",
-            Self::MissingMaterializationReceipt => "UNITIZATION_MISSING_MATERIALIZATION_RECEIPT",
-            Self::UnitizerProfileInvalid => "UNITIZER_PROFILE_INVALID",
-            Self::UnitizerProfileMismatch => "UNITIZER_PROFILE_MISMATCH",
-            Self::UnitManifestIncomplete => "UNIT_MANIFEST_INCOMPLETE",
-            Self::UnitManifestLegacyUnsupported => "UNIT_MANIFEST_LEGACY_UNSUPPORTED",
-            Self::UnitManifestDigestMismatch => "UNIT_MANIFEST_DIGEST_MISMATCH",
-            Self::UnitizationNondeterministic => "UNITIZATION_NONDETERMINISTIC",
-            Self::IdentityCollision => "UNIT_ID_CONFLICT",
+            Self::BinaryContent => "PREPARATION_BINARY_CONTENT",
+            Self::InvalidUtf8 => "PREPARATION_INVALID_UTF8",
+            Self::InputTooLarge => "PREPARATION_INPUT_TOO_LARGE",
+            Self::OutputTooLarge => "PREPARATION_OUTPUT_TOO_LARGE",
+            Self::TooManyLines => "PREPARATION_TOO_MANY_LINES",
+            Self::TooManyUnits => "PREPARATION_TOO_MANY_UNITS",
+            Self::UnitTooLarge => "PREPARATION_UNIT_TOO_LARGE",
+            Self::EncodedTooLarge => "PREPARATION_ENCODED_TOO_LARGE",
+            Self::InvalidSettings => "PREPARATION_SETTINGS_INVALID",
+            Self::InvalidLimits => "PREPARATION_LIMITS_INVALID",
+            Self::AllocationFailed => "PREPARATION_ALLOCATION_FAILED",
+            Self::OffsetOverflow => "PREPARATION_OFFSET_OVERFLOW",
+            Self::Cancelled => "PREPARATION_CANCELLED",
+            Self::Deadline => "PREPARATION_DEADLINE",
+            Self::InvalidArtifact => "PREPARATION_ARTIFACT_INVALID",
+            Self::BindingMismatch => "PREPARATION_BINDING_MISMATCH",
+            Self::IntegrityFailure => "PREPARATION_INTEGRITY_FAILURE",
         }
     }
 }
 
-impl fmt::Display for UnitizationError {
+impl From<MaterializationError> for PreparationError {
+    fn from(error: MaterializationError) -> Self {
+        match error {
+            MaterializationError::InvalidLimits => Self::InvalidLimits,
+            MaterializationError::InputTooLarge => Self::InputTooLarge,
+            MaterializationError::OutputTooLarge => Self::OutputTooLarge,
+            MaterializationError::BinaryContent => Self::BinaryContent,
+            MaterializationError::InvalidUtf8 => Self::InvalidUtf8,
+            MaterializationError::TooManyLines => Self::TooManyLines,
+            MaterializationError::AllocationFailed => Self::AllocationFailed,
+            MaterializationError::OffsetOverflow => Self::OffsetOverflow,
+            MaterializationError::Cancelled => Self::Cancelled,
+            MaterializationError::Deadline => Self::Deadline,
+        }
+    }
+}
+
+impl fmt::Display for PreparationError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(self.code())
     }
 }
 
-impl std::error::Error for UnitizationError {}
+impl std::error::Error for PreparationError {}
