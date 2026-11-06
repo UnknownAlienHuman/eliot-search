@@ -13,7 +13,7 @@ const MAX_ARGUMENTS: usize = 256;
 const MAX_ARGUMENT_BYTES: usize = 256 * 1024;
 
 #[derive(Clone, Copy)]
-pub(crate) enum RootCommand {
+pub enum RootCommand {
     Inspect,
     Initialize,
     CheckExistingOwner,
@@ -31,7 +31,7 @@ impl RootCommand {
     }
 }
 
-pub(crate) struct RootInvocation {
+pub struct RootInvocation {
     pub(crate) command: RootCommand,
     pub(crate) data_root: PathBuf,
 }
@@ -69,7 +69,7 @@ fn print_help() {
     ));
 }
 
-pub(crate) fn run_main() -> ExitCode {
+pub fn run_main() -> ExitCode {
     let started = Instant::now();
     let arguments = match capture_arguments() {
         Ok(arguments) => arguments,
@@ -92,9 +92,8 @@ pub(crate) fn run_main() -> ExitCode {
             ExitCode::SUCCESS
         }
         bootstrap::Parsed::Root(cli) => {
-            let startup_cwd = match std::env::current_dir() {
-                Ok(path) => path,
-                Err(_) => return emit_error("BOOTSTRAP_SETTINGS_INVALID:startup_cwd"),
+            let Ok(startup_cwd) = std::env::current_dir() else {
+                return emit_error("BOOTSTRAP_SETTINGS_INVALID:startup_cwd");
             };
             let invocation = match bootstrap::resolve(cli, &startup_cwd) {
                 Ok(invocation) => invocation,

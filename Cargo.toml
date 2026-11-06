@@ -1,5 +1,6 @@
 [workspace]
 resolver = "3"
+exclude = ["vendor/redb"]
 members = [
     "crates/search-contracts",
     "crates/search-domain",

@@ -92,7 +92,7 @@ fn map_io_error(error: &io::Error) -> PlainControlError {
     }
 }
 
-fn map_storage_error(error: &redb_plain::StorageError) -> PlainControlError {
+const fn map_storage_error(error: &redb_plain::StorageError) -> PlainControlError {
     match error {
         redb_plain::StorageError::Corrupted(_) => PlainControlError::Corrupt,
         redb_plain::StorageError::ValueTooLarge(_) | redb_plain::StorageError::Unsupported => {
@@ -248,6 +248,13 @@ fn read_empty_state(
     deadline: Instant,
     cancellation: &AtomicBool,
 ) -> Result<EmptyControlState, PlainControlError> {
+    check(deadline, cancellation)?;
+    let has_savepoints = database.has_persistent_savepoints();
+    check(deadline, cancellation)?;
+    if has_savepoints.map_err(|error| map_storage_error(&error))? {
+        return Ok(EmptyControlState::NotEmpty);
+    }
+
     check(deadline, cancellation)?;
     let transaction = database.begin_read();
     check(deadline, cancellation)?;
@@ -415,6 +422,19 @@ fn write_format_metadata(
     let transaction = database.begin_write();
     check(deadline, cancellation)?;
     let transaction = transaction.map_err(map_transaction_error)?;
+
+    let has_savepoint = {
+        check(deadline, cancellation)?;
+        let savepoints = transaction.list_persistent_savepoints();
+        check(deadline, cancellation)?;
+        let mut savepoints = savepoints.map_err(|error| map_storage_error(&error))?;
+        let has_savepoint = savepoints.next().is_some();
+        check(deadline, cancellation)?;
+        has_savepoint
+    };
+    if has_savepoint {
+        return Err(PlainControlError::Unsupported);
+    }
 
     let has_regular_table = {
         check(deadline, cancellation)?;
@@ -601,12 +621,15 @@ pub fn inspect_plain_control(
 /// [`PlainControlError::ProbeLimit`].
 /// A clean database with no regular or multimap tables is preformat empty;
 /// a formatted empty database contains only the single current format row.
+/// Both states also require the read-only system snapshot to contain no
+/// persistent savepoints retaining earlier user tables.
 ///
 /// # Errors
 ///
 /// Returns an error on cancellation, deadline expiry, unavailable or busy storage,
 /// corrupt or unsupported format metadata, or a file exceeding the probe size
-/// limit. Additional tables or metadata rows return `Ok(false)`.
+/// limit. Persistent savepoints, additional tables or metadata rows return
+/// `Ok(false)`.
 pub fn plain_control_is_empty(
     path: &Path,
     deadline: Instant,

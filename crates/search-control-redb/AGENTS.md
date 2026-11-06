@@ -7,6 +7,8 @@ Initialization and semantic-empty probing require the caller's root exclusion an
 Ordinary format inspection must stay read-only, without catalogue enumeration or a whole-file size ceiling.
 Read-only empty proofs are bounded before enumeration. A preformat retry may write only the exact proven empty
 file after its reader closes, must abort redb repair, and must not overwrite an existing application format.
+Empty proofs must exclude persistent savepoints in the stable system snapshot; current table absence alone
+does not establish that earlier committed source data is unretained.
 
 Keep the original deadline/cancellation inputs and distinguish unavailable I/O from corrupt or unsupported data.
 Preserve unsupported original files. Do not restore legacy journals, migration/authority/DEK frameworks, test-only

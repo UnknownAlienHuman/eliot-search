@@ -13,7 +13,7 @@ use crate::app::{RootCommand, RootInvocation};
 
 static CANCELLED: AtomicBool = AtomicBool::new(false);
 
-fn status_name(status: PlainRootStatus) -> &'static str {
+const fn status_name(status: PlainRootStatus) -> &'static str {
     match status {
         PlainRootStatus::Absent => "absent",
         PlainRootStatus::Empty => "empty",
@@ -50,7 +50,7 @@ fn emit_guarded(command: RootCommand, guard: PlainRootGuard) -> ExitCode {
     ExitCode::SUCCESS
 }
 
-pub(crate) fn run(invocation: RootInvocation, started: Instant) -> ExitCode {
+pub fn run(invocation: RootInvocation, started: Instant) -> ExitCode {
     let Some(deadline) = started.checked_add(Duration::from_secs(120)) else {
         return emit_error(PlainRootError::Deadline);
     };

@@ -1,13 +1,14 @@
 # eliot-search
 
-R068 implements one native argument capture and direct dispatch in the installed `entry.rs → app` path.
-Local help/version share one implementation; forwarding borrows the captured arguments. Five unlinked copies
-are removed. Existing DIRECT handlers remain: typed settings, the serviced client and safe typed rendering are
-still target behavior, not completed by this invocation change. The CLI must not own source/store/query state.
+The CLI provides local help/version and four one-shot root operations: inspect-data-root, initialize-data-root,
+check-existing-root-owner and discard-incomplete-data-root. It launches an owned eliot-searchd child for the
+selected operation. The CLI has no source-ingestion, search, Qdrant or live-query command.
 
-Read [FUNCTIONS.md](FUNCTIONS.md) for invocation, modes, presentation, cleanup and removal boundaries;
-[AGENTS.md](AGENTS.md) for editing constraints. Load protocol/client recipes only when those interfaces change.
+Read [FUNCTIONS.md](FUNCTIONS.md) for exact syntax, daemon selection, response handling and future client work;
+[AGENTS.md](AGENTS.md) gives editing constraints. The
+[current dispatch map](../../docs/implementation/CODE_MAP.md#existing-dispatch-to-replace) names the actual files.
 
-The connected retained-source → Qdrant → excerpt path remains implementation work under #264/#332.
-[Evidence status](../../docs/audit/ANALYSIS_REGISTRY.md#evidence-status) distinguishes inspected source from executed
-commands. Command names, help output and compiled dependencies alone do not establish a working CLI.
+This root operator path is not the connected retained-source → Qdrant → verified-excerpt product.
+Final root/control integrity and child-pipe fixes still require qualification at the final source revision.
+Executed evidence belongs in the [registry](../../docs/audit/ANALYSIS_REGISTRY.md#evidence-status);
+source inspection, helper probes and earlier binary runs do not qualify later changes or an installed baseline.

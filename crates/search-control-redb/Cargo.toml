@@ -11,7 +11,7 @@ readme = "README.md"
 path = "src/lib.rs"
 
 [dependencies]
-redb_plain = { package = "redb", version = "=4.5.0", default-features = false }
+redb_plain = { package = "redb", version = "=4.5.0", path = "../../vendor/redb", default-features = false }
 
 [lints]
 workspace = true

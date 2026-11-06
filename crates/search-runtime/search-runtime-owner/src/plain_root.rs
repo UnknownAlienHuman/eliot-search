@@ -607,7 +607,7 @@ fn classify_committed_root(
     }
     match inspect_control_format(&control_path, operation) {
         Ok(()) => Ok(PlainRootStatus::Current),
-        Err(error) => classify_control_failure(error).map_or(Err(error), Ok),
+        Err(error) => classify_control_failure(error).ok_or(error),
     }
 }
 

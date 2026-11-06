@@ -1,0 +1,68 @@
+diff --git a/src/db.rs b/src/db.rs
+index a11faf6e..3a15de9d 100644
+--- a/src/db.rs
++++ b/src/db.rs
+@@ -663,0 +664,2 @@ pub struct ReadOnlyDatabase {
++    system_root: Option<BtreeHeader>,
++    concurrency_mode: ConcurrencyMode,
+@@ -692,0 +695,55 @@ impl ReadOnlyDatabase {
++    /// Reports whether the read-only snapshot contains any persistent savepoints.
++    ///
++    /// This method supports only the default [`ConcurrencyMode::ExclusiveWriter`],
++    /// whose file lock excludes writers for this handle's lifetime. Its captured
++    /// system root therefore belongs to the same snapshot as the user tables read
++    /// through [`Self::begin_read`]. It reads the existing typed savepoint table
++    /// without creating a write transaction, changing the file, or repairing it.
++    ///
++    /// # Errors
++    ///
++    /// Returns [`StorageError::Unsupported`] for modes that permit concurrent
++    /// writers. Storage failures and invalid savepoint table metadata are returned
++    /// rather than treated as absence.
++    pub fn has_persistent_savepoints(&self) -> Result<bool> {
++        if self.concurrency_mode.is_multi_process_writable() {
++            return Err(StorageError::Unsupported);
++        }
++
++        let resolver = PageResolver::new(self.mem.clone());
++        let system_tree = TableTree::new(
++            self.system_root,
++            PageHint::None,
++            Arc::new(TransactionGuard::untracked()),
++            resolver.clone(),
++        )?;
++        let table_name = SAVEPOINT_TABLE.name();
++        let Some(definition) = system_tree
++            .get_table::<SavepointId, SerializedSavepoint<'static>>(table_name, TableType::Normal)
++            .map_err(|error| {
++                error.into_storage_error_or_corrupted("Unable to open persistent savepoint table")
++            })?
++        else {
++            return Ok(false);
++        };
++        let InternalTableDefinition::Normal { table_root, .. } = definition else {
++            return Err(StorageError::Corrupted(
++                "Persistent savepoint table is not a normal table".to_string(),
++            ));
++        };
++        let table: ReadOnlyTable<SavepointId, SerializedSavepoint<'static>> = ReadOnlyTable::new(
++            table_name.to_string(),
++            table_root,
++            PageHint::None,
++            Arc::new(TransactionGuard::untracked()),
++            resolver,
++        )?;
++        let mut savepoints = ReadableTable::iter(&table)?;
++        if let Some(savepoint) = savepoints.next() {
++            savepoint?;
++            Ok(true)
++        } else {
++            Ok(false)
++        }
++    }
++
+@@ -740,0 +798 @@ impl ReadOnlyDatabase {
++        let system_root = mem.get_system_root();
+@@ -743,0 +802,2 @@ impl ReadOnlyDatabase {
++            system_root,
++            concurrency_mode,

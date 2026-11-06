@@ -1,69 +1,76 @@
 # Code entrypoints and change map
 
-Base inspected: `d7ec099e`; CLI routing landed in R068; daemon routing below is implemented in R069.
-This maps actual files, not a claim that the replacement product is connected.
-The [owner map](README.md#owners) defines intended responsibilities; a row below does not require keeping a crate.
-Recheck callers and Cargo targets before editing. Update this map only when those entrypoints change.
+This map describes the current filesystem after the root cut. Current binaries expose root operations only.
+It does not qualify pending source changes or the future source-to-Qdrant product.
+The [owner map](README.md#owners) defines responsibilities; a row does not require keeping a crate.
 
 ## Real binaries
 
-| Package / target | Actual root | Important distinction |
+| Package / target | Actual entrypoint and implementation |
+|---|---|
+| eliot-search / eliot-search | [entry.rs](../../bins/eliot-search/src/entry.rs) → [app.rs](../../bins/eliot-search/src/app.rs); [manifest](../../bins/eliot-search/Cargo.toml) |
+| eliot-searchd / eliot-searchd | [entry.rs](../../bins/eliot-searchd/src/entry.rs) → [app.rs](../../bins/eliot-searchd/src/app.rs); [manifest](../../bins/eliot-searchd/Cargo.toml) |
+
+Both packages define only their binary target. The former library, main/sealed harness and wave/loopback feature
+routes are removed. Check the real binary; package names and retained workspace crates do not imply handlers.
+
+<a id="existing-dispatch-to-replace"></a>
+## Current operator dispatch
+
+    CLI entry → app::run_main → native command parse
+      standalone help/version → local output, no daemon
+      four root subcommands   → owned eliot-searchd child with matching --operation and settings
+                              → bounded root response validation → output
+
+    daemon entry → app::run_main → app/bootstrap::parse
+      standalone help/version → local output, no config/root acquisition
+      root command            → capture startup cwd → bootstrap::resolve → typed RootInvocation
+                              → native_root_command::run → search-runtime-owner
+                              → search-control-redb where control-format access is required
+
+| CLI subcommand | Daemon flag | Root function |
 |---|---|---|
-| eliot-search / eliot-search | [entry.rs](../../bins/eliot-search/src/entry.rs), [Cargo.toml](../../bins/eliot-search/Cargo.toml) | src/main.rs is a legacy test target, not the installed CLI |
-| eliot-searchd / eliot-searchd | [entry.rs](../../bins/eliot-searchd/src/entry.rs), [Cargo.toml](../../bins/eliot-searchd/Cargo.toml) | src/main.rs and sealed-* targets are legacy harnesses; checking the library alone misses entrypoint wiring |
+| inspect-data-root | --inspect-data-root | inspect_plain |
+| initialize-data-root | --initialize-data-root | initialize_plain |
+| check-existing-root-owner | --check-existing-root-owner | open_plain |
+| discard-incomplete-data-root | --discard-incomplete-data-root | discard_incomplete_plain |
 
-## Existing dispatch to replace
+Root functions take (&Path, Instant, &AtomicBool). Init/open return PlainRootGuard; inspection returns
+PlainRootInspection and discard returns unit. The daemon holds guards through terminal root output.
+Its original deadline/cancellation is passed to root/control effects.
 
-These are actual routes, not proposed public interfaces:
+The CLI operation comes first and accepts --daemon PATH for child selection. Daemon settings flags may surround
+its root command. Positional ROOT or --data-root selects the CLI layer; --config-file and
+ELIOT_SEARCH__BOOTSTRAP__DATA_ROOT can supply a missing root. See the
+[daemon recipe](../../bins/eliot-searchd/FUNCTIONS.md#current-entrypoints-and-removal-seams) for precedence and bounds.
 
-```text
-CLI main → app::run_main → capture native argv once → bounded dispatch
-  help/version                → local output, no daemon
-  serve-data-root             → public_client::run_command(tail)
-  remote/indexed (harness)     → selected legacy handler(tail)
-  remaining command           → app::core::run_command(command, tail)
-
-daemon main → app::run_main → bounded native argv capture → config CLI split → direct dispatch
-  removed legacy mutations    → refuse before effects
-  persistent DIRECT commands  → owner_composition::run_direct_registry(raw, started)
-  native root commands        → native_root_command::run_command(raw, mode, started)
-  migration commands          → source_migration_command::run_command(raw, started)
-  preparation commands        → preparation_composition::run_command(selected)
-  loopback (explicit harness) → authenticated_proxy::run_command(selected, config)
-  help/version/health/scans    → app shell handler
-```
-
-Both installed entrypoints now select directly; public_runtime_service and secure_commands were shadowed by the
-DIRECT-registry route and are deleted. Help has one owner and no post-dispatch additions. The separate legacy
-src/main.rs/sealed-* harnesses are not the installed application.
-
-F1 still needs consumed typed settings. Shell/harness receive the captured CLI layer; native custody reparses
-its raw input under the old model. Native-root/preparation commands reject unconsumed config flags rather than
-ignore them. Convert settings with the actual root constructor; do not prebuild a config facade. Existing DIRECT
-handlers are not the final framed service or plain root, and no new product operation is implied by this map.
+There is no active ingestion, scan, preparation, migration, persistent search, framed-query or alternate harness
+route. Root-state output does not report Qdrant availability. Final native qualification remains distinct from
+this source map.
 
 ## Work by path
 
-| Task | Existing source to trace | Rule owner / consumer to include |
-|---|---|---|
-| Capture settings | [search-config/src](../../crates/search-config/src/), daemon config_composition | [Settings](../../crates/search-config/FUNCTIONS.md); actual daemon constructors |
-| Root and exclusion | [runtime-owner/src](../../crates/search-runtime/search-runtime-owner/src/), [owner_composition](../../bins/eliot-searchd/src/owner_composition/) | [Root](../../crates/search-runtime/search-runtime-owner/FUNCTIONS.md); daemon + object store |
-| Acquire and retain a body | [native_source.rs](../../bins/eliot-searchd/src/owner_composition/kernel/native_source.rs), [safe-reader/src](../../crates/search-source/search-safe-reader/src/) | [Reader](../../crates/search-source/search-safe-reader/FUNCTIONS.md), [objects](../../crates/search-source/search-revision-store/FUNCTIONS.md); source-head installation |
-| Current rows and stale work | [source-registry/src](../../crates/search-source/search-source-registry/src/), [control-redb/src](../../crates/search-control-redb/src/) | [Source rows](../../crates/search-source/search-source-registry/FUNCTIONS.md); reconcile + preparation + publication |
-| Transform and units | [materializer/src](../../crates/search-prep/search-materializer/src/), [unitizer/src](../../crates/search-prep/search-unitizer/src/) | Their FUNCTIONS.md; object reader + projection consumer |
-| Qdrant calls | [bridge/src](../../crates/search-index-qdrant/search-qdrant-bridge/src/) | [Bridge](../../crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md); publication + actual query caller |
-| Publish and retain a view | [publication/src](../../crates/search-index-qdrant/search-publication/src/), control-redb | [Publisher](../../crates/search-index-qdrant/search-publication/FUNCTIONS.md); query + cleanup |
-| Query, evidence, Exact | [query family](../../crates/search-query/) | [Query map](../../crates/search-query/README.md); retained reader + protocol/daemon |
-| Child connection and output | [provider-client/src](../../crates/search-provider-client/src/), [protocol/src](../../crates/search-provider-protocol/src/) | [Client](../../crates/search-provider-client/FUNCTIONS.md), [protocol](../../crates/search-provider-protocol/FUNCTIONS.md), [CLI](../../bins/eliot-search/FUNCTIONS.md); both binaries |
-| Remove legacy security | CLI/daemon manifests; runtime secret/crypto packages; pairing/key-selection callers | [Removal map](../architecture/LOCAL_SCOPE.md#remove-legacy-security-wiring); preserve user data/private work, not unused public wrappers |
-| Remove Qdrant process scaffolding | Existing supervisor and its Cargo/feature callers | [Removal boundary](../../crates/search-index-qdrant/search-qdrant-supervisor/FUNCTIONS.md#removal-boundary); baseline connect uses only the bridge |
+The first three rows are current consumers. Remaining rows identify future integration owners, not installed
+commands or completed stages.
 
-Use [caller-search/check commands](WORKING_GUIDE.md#find-callers-before-changing-a-boundary) for each row. Legacy
-feature names are not product milestones. Shared data belongs with its real producer/consumer; do not implement
-the old search-contracts/search-ports catalogues just because their folders exist.
+| Boundary | Source / rule |
+|---|---|
+| Native CLI and child lifetime | [CLI app](../../bins/eliot-search/src/app.rs), [CLI recipe](../../bins/eliot-search/FUNCTIONS.md) |
+| Consumed settings and root dispatch | [bootstrap](../../bins/eliot-searchd/src/app/bootstrap.rs), [root handler](../../bins/eliot-searchd/src/native_root_command.rs) |
+| Plain root/control | [root source](../../crates/search-runtime/search-runtime-owner/src/plain_root.rs), [Root](../../crates/search-runtime/search-runtime-owner/FUNCTIONS.md), [control source](../../crates/search-control-redb/src/plain_control.rs), [Control](../../crates/search-control-redb/FUNCTIONS.md) |
+| Future stable acquisition and retained body | [Reader](../../crates/search-source/search-safe-reader/FUNCTIONS.md), [Objects](../../crates/search-source/search-revision-store/FUNCTIONS.md); connect a real daemon consumer |
+| Future current rows and stale work | [Source family](../../crates/search-source/README.md), [Control](../../crates/search-control-redb/FUNCTIONS.md) |
+| Future transforms and unit ranges | [Materializer](../../crates/search-prep/search-materializer/FUNCTIONS.md), [Unitizer](../../crates/search-prep/search-unitizer/FUNCTIONS.md) |
+| Future Qdrant calls | [Bridge](../../crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md), [Lexical](../../crates/search-lexical/FUNCTIONS.md) |
+| Future publication and view lifetime | [Publication](../../crates/search-index-qdrant/search-publication/FUNCTIONS.md); connect control and query consumers |
+| Future evidence and Exact | [Query family](../../crates/search-query/README.md), retained reader and daemon consumer |
+| Future framed connection and presentation | [Client](../../crates/search-provider-client/FUNCTIONS.md), [Protocol](../../crates/search-provider-protocol/FUNCTIONS.md), [CLI](../../bins/eliot-search/FUNCTIONS.md) |
+
+Use the [caller-search method](WORKING_GUIDE.md#find-callers-before-changing-a-boundary) within the selected owner.
+Do not restore deleted daemon implementations or unconsumed APIs because an older map or test named them.
 
 ## Keep the implementation small
 
-Start at the current stage, not every row. Root/settings → one retained file → Qdrant → CLI is the first path.
-Use one plain writer, one typed metadata store, one publisher and one serviced client. No crypto/ACL subsystem,
-second search engine, controller, duplicate queue database or new wrapper crate is needed to complete that path.
+The next connected product path is root/settings → one retained file/current row → preparation → Qdrant → CLI.
+Build the actual owners and delete displaced code with its callers. Root-only command checks, helper-native
+probes and retained workspace libraries do not qualify that pipeline or an installed baseline.

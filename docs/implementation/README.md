@@ -6,6 +6,9 @@ This page owns delivery order and cross-owner values. Use [code map](CODE_MAP.md
 
 ## Connected path
 
+The current binaries expose the four root operator operations only. The following source-to-query path and
+Stages 2–5 are future integration work, not available commands or a qualification claim.
+
 ```text
 selected source → stable acquired bytes → immutable ObjectRef/current SourceRecord
 → prepared representation or explicit gap → Qdrant generation + matching published evidence
@@ -20,7 +23,7 @@ Preserve user data and unpublished #598 work without depending on it. A boundary
 
 | Value | Meaning |
 |---|---|
-| DataRootGuard | Open root metadata/path and one retained process-lock handle |
+| PlainRootGuard | Current root-owner type retaining the root path and process-lock handle |
 | ObjectRef | Format version, kind, content address and exact length; no crypto profile |
 | SourceRecord | Source identity, non-reset row/registration guard, retained reference and selection facts |
 | PreparedRef | Exact input ObjectRef, transform identity and artifact/outcome |
@@ -28,7 +31,7 @@ Preserve user data and unpublished #598 work without depending on it. A boundary
 | QueryScoringProfile | Request-time BM25 settings; not a reason to rebuild |
 | PublishedView | Exact physical collection/profile and matching owned redb read snapshot |
 | EvidenceRef | Point/source/prepared binding, representation and range |
-| ExecutionContext | Original absolute deadline, cancellation and operation-specific finite counters |
+| Execution context | Original absolute deadline, cancellation and finite work; root APIs take these directly |
 | RequestContext | Execution state plus pinned view/selection; Search adds scoring |
 
 These are meanings, not an instruction to create a public type or crate for every row. Root/object/preparation/
@@ -40,7 +43,7 @@ the window's original view/results, not the latest index. Stage 2/3A has no intr
 
 | Responsibility | Owning recipe |
 |---|---|
-| Invocation/settings | [Config](../../crates/search-config/FUNCTIONS.md) |
+| Invocation/settings | [Daemon bootstrap](../../bins/eliot-searchd/src/app/bootstrap.rs), [settings rules](../../crates/search-config/FUNCTIONS.md) |
 | Root/lock/shared file publication | [Root](../../crates/search-runtime/search-runtime-owner/FUNCTIONS.md) |
 | Immutable bytes | [Objects](../../crates/search-source/search-revision-store/FUNCTIONS.md) |
 | Acquisition/current source/inventory | [Source family](../../crates/search-source/README.md) |
@@ -60,21 +63,30 @@ the window's original view/results, not the latest index. Stage 2/3A has no intr
 <a id="1-foundation--invocation-settings-and-root"></a>
 ### 1. Foundation — invocation, settings and root
 
-Owners #333/#266/#360. Implement actual help/version → args_os/settings once → inspect/init/open → root guard →
-factual status. Only data root, bounded config input and diagnostics are needed. No keys or storage-mode selector.
-Use the root owner's standard lock and same-parent no-clobber helper, not a custom Windows security platform.
-Initialize manifest-last; known empty incomplete state may be explicitly discarded/retried. Unknown/user data stays.
-Use the [actual dispatch map](CODE_MAP.md#existing-dispatch-to-replace). Work in this order:
+Owners #333/#266/#360. Current source connects help/version and native arguments to typed root input, then
+inspect, initialize, check-existing-owner or explicit incomplete-init discard. The CLI uses bare operation
+subcommands; the daemon uses matching --operation flags. See the
+[actual dispatch map](CODE_MAP.md#existing-dispatch-to-replace) and exact syntax in the
+[CLI](../../bins/eliot-search/FUNCTIONS.md#capture-and-dispatch) and
+[daemon](../../bins/eliot-searchd/FUNCTIONS.md#current-entrypoints-and-removal-seams) recipes.
 
-| Connected change | Stop condition before the next change |
+Only data_root is consumed from bounded file/environment/CLI settings. Diagnostics use fixed output bounds;
+there is no accepted diagnostic_limit setting, storage-mode selector or external initialization ID.
+The root owner implements manifest-last initialization, existing-root opening and explicit incomplete-init
+discard using the same control format that search-control-redb owns. Init/open hold PlainRootGuard through
+the terminal output. No source body, Qdrant backend or query handler is constructed by these commands.
+
+| Boundary | Required behavior and final check |
 |---|---|
-| Parse invocation once | Help/version and invalid input finish before spawning or opening stores; selected settings reach the actual handler. |
-| Route inspect/init/open to the root owner | One guard owns the real root lifetime; plain initialization and refusal paths use the existing root recipe, not key selection. |
-| Connect factual status and remove bypasses | Real binary dispatch cannot enter a displaced route for converted commands; status reports observed root/store state. |
+| Invocation and settings | Help/version and malformed command shape finish before root effects; lower settings layers validate before override. |
+| Root lifetime and control format | All four operations use the root owner and the caller's original deadline/cancellation; existing/user data is preserved. |
+| Factual output and child cleanup | Output names the requested root operation and observed state; execute final child-exit, pipe and failure cases. |
 
-These can land as small connected cuts with minimal actual-consumer check/Clippy. No Qdrant server, complete
-settings catalogue, transport rewrite, crypto removal programme or future test framework blocks Foundation.
-When a shared legacy route cannot yet leave, name its remaining caller and next removal; do not create a facade.
+The displaced binary routes and exclusive legacy fixtures are physically removed. Do not restore them as
+compatibility scaffolding. Final root/control integrity and child-pipe fixes still require locked checks and
+native qualification at the final source revision. Earlier binary runs and helper-native probes do not
+qualify later changes, universal root safety or an installed baseline. Record final evidence in the existing
+registry; this delivery sequence is not a second status ledger.
 
 <a id="2-walking-skeleton--one-file-to-one-cli-result"></a>
 ### 2. One file to one CLI result
@@ -83,13 +95,14 @@ Coordinator #264. One explicit local file → stable read → plain ObjectRef/cu
 fresh vectorless Qdrant collection → explicit scoring text index → InsertOnly/readback/canary → matching current
 and evidence commit → PublishedView → TextQuery → retained excerpt → CLI.
 
-Upgrade exact Qdrant client/server/schema and their real consumers together; the main lock still has client 1.19.0,
-while the selected scoring-text path needs the documented 1.20.x APIs. Pin the exact adopted patch at the code cut.
+Upgrade exact Qdrant client/server/schema and their real consumers together. The selected scoring-text path
+requires its documented APIs; pin and qualify the exact adopted patches at that future code cut.
 Use lexical/bridge owner settings, not copied tables. Keep final owners' persistent references, not a throwaway demo.
 Connect to the operator-started local server; no supervisor construction or key lease. A fresh root without a
 published generation is buildable, not a corrupt root or a successful empty search; the bridge owns those cases.
-The one-shot CLI uses the actual owned-child framed path for one request. Live paging/windows arrive in Stage 4;
-do not create a temporary line protocol or require full interactive behavior to deliver the first result.
+This stage must connect an actual owned-child framed path for one search request; the current root child is
+not a framed search session. Live paging/windows arrive in Stage 4. Do not add a temporary line protocol or
+require full interactive behavior to deliver the first retained excerpt.
 No broad inventory, watcher, paging, encryption, permission system, point mutation or cleanup platform first.
 Complete when default binaries return real retained evidence through Qdrant; missing/corrupt evidence is not a card.
 
@@ -127,12 +140,16 @@ consumers. No encryption or restricted-user phase. Qdrant Edge, if studied later
 <a id="publication-and-retrieval"></a>
 ## Lifetime and lock order
 
+PlainRootGuard currently covers a one-shot root operation through output. The following publication/view/session
+ordering applies when those future owners are connected.
+
 Root guard precedes and outlives stores. Publication serializes selection, performs object/backend I/O outside
 redb writers, commits bounded metadata, opens/verifies its snapshot, then installs under a short view lock.
 Do not start the next publication before install/recovery completes. No final transaction copies the corpus.
 New Search/Exact clones current under the short lock and releases it before work. Continue/Expand keep their
 existing view. No writer/view/window mutex or mutable map borrow spans I/O; owned guards may remain live.
-Last guard drop wakes cleanup but performs no deletion. One session owner prepares then applies cursor changes.
+For future published views, last view-guard drop wakes cleanup but performs no deletion. One session owner
+prepares then applies cursor changes.
 
 ## Slice completion
 
