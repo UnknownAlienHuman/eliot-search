@@ -1,121 +1,104 @@
 # Work register
 
-One place for remaining work, current evidence and the next task. Algorithms stay in owner recipes.
-**R069 — connected daemon invocation and shadow-route removal, 2026-11-02.** Base: `d7ec099e4a7cf107c190ee6b124cc7cd496bfeee`.
+Current checkpoint, 2026-11-06: Windows debug root operator qualified at source
+ad8cc9e8fa498d43b644246af3b7f4900890317a. Source acquisition through verified Qdrant search remains unconnected.
 
 <a id="resume"></a>
 <a id="resume-after-interruption"></a>
 ## Next task
 
-**Finish consumed bootstrap settings, then plain root ownership.** CLI and daemon now each capture native argv
-once and select the real handler. Do not redo dispatch. Start in daemon config_composition and its actual
-NativeRootRequest/root consumer: capture startup cwd, merge only consumed bootstrap fields and pass checked
-values directly. Remove raw-argv custody and the displaced config registry with their consumers, not by adding
-a second configuration facade. A small F1 settings change may land together with its F2 root consumer; no
-placeholder settings layer is required to cross the row boundary.
-
-The [code map](../implementation/CODE_MAP.md#existing-dispatch-to-replace) shows actual routes. Native-root and
-preparation handlers currently reject config flags they do not consume. Existing DIRECT effects, protected-root
-mechanisms and the final serviced client still need their named cutovers. Do not implement missing Unix crypto
-or enable every old feature to make the new plain product appear complete.
-
-One manager owns one worktree and the integration diff. Give an executor one row plus its affected paths,
-owner recipe, preserved invariants and stop condition. Read its changed caller path, not every document.
-After two failed approaches, record the cause and change approach; do not stack fallback wrappers or suppress errors.
+**S1: connect the first real bounded file read to retained bytes and a guarded current source row.**
+Use the actual daemon entry/app path and source owners: no-execute acquisition → plain ObjectRef →
+guarded CurrentSourceRecord in the same search-control-redb 4.5.0 database. Preserve the acquired bytes through
+retention instead of rereading them. Retained Source/materializer/Qdrant crates still need actual caller cutovers.
+The [code map](../implementation/CODE_MAP.md#existing-dispatch-to-replace) names current entrypoints;
+do not restore deleted root constructors or legacy fixtures.
 
 <a id="work-register"></a>
 <a id="delivery-remaining"></a>
 ## Remaining work
 
-READY means work can start; PARTIAL means a named increment landed and the remainder can continue; WAIT means
-its prerequisite is not complete.
-DONE requires landed files and recorded checks, never a revised recipe. IDs are local navigation, not a new API.
-The [package register](WORKSPACE_MEMBER_DISPOSITION_2026-10-21.md#package-register) covers every remaining member.
+The [package register](WORKSPACE_MEMBER_DISPOSITION_2026-10-21.md#package-register) records package dispositions.
+DONE below is the named delivered scope, not completion of the product.
 
-| ID / status | Depends on | Exact starting paths and owner | Stop condition / removal |
+| ID / status | Depends on | Owner / current starting point | Required result |
 |---|---|---|---|
-| C0 / DONE (R067) | None | Old xtask/swarm/tooling and five unconsumed packages | Source, manifests, unused lock entries, exclusive fixtures/workflows and competing documents removed together; no surviving input reader lost. |
-| F1 / PARTIAL | None | daemon src/entry.rs, app, config_composition; [settings](../../crates/search-config/FUNCTIONS.md) | Both installed entrypoints capture once and route directly. Finish consumed typed bootstrap settings with the real root constructor; eliminate residual raw-argv/config revalidation. Keep help/version/rejected invocation effect-free and check the changed binaries. |
-| F2 / WAIT for consumed settings | F1 settings, may land together | daemon owner_composition, native_root_command; [root](../../crates/search-runtime/search-runtime-owner/FUNCTIONS.md) | Plain inspect/init/open and factual status use one lifetime guard. Move concrete OS/file operations, remove legacy key/epoch/initialization protocols; do not add Linux no-op security adapters. |
-| S1 / WAIT | F2 | owner_composition/kernel/native_source.rs, safe_reader_adapter; [source map](../../crates/search-source/README.md#ownership) | Same acquired bytes reach plain ObjectRef and guarded current row. Delete receipt/provenance/registry replay and duplicate writers with their actual consumers. |
-| P1 / WAIT | S1 | preparation_composition; [materializer](../../crates/search-prep/search-materializer/FUNCTIONS.md), [unitizer](../../crates/search-prep/search-unitizer/FUNCTIONS.md) | One UTF-8 representation/ranges, one stored outcome, no adjacent reparse or second writer. Empty/gap and stale-result semantics remain truthful. |
-| Q1 / WAIT | P1 | publication_composition, search-control-redb, [bridge](../../crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md), [publisher](../../crates/search-index-qdrant/search-publication/FUNCTIONS.md) | Real fixed build, matching current/evidence state and installed view. Adopt exact client/server with consumers; remove supervisor/lease/proof coupling, not by creating dummy credentials. |
-| U1 / WAIT | Q1 | public_client, owner_composition direct_registry, provider_composition; [CLI](../../bins/eliot-search/FUNCTIONS.md), [client](../../crates/search-provider-client/FUNCTIONS.md), [protocol](../../crates/search-provider-protocol/FUNCTIONS.md) | One-shot CLI returns a verified retained excerpt via final child-stdio path. Remove pairing/pipe/bootstrap/duplicate requests and old query plan/executor wrappers. No throwaway transport. |
-| R1 / WAIT | U1 | source_roots, source-reconcile, control, publication, pins/reclaimer | Restart and complete desired-state comparison converge without lost wakeups; old views stay valid and whole generations clean safely. Remove duplicate journals, point GC and full-catalogue status scans. |
-| X1 / WAIT | R1 | query family, daemon continuation/result_handles, client | Exact scans retained inventory; live windows keep original view/order, bounded expansion and expiry. Delete duplicate handle/catalogue/fence/replay state. |
-| M1 / WAIT | R1 | daemon maintenance/restore_composition; [maintenance](../../crates/search-runtime/search-retention/FUNCTIONS.md) | Complete stopped-root marking, non-runnable archives and isolated fresh-destination import. Remove generic lease/purge/restore machinery, preserving originals. |
-| O1 / DEFERRED | Connected baseline + explicit need | code-enricher, overlay, comparator, subject-resolver; [optional depth](../product/AGENT_ANALYSIS_FRAMEWORK.md#optional-depth) | Remove unconsumed scaffolds after feature/launch/caller check. Implement optional behavior only for a selected real consumer; no empty replacement binaries or placeholders. |
-| V1 / WAIT | Connected shipped paths | [later checks](../implementation/TEST_CUTOVER.md), issue #215 | Run actual behavior/platform/relevance/resource cases; publish only supported measured claims and executed Quickstart. Before this, production cuts run minimal check/Clippy, not broad tests. |
+| C0 / DONE | None | Removed controller tooling and unused packages | Keep displaced producers/fixtures physically removed. |
+| F1 / DONE, Windows debug root scope | None | CLI/daemon entry/app; [settings](../../crates/search-config/FUNCTIONS.md) | Consumed native file/environment/CLI root settings and effect-free help/version. |
+| F2 / DONE, Windows debug root scope | F1 | daemon native_root_command; [root](../../crates/search-runtime/search-runtime-owner/FUNCTIONS.md), [control](../../crates/search-control-redb/FUNCTIONS.md) | Four plain root operations, stable exclusion, actual control format and bounded factual output. |
+| S1 / READY | F2 | daemon app + [source owners](../../crates/search-source/README.md#ownership), safe reader/object store/control | One actual bounded file read → ObjectRef → guarded CurrentSourceRecord. |
+| P1 / WAIT | S1 | Materializer/unitizer and a real daemon consumer | One retained representation/ranges and explicit empty/gap outcomes. |
+| Q1 / WAIT | P1 | Control, Qdrant bridge and publisher | Actual build/readback → matching current/evidence state → installed PublishedView. |
+| U1 / WAIT | Q1 | CLI app and provider client/protocol owners | Owned-child framed search returning a verified retained excerpt. |
+| R1 / WAIT | U1 | Source reconciliation, control and publication | Restart/inventory convergence and whole-generation lifetime/cleanup. |
+| X1 / WAIT | R1 | Exact/query window and client owners | Retained exact denominator, same-session paging/expansion and expiry. |
+| M1 / WAIT | R1 | Retention and future stopped-root maintenance caller | Conservative collection/archive/import preserving originals. |
+| O1 / DEFERRED | Connected baseline + actual need | [Selected depth](../product/AGENT_ANALYSIS_FRAMEWORK.md#optional-depth) | Add only an actual source-backed consumer; remove unused scaffolds. |
+| V1 / WAIT | Connected shipped paths | [Qualification](../implementation/TEST_CUTOVER.md), #215 | Measured relevance/scale/platform/release and installed-baseline evidence. |
 
-Stage 3B is conditional on declared Stage 3A budgets failing, not an additional prerequisite. Delivery order and
-mechanisms remain in the [implementation sequence](../implementation/README.md#delivery-sequence). Shared
-contracts/domain/ports shrink with each real consumer above; there is no separate global rewrite phase.
+[Implementation](../implementation/README.md#delivery-sequence) owns delivery order. Stage 3B is conditional
+on measured Stage 3A budgets failing; there is no separate global rewrite programme.
 
 <a id="established-decisions--do-not-rediscover"></a>
 <a id="decisions-and-owners"></a>
 ## Preserved decisions
 
-[Local scope](../architecture/LOCAL_SCOPE.md): plain per-account storage, same-host operator-owned Qdrant, owned-child
-stdio. No application encryption, key platform, grants or multi-user layer. Keep source integrity, exclusions,
-finite work, coherent views and conservative deletion. Preserve user originals/keys and unpublished branches.
+[Local scope](../architecture/LOCAL_SCOPE.md): one OS account, plain local storage, operator-owned same-host
+Qdrant and owned-child stdio. Keep no-execute input handling, finite work, data integrity and conservative deletion.
+Preserve user originals/keys and unpublished branches.
 
 <a id="coverage-ledger"></a>
 <a id="changed-documentation"></a>
 ## Cleanup delivered
 
-R069 connects the daemon app dispatcher and passes captured arguments/configuration to existing handlers.
-One help/version path replaces competing help. Native file paths remain lossless; invalid command/query text
-and unexpected shape refuse before their effects. No new crate, dependency, state service or transport.
-
-Removed public_runtime_service and secure_commands: their persistent commands were already handled by the earlier
-DIRECT-registry owner. Their exclusive fixtures and four source-shape test files leave with the removed topology.
-The DIRECT effect implementation is retained, not replaced by a stub. Legacy refusal remains before writes.
-R067 cleanup and R068 CLI remain landed; Cargo graph, other branches and user bytes/keys are unchanged.
+The selected root/control/both-binary closures physically removed 706 obsolete files, approximately 163,000 lines.
+Legacy initializers/producers and exclusive fixtures are deleted, not retained behind cfg(test).
+Current root operations use the same control/control.redb format through the control owner and redb 4.5.0;
+the old 2.6 implementation is removed. The vendor data-safety patch exposes persistent-savepoint information
+through the native read-only API. [Vendor provenance](../../vendor/redb/ELIOT_VENDOR.md) records that patch.
 
 <a id="evidence-status"></a>
 <a id="execution-evidence"></a>
 ## Verification and known blockers
 
-[Run 41519190759](https://github.com/UnknownAlienHuman/eliot-search/actions/runs/41519190759) compared exact base
-`d7ec099e` and source `3ecb5837` on Ubuntu 24.04 and Windows 2025, Rust 1.98.0. Actual installed daemon target,
-default and explicit `--features legacy-loopback-harness`:
+Evidence is for the following exact SOURCE revisions on Windows debug / Rust 1.98.0, not a later docs head:
 
-```text
-cargo +1.98.0 check --locked -p eliot-searchd --bin eliot-searchd [feature selection]
-cargo +1.98.0 clippy --locked -p eliot-searchd --bin eliot-searchd [feature selection] --no-deps -- -D warnings
-```
+- f680222357de64dcb131d50f2f4e5b3b825f493b: locked check and strict Clippy (--no-deps -- -D warnings)
+  PASS for search-control-redb --lib, search-runtime-owner --lib, eliot-search --bin eliot-search and
+  eliot-searchd --bin eliot-searchd; both binary builds PASS.
+- ad8cc9e8fa498d43b644246af3b7f4900890317a: CLI-only deadline-boundary delta; CLI locked check, strict
+  Clippy, build and new basic execution PASS. Root/control/daemon blobs are unchanged from f680.
+- At ad8, 35 native command records / 22 recovery-config assertions PASS. Real formatted and vendor preformat-empty
+  retry reached current; discard retained only the same root.lock native file identity. Known partial stages
+  recovered; completed hardlinks classified current. Unknown stages/sentinels refused with inventories preserved.
+  File-parent versus startup-cwd resolution, file < environment < CLI across distinct roots, and overridden
+  empty/escaped-NUL lower-layer rejection passed. Stages were constructed filesystem states, not process kills.
+- Same golden savepoint ID 1 / retained-user-data regression: old 248 was RED (database deletion on a copy);
+  fixed f680 CLI and daemon init/discard refused and preserved every file hash.
+- Earlier native root API probes passed actual second-process Busy and cancellation/expiry before initialization
+  with no filesystem effects; these were not repeated in the ad8 batch. The f680 Windows descendant-pipe
+  deadline case passed once in 180.75 seconds. Actual expired-before-spawn process execution: NOT_RUN; source
+  boundary reviewed. No universal OS timing guarantee is inferred.
+- Independent vendor read-only source/API baseline and final ad8 Root SOURCE review by gpt-6.1 Sol PASS;
+  no unresolved P1/P2 findings. Source review and helper-native owner evidence are not installed-baseline proof.
 
-| Check | Base → changed source | Required follow-through |
-|---|---|---|
-| Windows check, default/harness | PASS → PASS, warnings remain | Compilation, not executed command or product behavior. |
-| Linux check, default/harness | FAIL → FAIL, same 19 compiler errors | Existing missing unsupported-module paths, unconditional Windows imports and missing File import remain with the actual platform/root cut. No fake adapter or cfg-hidden success. |
-| Windows strict package Clippy, default | FAIL: 164 → 390 diagnostics | Removing shadow callers exposes unused support; not an unchanged or passing lint result. |
-| Windows strict package Clippy, harness | FAIL: 190 → 414 diagnostics | Same exposure, plus inherited harness debt. |
-| Linux strict package Clippy | FAIL at the existing compiler boundary | No clean lint claim for code not reached. |
+The ad8 recovery/config artifact SHA-256 values are:
 
-New Windows diagnostic blocks are unused imports/declarations/fields in the remaining legacy support, not a
-reason to retain the fake calling routes or add lint suppressions. Trace/prune continuation/result_handles,
-service_output, old store reads and native registration/read/sync support with their actual feature/harness
-consumers during F1/F2/U1/X1. Their source was previously kept apparently live by unreachable dispatchers.
-The retained source is not declared clean. `--no-deps` does not qualify dependency lints.
+    CLI     473868F3DD18A6D30CE58B6AC19AFEC16E88405891E17603E124134EDA860D3D
+    daemon  F71ABD97C1A051709D8F7E8871139EED2F153900A044FF850932C024D60E03D0
 
-Recovered the complete 1,709-blob snapshot at `c1937655` (base plus temporary workflow) and verified every blob.
-Reviewed effective route precedence, source/module/launch references and removed-family consumers. Exact authored
-outputs were hash-checked before creating the candidate; no source was synthesized by the temporary transfer job.
-Final navigation, path and diff results are recorded in this change's PR, not inferred from earlier checks.
-Temporary transfer/verification workflows are removed before landing. No tests, executed daemon scenario,
-full-feature build, Qdrant, runtime/performance result or independent-agent review is claimed.
+Actual process-kill/power-loss recovery, other platforms, installed baseline, source ingestion, preparation,
+Qdrant publication and verified search remain NOT_RUN/unconnected. [Quickstart](../../QUICKSTART.md)
+contains only the qualified root operator surface. The overall project goal remains open.
 
 ## Update and finish a task
 
-Change status only with the actual result: record commit, command/target/features, outcome and remaining blocker.
-Update changed package rows and one owning recipe; keep issue bodies as links. A blocked agent leaves its concrete
-cause and safe diff, not fabricated completion. The integration owner rechecks dispatch, removed imports and the
-minimal build closure before landing. Remaining source defects are not erased by a smaller file count.
+Update this checkpoint and its owning recipe with actual consumer changes and exact-source evidence.
+Do not promote compilation, fixture success or a review badge into unexecuted product behavior.
 
 <a id="evidence-index"></a>
 <a id="prior-evidence"></a>
 ## History
 
-[R068 registry](https://github.com/UnknownAlienHuman/eliot-search/blob/d7ec099e4a7cf107c190ee6b124cc7cd496bfeee/docs/audit/ANALYSIS_REGISTRY.md)
-retains earlier evidence. The old #610 branch is reference material to reconcile, not a bulk merge instruction.
+Earlier investigation remains in [Git history](https://github.com/UnknownAlienHuman/eliot-search/blob/f680222357de64dcb131d50f2f4e5b3b825f493b/docs/audit/ANALYSIS_REGISTRY.md);
+its deleted paths and former test/feature instructions are not current implementation work.
