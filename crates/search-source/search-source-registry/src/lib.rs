@@ -17,6 +17,9 @@ pub const MAX_PREPARATION_UNIT_BYTES: u32 = 64 * 1024;
 /// Worst-case JSON escaping for one full 64 KiB unit plus closed metadata and framing.
 pub const MAX_PREPARATION_RESPONSE_BYTES: usize = 6 * 64 * 1024 + 4096;
 
+/// At most 64 fixed-field evidence hits (2048 serialized bytes each), plus generation framing.
+pub const MAX_PUBLICATION_RESPONSE_BYTES: usize = 64 * 2048 + 4096;
+
 /// Output-affecting settings for unchanged UTF-8 and line-preferred units.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct PreparationSettings {

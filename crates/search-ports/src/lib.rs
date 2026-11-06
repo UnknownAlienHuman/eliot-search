@@ -35,7 +35,7 @@ pub use error::{DisclosureClass, PortError, PortErrorKind, PortFailure, PortRetr
 pub use handles::{HandleInvalidationScope, HandleLimits};
 pub use index::{DefaultPinOwner, EpochPinPort, SearchIndexAdminPort, SearchIndexPort};
 pub use optional::ModelProviderPort;
-pub use preparation::{CodeEnricherPort, LexicalEncoderPort, MaterializerPort, UnitizerPort};
+pub use preparation::{CodeEnricherPort, MaterializerPort, UnitizerPort};
 pub use query::{AccessCompilerPort, ExactScannerPort, HandleStorePort, OverlayPort};
 pub use runtime::{ClockPort, MonotonicInstant, ProcessSupervisorPort, SecretStorePort};
 pub use source::{

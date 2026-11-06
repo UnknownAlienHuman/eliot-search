@@ -23,6 +23,7 @@ search-safe-reader.workspace = true
 serde.workspace = true
 search-source-registry.workspace = true
 search-unitizer.workspace = true
+search-qdrant-bridge.workspace = true
 serde_json.workspace = true
 toml.workspace = true
 

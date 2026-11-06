@@ -15,18 +15,14 @@ members = [
     "crates/search-prep/search-materializer",
     "crates/search-prep/search-unitizer",
     "crates/search-prep/search-code-enricher",
-    "crates/search-lexical",
     "crates/search-index-qdrant/search-point-identity",
     "crates/search-index-qdrant/search-qdrant-supervisor",
     "crates/search-index-qdrant/search-qdrant-bridge",
     "crates/search-index-qdrant/search-epoch-pins",
-    "crates/search-index-qdrant/search-index-reclaimer",
     "crates/search-query/search-access",
-    "crates/search-query/search-overlay",
     "crates/search-query/search-exact",
     "crates/search-query/search-subject-resolver",
     "crates/search-query/search-query-planner",
-    "crates/search-query/search-retrieval-executor",
     "crates/search-query/search-candidate-validator",
     "crates/search-query/search-comparator",
     "crates/search-query/search-handles",
@@ -63,18 +59,14 @@ search-revision-store = { path = "crates/search-source/search-revision-store" }
 search-materializer = { path = "crates/search-prep/search-materializer" }
 search-unitizer = { path = "crates/search-prep/search-unitizer" }
 search-code-enricher = { path = "crates/search-prep/search-code-enricher" }
-search-lexical = { path = "crates/search-lexical" }
 search-point-identity = { path = "crates/search-index-qdrant/search-point-identity" }
 search-qdrant-supervisor = { path = "crates/search-index-qdrant/search-qdrant-supervisor" }
 search-qdrant-bridge = { path = "crates/search-index-qdrant/search-qdrant-bridge" }
 search-epoch-pins = { path = "crates/search-index-qdrant/search-epoch-pins" }
-search-index-reclaimer = { path = "crates/search-index-qdrant/search-index-reclaimer" }
 search-access = { path = "crates/search-query/search-access" }
-search-overlay = { path = "crates/search-query/search-overlay" }
 search-exact = { path = "crates/search-query/search-exact" }
 search-subject-resolver = { path = "crates/search-query/search-subject-resolver" }
 search-query-planner = { path = "crates/search-query/search-query-planner" }
-search-retrieval-executor = { path = "crates/search-query/search-retrieval-executor" }
 search-candidate-validator = { path = "crates/search-query/search-candidate-validator" }
 search-comparator = { path = "crates/search-query/search-comparator" }
 search-handles = { path = "crates/search-query/search-handles" }
@@ -88,7 +80,9 @@ search-provider-transport-windows = { path = "crates/search-runtime/search-provi
 
 # Single vendor-SDK pin. Only search-qdrant-bridge may inherit this
 # dependency; its exact version must match the qualified client receipt.
-qdrant-client = { version = "=1.19.0", default-features = false }
+qdrant-client = { version = "=1.20.0", default-features = false }
+tonic = { version = "=0.14.6", features = ["transport", "tls-native-roots", "tls-ring"] }
+prost = "=0.14.3"
 
 # #237: exact private algorithm mechanisms; search-contracts owns canonical
 # bytes/domains and typed outputs. `pure` is intentionally pinned (upstream

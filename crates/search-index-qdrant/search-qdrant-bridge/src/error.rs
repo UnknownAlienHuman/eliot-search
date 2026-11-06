@@ -1,83 +1,74 @@
-use core::fmt;
+//! Content-free boundary failures.
 
-/// Closed Qdrant bridge failure.
-#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
-pub enum BridgeError {
-    EndpointNotLoopback,
-    AuthenticationInvalid,
-    AuthenticationLeaseExpired,
-    SupervisorReceiptMismatch,
-    CapabilityProbeFailed,
-    CapabilityReceiptMismatch,
-    CollectionAlreadyExists,
-    CollectionNotFound,
-    CollectionSchemaMismatch,
-    PayloadIndexMissing,
-    NamedVectorMissing,
-    VectorDimensionMismatch,
-    StrictModeRequired,
-    MutationTooLarge,
-    DuplicatePointId,
-    PointNotFound,
-    OperationConflict,
-    MutationOutcomeUnknown,
-    ExactReadbackMismatch,
-    UnexpectedPoint,
-    InvalidFilter,
-    UnindexedFilter,
-    QueryBudgetExceeded,
-    InvalidScore,
-    /// The operation was cancelled before dispatch or between bounded pages.
-    Cancelled,
-    /// The transport failed without a possible external write (reads and
-    /// pre-send connect failures). Mutations that may have committed after
-    /// dispatch report [`BridgeError::MutationOutcomeUnknown`] instead.
-    TransportFailed,
-    /// The server returned a response that does not match the exact expected
-    /// shape (missing identity, payload or vector fields, oversize page).
+use std::fmt;
+
+/// A definite refusal/read failure or an unresolved dispatched mutation.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum BackendError {
+    /// The explicit endpoint is not an allowed loopback gRPC URL.
+    InvalidEndpoint,
+    /// Execution limits are zero or exceed the public ceilings.
+    InvalidLimits,
+    /// A collection, batch, identifier, query or credential is invalid.
+    InvalidInput,
+    /// The complete SDK request exceeds its byte/count allowance.
+    RequestTooLarge,
+    /// A decoded response exceeds its selected point/payload allowance.
+    ResponseTooLarge,
+    /// A bounded local allocation failed.
+    AllocationFailed,
+    /// The server refused the supplied authentication.
+    Authentication,
+    /// The observed server version is not the selected exact patch.
+    UnsupportedServer,
+    /// The collection or text index differs from the fixed physical profile.
+    SchemaMismatch,
+    /// Actual points differ from the exact fixed upload batch.
+    PointMismatch,
+    /// A response lacks required fields or has invalid routing data.
     MalformedResponse,
+    /// Cancellation was observed before dispatch, or during a read.
+    Cancelled,
+    /// The absolute deadline expired before dispatch, or during a read.
+    Deadline,
+    /// A read or connection transport failed.
+    Transport,
+    /// The server returned a definite failure for a read.
+    BackendRefused,
+    /// A mutation or failed composite operation cannot be settled as no-effect.
+    /// This includes any failure after successful collection creation.
+    UnknownDispatch,
 }
 
-impl BridgeError {
-    /// Stable machine-readable reason code.
+impl BackendError {
+    /// Stable machine code without URL, credentials, query or SDK status text.
     #[must_use]
     pub const fn code(self) -> &'static str {
         match self {
-            Self::EndpointNotLoopback => "QDRANT_ENDPOINT_NOT_LOOPBACK",
-            Self::AuthenticationInvalid => "QDRANT_AUTHENTICATION_INVALID",
-            Self::AuthenticationLeaseExpired => "QDRANT_AUTHENTICATION_LEASE_EXPIRED",
-            Self::SupervisorReceiptMismatch => "QDRANT_SUPERVISOR_RECEIPT_MISMATCH",
-            Self::CapabilityProbeFailed => "QDRANT_CAPABILITY_PROBE_FAILED",
-            Self::CapabilityReceiptMismatch => "QDRANT_CAPABILITY_RECEIPT_MISMATCH",
-            Self::CollectionAlreadyExists => "QDRANT_COLLECTION_ALREADY_EXISTS",
-            Self::CollectionNotFound => "QDRANT_COLLECTION_NOT_FOUND",
-            Self::CollectionSchemaMismatch => "QDRANT_COLLECTION_SCHEMA_MISMATCH",
-            Self::PayloadIndexMissing => "QDRANT_PAYLOAD_INDEX_MISSING",
-            Self::NamedVectorMissing => "QDRANT_NAMED_VECTOR_MISSING",
-            Self::VectorDimensionMismatch => "QDRANT_VECTOR_DIMENSION_MISMATCH",
-            Self::StrictModeRequired => "QDRANT_STRICT_MODE_REQUIRED",
-            Self::MutationTooLarge => "QDRANT_MUTATION_TOO_LARGE",
-            Self::DuplicatePointId => "QDRANT_DUPLICATE_POINT_ID",
-            Self::PointNotFound => "QDRANT_POINT_NOT_FOUND",
-            Self::OperationConflict => "QDRANT_OPERATION_CONFLICT",
-            Self::MutationOutcomeUnknown => "QDRANT_MUTATION_OUTCOME_UNKNOWN",
-            Self::ExactReadbackMismatch => "QDRANT_EXACT_READBACK_MISMATCH",
-            Self::UnexpectedPoint => "QDRANT_UNEXPECTED_POINT",
-            Self::InvalidFilter => "QDRANT_INVALID_FILTER",
-            Self::UnindexedFilter => "QDRANT_UNINDEXED_FILTER",
-            Self::QueryBudgetExceeded => "QDRANT_QUERY_BUDGET_EXCEEDED",
-            Self::InvalidScore => "QDRANT_INVALID_SCORE",
-            Self::Cancelled => "QDRANT_OPERATION_CANCELLED",
-            Self::TransportFailed => "QDRANT_TRANSPORT_FAILED",
-            Self::MalformedResponse => "QDRANT_MALFORMED_RESPONSE",
+            Self::InvalidEndpoint => "BACKEND_ENDPOINT_INVALID",
+            Self::InvalidLimits => "BACKEND_LIMITS_INVALID",
+            Self::InvalidInput => "BACKEND_INPUT_INVALID",
+            Self::RequestTooLarge => "BACKEND_REQUEST_TOO_LARGE",
+            Self::ResponseTooLarge => "BACKEND_RESPONSE_TOO_LARGE",
+            Self::AllocationFailed => "BACKEND_ALLOCATION_FAILED",
+            Self::Authentication => "BACKEND_AUTHENTICATION_FAILED",
+            Self::UnsupportedServer => "BACKEND_VERSION_UNSUPPORTED",
+            Self::SchemaMismatch => "BACKEND_SCHEMA_MISMATCH",
+            Self::PointMismatch => "BACKEND_POINT_MISMATCH",
+            Self::MalformedResponse => "BACKEND_RESPONSE_MALFORMED",
+            Self::Cancelled => "BACKEND_CANCELLED",
+            Self::Deadline => "BACKEND_DEADLINE",
+            Self::Transport => "BACKEND_TRANSPORT_FAILED",
+            Self::BackendRefused => "BACKEND_REFUSED",
+            Self::UnknownDispatch => "BACKEND_UNKNOWN_DISPATCH",
         }
     }
 }
 
-impl fmt::Display for BridgeError {
+impl fmt::Display for BackendError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(self.code())
     }
 }
 
-impl std::error::Error for BridgeError {}
+impl std::error::Error for BackendError {}

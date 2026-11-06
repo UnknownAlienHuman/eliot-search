@@ -4,6 +4,11 @@ This owner defines the concrete lexical meaning consumed by preparation, publica
 source identity, publication state, scope, evidence or Exact. R052 removes hidden Qdrant defaults and separates
 physical index schema from query-time BM25 scoring.
 
+The former lexical Rust package is physically retired with its local analyzers, aliases, frozen profiles, sparse
+encoders, numerical scoring and exclusive fixtures. This recipe remains canonical. The first publication caller
+passes actual prepared-unit text directly; fixed SDK translation lives privately in the concrete bridge, without
+a forwarding crate, profile registry or unused text composer.
+
 ## Physical text-index profile V1
 
 The first product uses one vectorless physical collection and one payload field:

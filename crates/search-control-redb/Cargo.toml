@@ -15,6 +15,8 @@ redb_plain = { package = "redb", version = "=4.5.0", path = "../../vendor/redb",
 getrandom = "=0.2.17"
 search-contracts.workspace = true
 search-source-registry.workspace = true
+serde.workspace = true
+serde_json.workspace = true
 
 [lints]
 workspace = true

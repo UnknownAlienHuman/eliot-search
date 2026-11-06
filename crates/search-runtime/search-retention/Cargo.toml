@@ -16,7 +16,6 @@ search-domain.workspace = true
 search-ports.workspace = true
 search-config.workspace = true
 search-epoch-pins.workspace = true
-search-index-reclaimer.workspace = true
 search-handles.workspace = true
 
 [lints]

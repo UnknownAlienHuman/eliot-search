@@ -25,6 +25,7 @@ pub(super) const SOURCE_SCHEMA_VERSION: &[u8] = &[1];
 pub(super) const SCHEMA_VERSION_KEY: &str = "schema_version";
 pub(super) const NAMESPACE_KEY: &str = "source_namespace_id";
 pub(super) const PREPARATION_TABLE_NAME: &str = "current_preparations";
+const WANTED_REVISION_KEY: &str = "wanted_corpus_revision";
 const MAX_LOCATOR_BYTES: usize = 32 * 1024;
 
 pub(super) const SOURCE_STATE: TableDefinition<&str, &[u8]> =
@@ -137,6 +138,14 @@ pub(super) fn catalogue_names(
     if has_multimap {
         return Err(SourceControlError::UnsupportedSchema);
     }
+    let publication_count = names
+        .iter()
+        .filter(|name| crate::publication::TABLE_NAMES.contains(&name.as_str()))
+        .count();
+    if publication_count != 0 && publication_count != crate::publication::TABLE_NAMES.len() {
+        return Err(SourceControlError::UnsupportedSchema);
+    }
+    names.retain(|name| !crate::publication::TABLE_NAMES.contains(&name.as_str()));
     names.sort_unstable();
     if names.len() == 1 && names[0] == META_TABLE_NAME {
         return Ok(false);
@@ -208,7 +217,7 @@ impl<'a> Decoder<'a> {
     }
 }
 
-fn encode_record(record: &CurrentSourceRecord) -> Result<Vec<u8>, SourceControlError> {
+pub(super) fn encode_record(record: &CurrentSourceRecord) -> Result<Vec<u8>, SourceControlError> {
     if record.row_revision == 0
         || record.registration_revision == 0
         || record.object_ref.kind != ObjectKind::Source
@@ -341,6 +350,54 @@ pub(super) fn read_source_by_id(
         return Err(SourceControlError::Corrupt);
     }
     Ok(Some(source))
+}
+
+pub(super) fn wanted_revision(transaction: &ReadTransaction) -> Result<u64, SourceControlError> {
+    let table = transaction
+        .open_table(SOURCE_STATE)
+        .map_err(|_| SourceControlError::Corrupt)?;
+    let value = table
+        .get(WANTED_REVISION_KEY)
+        .map_err(|_| SourceControlError::Database)?;
+    value.map_or(Ok(0), |v| {
+        Ok(u64::from_le_bytes(
+            v.value()
+                .try_into()
+                .map_err(|_| SourceControlError::Corrupt)?,
+        ))
+    })
+}
+
+pub(super) fn write_wanted_revision(
+    transaction: &WriteTransaction,
+) -> Result<u64, SourceControlError> {
+    let table = transaction
+        .open_table(SOURCE_STATE)
+        .map_err(|_| SourceControlError::Database)?;
+    let value = table
+        .get(WANTED_REVISION_KEY)
+        .map_err(|_| SourceControlError::Database)?;
+    value.map_or(Ok(0), |v| {
+        Ok(u64::from_le_bytes(
+            v.value()
+                .try_into()
+                .map_err(|_| SourceControlError::Corrupt)?,
+        ))
+    })
+}
+
+pub(super) fn advance_wanted_revision(
+    transaction: &WriteTransaction,
+) -> Result<(), SourceControlError> {
+    let next = write_wanted_revision(transaction)?
+        .checked_add(1)
+        .ok_or(SourceControlError::RevisionExhausted)?;
+    transaction
+        .open_table(SOURCE_STATE)
+        .map_err(|_| SourceControlError::Database)?
+        .insert(WANTED_REVISION_KEY, next.to_le_bytes().as_slice())
+        .map_err(|_| SourceControlError::Database)?;
+    Ok(())
 }
 
 fn load_locator_row(
@@ -578,6 +635,7 @@ pub fn commit_current_source(
     drop(locators);
     drop(rows);
     drop(state);
+    advance_wanted_revision(&transaction)?;
     check(deadline, cancellation)?;
     if transaction.commit().is_ok() {
         Ok(record)

@@ -261,7 +261,7 @@ fn validate(row: &CurrentPreparation) -> Result<()> {
     }
     Ok(())
 }
-fn encode(row: &CurrentPreparation) -> Result<Vec<u8>> {
+pub(super) fn encode(row: &CurrentPreparation) -> Result<Vec<u8>> {
     validate(row)?;
     let mut out = Vec::new();
     out.push(1);
@@ -330,7 +330,7 @@ impl Cursor<'_> {
         })
     }
 }
-fn decode(bytes: &[u8]) -> Result<CurrentPreparation> {
+pub(super) fn decode(bytes: &[u8]) -> Result<CurrentPreparation> {
     let mut c = Cursor { bytes, at: 0 };
     if c.byte()? != 1 {
         return Err(PreparationControlError::UnsupportedSchema);
@@ -558,6 +558,7 @@ fn select_settings(
         .insert(id.as_bytes().as_slice(), bytes.as_slice())
         .map_err(|_| PreparationControlError::Database)?;
     drop(table);
+    crate::current_source::advance_wanted_revision(&tx).map_err(source_error)?;
     finish_commit(db, tx, path, row, deadline, cancel)
 }
 
@@ -681,5 +682,6 @@ pub fn commit_preparation(
         .insert(source.source_id.as_bytes().as_slice(), bytes.as_slice())
         .map_err(|_| PreparationControlError::Database)?;
     drop(table);
+    crate::current_source::advance_wanted_revision(&tx).map_err(source_error)?;
     finish_commit(db, tx, path, row, deadline, cancel)
 }
