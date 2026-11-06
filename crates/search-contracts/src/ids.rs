@@ -1,14 +1,9 @@
-use crate::bounds::{
-    BoundedText, MAX_HANDLE_TOKEN_BYTES, MAX_NAME_BYTES, MAX_PROFILE_ID_BYTES,
-    MIN_HANDLE_TOKEN_BYTES,
-};
-use crate::canonical::{OpaqueRef, base64url_decode, base64url_encode, hex_decode, hex_encode};
 use crate::{ContractError, ContractErrorKind};
 use core::{fmt, str::FromStr};
 
 /// Canonical 16-byte UUID storage shared by strongly typed identifiers.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct UuidBytes([u8; 16]);
+struct UuidBytes([u8; 16]);
 
 impl UuidBytes {
     #[must_use]
@@ -84,7 +79,7 @@ impl FromStr for UuidBytes {
     }
 }
 
-fn lower_hex(value: u8) -> Option<u8> {
+const fn lower_hex(value: u8) -> Option<u8> {
     match value {
         b'0'..=b'9' => Some(value - b'0'),
         b'a'..=b'f' => Some(value - b'a' + 10),
@@ -109,6 +104,10 @@ macro_rules! uuid_newtype {
                     self.0.as_bytes()
                 }
 
+                /// Parses the canonical lowercase UUID spelling.
+                ///
+                /// # Errors
+                /// Returns a content-free error for a noncanonical UUID.
                 pub fn parse(value: &str) -> Result<Self, ContractError> {
                     UuidBytes::parse(value).map(Self)
                 }
@@ -131,320 +130,14 @@ macro_rules! uuid_newtype {
     };
 }
 
-uuid_newtype!(
-    InstallationId,
-    InstallationIncarnationId,
-    DataRootId,
-    BindingId,
-    WorkspaceId,
-    WorkspaceViewRevisionId,
-    RootBindingId,
-    PathBindingId,
-    RepositoryLineageId,
-    CollectionGenerationId,
-    CorpusId,
-    ReferencePortfolioId,
-    SourceNamespaceId,
-    SourceId,
-    SourceMembershipId,
-    ProjectionMembershipId,
-    SourceRevisionId,
-    MaterializationId,
-    RepresentationId,
-    UnitId,
-    AccessPartitionId,
-    ScoringPartitionId,
-    ScoringDocumentId,
-    AccessPolicyBindingId,
-    ResidencyPolicyBindingId,
-    ScopeDomainId,
-    AccessDomainId,
-    ConfidentialityDomainId,
-    EncryptionKeyDomainId,
-    RetentionDomainId,
-    ErasureDomainId,
-    GrantId,
-    RequestId,
-    PlanId,
-    CandidateId,
-    CutoverId,
-    BufferSnapshotId,
-    ImportedSnapshotId,
-    HandleId,
-    ContinuationId,
-    PublicationIntentId,
-    PublicationReceiptId,
-);
+uuid_newtype!(SourceNamespaceId, SourceId);
 
-/// Non-zero runtime owner epoch.
+/// BLAKE3 digest bytes shared by immutable object references.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct OwnerEpoch(u64);
-
-impl OwnerEpoch {
-    pub fn new(value: u64) -> Result<Self, ContractError> {
-        if value == 0 {
-            return Err(ContractError::new(
-                ContractErrorKind::ZeroNotAllowed,
-                "owner_epoch",
-            ));
-        }
-        Ok(Self(value))
-    }
-
-    #[must_use]
-    pub const fn get(self) -> u64 {
-        self.0
-    }
-
-    pub fn checked_next(self) -> Result<Self, ContractError> {
-        self.0
-            .checked_add(1)
-            .ok_or_else(|| ContractError::new(ContractErrorKind::EpochExhausted, "owner_epoch"))
-            .and_then(Self::new)
-    }
-}
-
-/// Minimum collection epoch.
-///
-/// `0` is the empty initial generation and never a published point.
-pub const MIN_QDRANT_EPOCH: i64 = 0;
-
-/// Maximum collection epoch.
-///
-/// The largest bound of the contiguous integer domain that is exactly
-/// representable by the provider range boundary. Larger even values are
-/// intentionally rejected, and validation uses integers only.
-///
-/// The value stays readable and can still be the last published epoch, but
-/// it can never reserve another one.
-pub const MAX_QDRANT_EPOCH: i64 = 9_007_199_254_740_992;
-
-/// Collection epoch closed to the Qdrant-compatible logical domain.
-///
-/// The signed 64-bit representation is retained for the persistence
-/// layers; the closed bound is a storage bound, not an authority claim. A
-/// bare epoch is never compared across collection generations.
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct Epoch(i64);
-
-impl Epoch {
-    pub fn new(value: i64) -> Result<Self, ContractError> {
-        if !(MIN_QDRANT_EPOCH..=MAX_QDRANT_EPOCH).contains(&value) {
-            return Err(ContractError::new(
-                ContractErrorKind::EpochOutOfRange,
-                "epoch",
-            ));
-        }
-        Ok(Self(value))
-    }
-
-    #[must_use]
-    pub const fn get(self) -> i64 {
-        self.0
-    }
-
-    /// Advances by one, refusing at the closed domain maximum.
-    ///
-    /// The next publication past [`MAX_QDRANT_EPOCH`] belongs to a new
-    /// collection generation, not to a wider epoch.
-    pub fn checked_next(self) -> Result<Self, ContractError> {
-        let next = self
-            .0
-            .checked_add(1)
-            .filter(|candidate| *candidate <= MAX_QDRANT_EPOCH)
-            .ok_or_else(|| ContractError::new(ContractErrorKind::EpochExhausted, "epoch"))?;
-        Ok(Self(next))
-    }
-}
-
-macro_rules! revision_newtype {
-    ($($name:ident),+ $(,)?) => {
-        $(
-            #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-            pub struct $name(u64);
-
-            impl $name {
-                #[must_use]
-                pub const fn new(value: u64) -> Self {
-                    Self(value)
-                }
-
-                #[must_use]
-                pub const fn get(self) -> u64 {
-                    self.0
-                }
-
-                pub fn checked_next(self) -> Result<Self, ContractError> {
-                    self.0.checked_add(1).map(Self).ok_or_else(|| {
-                        ContractError::new(ContractErrorKind::EpochExhausted, stringify!($name))
-                    })
-                }
-            }
-        )+
-    };
-}
-
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct NonZeroRevision(u64);
-
-impl NonZeroRevision {
-    pub fn new(value: u64) -> Result<Self, ContractError> {
-        if value == 0 {
-            return Err(ContractError::new(
-                ContractErrorKind::ZeroNotAllowed,
-                "non_zero_revision",
-            ));
-        }
-        Ok(Self(value))
-    }
-
-    #[must_use]
-    pub const fn get(self) -> u64 {
-        self.0
-    }
-
-    pub fn checked_next(self) -> Result<Self, ContractError> {
-        self.0
-            .checked_add(1)
-            .ok_or_else(|| ContractError::new(ContractErrorKind::EpochExhausted, "revision"))
-            .and_then(Self::new)
-    }
-}
-
-revision_newtype!(
-    PortfolioRevision,
-    CollectionRouteRevision,
-    CatalogRevision,
-    MembershipRevision,
-    AccessPolicyRevision,
-    ShadowFenceRevision,
-    PurgeFenceRevision,
-    ObservationCursorRevision,
-    OverlayRevision,
-    PolicyRevision,
-);
-
-/// Shared 32-byte digest wrapper definitions.
-///
-/// The macro gives every digest-shaped type identical storage, decode,
-/// access and formatting code, but the types are not one semantic class:
-///
-/// - `Blake3Digest32` and `Sha256Digest32` are algorithm-qualified. The
-///   named algorithm is load-bearing, so real compute reaches them only
-///   through the crate-private `from_computed_bytes` added after this
-///   invocation, and stored values enter through the named
-///   `from_stored_bytes` decode path.
-/// - `SourceOwnerGeneration`, `ObjectResidencyKeyDigest`,
-///   `PlanFingerprint`, `QuerySnapshotFingerprint`, `ArtifactDigest` and
-///   `HandleTokenDigest` are digest-shaped semantic identities. Each owning
-///   package defines their algorithm, domain and profile, and the bytes may
-///   come from a legacy mixer, a generation counter or an owner-specific
-///   canonical preimage. Their `from_bytes` and `parse_hex` entry points are
-///   decode-only compatibility and prove nothing about the producing
-///   algorithm; they are never relabelled as real algorithm output.
-///
-/// `HandleTokenDigest` is deliberately outside this macro. Its bytes are
-/// secret-derived: it keeps the same 32-byte storage, the same decode paths
-/// and the same ordering as the types above, but `Debug` and `Display` emit
-/// constant redacted strings instead of hexadecimal. A formatting call
-/// therefore cannot disclose a handle token. Callers that legitimately need
-/// the exact bytes use `as_bytes`, which is unchanged.
-macro_rules! digest_newtype {
-    ($($name:ident),+ $(,)?) => {
-        $(
-            #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-            pub struct $name([u8; 32]);
-
-            impl $name {
-                /// Named stored/wire decode path for existing bytes.
-                ///
-                /// Honest about what it proves: it reloads bytes a producer
-                /// persisted. It runs no algorithm and certifies none.
-                ///
-                /// This path is used by codecs and other readers of
-                /// already-durable values. Real algorithm compute does not
-                /// use it.
-                #[must_use]
-                pub const fn from_stored_bytes(bytes: [u8; 32]) -> Self {
-                    Self(bytes)
-                }
-
-                /// Decode-only compatibility; does not execute or verify an algorithm.
-                #[must_use]
-                pub const fn from_bytes(bytes: [u8; 32]) -> Self {
-                    Self(bytes)
-                }
-
-                #[must_use]
-                pub const fn as_bytes(&self) -> &[u8; 32] {
-                    &self.0
-                }
-
-                pub fn parse_hex(value: &str) -> Result<Self, ContractError> {
-                    hex_decode(value, stringify!($name)).map(Self)
-                }
-            }
-
-            impl fmt::Display for $name {
-                fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-                    formatter.write_str(&hex_encode(&self.0))
-                }
-            }
-
-            impl FromStr for $name {
-                type Err = ContractError;
-
-                fn from_str(value: &str) -> Result<Self, Self::Err> {
-                    Self::parse_hex(value)
-                }
-            }
-        )+
-    };
-}
-
-digest_newtype!(
-    Blake3Digest32,
-    Sha256Digest32,
-    SourceOwnerGeneration,
-    ObjectResidencyKeyDigest,
-    PlanFingerprint,
-    QuerySnapshotFingerprint,
-    ArtifactDigest,
-);
+pub struct Blake3Digest32([u8; 32]);
 
 impl Blake3Digest32 {
-    pub(crate) const fn from_computed_bytes(bytes: [u8; 32]) -> Self {
-        Self(bytes)
-    }
-}
-
-impl Sha256Digest32 {
-    pub(crate) const fn from_computed_bytes(bytes: [u8; 32]) -> Self {
-        Self(bytes)
-    }
-}
-
-/// Secret-derived digest of an opaque handle token.
-///
-/// This type intentionally departs from `digest_newtype`. It is the only
-/// digest-shaped contract value whose bytes are secret-derived, so it keeps
-/// 32-byte storage and the full decode surface but emits constant redacted
-/// strings from `Debug` and `Display`. Exact bytes remain readable through
-/// `as_bytes` for constant-time comparison and durable restore.
-#[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct HandleTokenDigest([u8; 32]);
-
-impl HandleTokenDigest {
-    /// Named stored/wire decode path for existing bytes.
-    ///
-    /// It reloads bytes a producer persisted. It runs no algorithm and
-    /// certifies none.
-    #[must_use]
-    pub const fn from_stored_bytes(bytes: [u8; 32]) -> Self {
-        Self(bytes)
-    }
-
-    /// Decode-only compatibility; does not execute or verify an algorithm.
+    /// Wraps stored or independently computed bytes; this performs no hashing.
     #[must_use]
     pub const fn from_bytes(bytes: [u8; 32]) -> Self {
         Self(bytes)
@@ -454,250 +147,20 @@ impl HandleTokenDigest {
     pub const fn as_bytes(&self) -> &[u8; 32] {
         &self.0
     }
-
-    pub fn parse_hex(value: &str) -> Result<Self, ContractError> {
-        hex_decode(value, "HandleTokenDigest").map(Self)
-    }
 }
 
-/// Constant redaction. No secret byte, length or prefix can reach a log or
-/// diagnostic through this implementation.
-impl fmt::Debug for HandleTokenDigest {
+impl fmt::Display for Blake3Digest32 {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str("HandleTokenDigest(<redacted>)")
+        formatter.write_str(&hex_encode(&self.0))
     }
 }
 
-impl fmt::Display for HandleTokenDigest {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str("<redacted>")
+fn hex_encode(bytes: &[u8]) -> String {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let mut output = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        output.push(char::from(HEX[usize::from(byte >> 4)]));
+        output.push(char::from(HEX[usize::from(byte & 0x0f)]));
     }
-}
-
-impl FromStr for HandleTokenDigest {
-    type Err = ContractError;
-
-    fn from_str(value: &str) -> Result<Self, Self::Err> {
-        Self::parse_hex(value)
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub enum DigestAlgorithm {
-    Blake3_256,
-    Sha256,
-}
-
-crate::impl_wire_enum!(DigestAlgorithm {
-    Blake3_256 => "blake3_256",
-    Sha256 => "sha256",
-});
-
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct VersionedContentDigest {
-    algorithm: DigestAlgorithm,
-    bytes: [u8; 32],
-}
-
-impl VersionedContentDigest {
-    /// Restore an externally tagged stored value; no algorithm verification occurs.
-    #[must_use]
-    pub const fn from_stored_bytes(algorithm: DigestAlgorithm, bytes: [u8; 32]) -> Self {
-        Self { algorithm, bytes }
-    }
-
-    /// Preserve a typed algorithm tag. A decoded input remains decode-only.
-    #[must_use]
-    pub const fn from_blake3(digest: Blake3Digest32) -> Self {
-        Self {
-            algorithm: DigestAlgorithm::Blake3_256,
-            bytes: *digest.as_bytes(),
-        }
-    }
-
-    /// Preserve a typed algorithm tag. A decoded input remains decode-only.
-    #[must_use]
-    pub const fn from_sha256(digest: Sha256Digest32) -> Self {
-        Self {
-            algorithm: DigestAlgorithm::Sha256,
-            bytes: *digest.as_bytes(),
-        }
-    }
-
-    #[must_use]
-    pub const fn algorithm(&self) -> DigestAlgorithm {
-        self.algorithm
-    }
-
-    #[must_use]
-    pub const fn as_bytes(&self) -> &[u8; 32] {
-        &self.bytes
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub enum DigestRef {
-    Blake3(Blake3Digest32),
-    Sha256(Sha256Digest32),
-}
-
-macro_rules! profile_newtype {
-    ($($name:ident),+ $(,)?) => {
-        $(
-            #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-            pub struct $name(BoundedText<MAX_PROFILE_ID_BYTES>);
-
-            impl $name {
-                pub fn new(value: impl Into<String>) -> Result<Self, ContractError> {
-                    BoundedText::new_non_empty(value).map(Self)
-                }
-
-                #[must_use]
-                pub fn as_str(&self) -> &str {
-                    self.0.as_str()
-                }
-            }
-
-            impl fmt::Display for $name {
-                fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-                    formatter.write_str(self.as_str())
-                }
-            }
-        )+
-    };
-}
-
-profile_newtype!(
-    ProfileId,
-    ProjectionProfileSetId,
-    FusionProfileId,
-    RecipeFamilyId
-);
-
-#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct RuleId(BoundedText<MAX_NAME_BYTES>);
-
-impl RuleId {
-    pub fn new(value: impl Into<String>) -> Result<Self, ContractError> {
-        BoundedText::new_non_empty(value).map(Self)
-    }
-
-    #[must_use]
-    pub fn as_str(&self) -> &str {
-        self.0.as_str()
-    }
-}
-
-#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct ReceiptRef(OpaqueRef);
-
-impl ReceiptRef {
-    pub fn new(value: impl Into<String>) -> Result<Self, ContractError> {
-        OpaqueRef::new(value).map(Self)
-    }
-
-    #[must_use]
-    pub fn as_str(&self) -> &str {
-        self.0.as_str()
-    }
-}
-
-/// Git object identity in canonical lower-case SHA-1 or SHA-256 hexadecimal.
-#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct GitObjectId(String);
-
-impl GitObjectId {
-    pub fn parse(value: impl Into<String>) -> Result<Self, ContractError> {
-        let value = value.into();
-        if !matches!(value.len(), 40 | 64) || value.bytes().any(|byte| lower_hex(byte).is_none()) {
-            return Err(ContractError::new(
-                ContractErrorKind::InvalidDigest,
-                "git_object_id",
-            ));
-        }
-        Ok(Self(value))
-    }
-
-    #[must_use]
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-/// Opaque bearer token. Debug intentionally exposes only length.
-#[derive(Clone, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct OpaqueHandleToken {
-    bytes: [u8; MAX_HANDLE_TOKEN_BYTES],
-    len: u8,
-}
-
-impl OpaqueHandleToken {
-    pub fn new(value: &[u8]) -> Result<Self, ContractError> {
-        if !(MIN_HANDLE_TOKEN_BYTES..=MAX_HANDLE_TOKEN_BYTES).contains(&value.len()) {
-            return Err(ContractError::new(
-                ContractErrorKind::InvalidToken,
-                "opaque_handle_token",
-            ));
-        }
-        let len = u8::try_from(value.len()).map_err(|_| {
-            ContractError::new(ContractErrorKind::InvalidToken, "opaque_handle_token")
-        })?;
-        let mut bytes = [0_u8; MAX_HANDLE_TOKEN_BYTES];
-        bytes[..value.len()].copy_from_slice(value);
-        Ok(Self { bytes, len })
-    }
-
-    pub fn parse_base64url(value: &str) -> Result<Self, ContractError> {
-        Self::new(&base64url_decode(value)?)
-    }
-
-    #[must_use]
-    pub fn as_bytes(&self) -> &[u8] {
-        &self.bytes[..usize::from(self.len)]
-    }
-
-    #[must_use]
-    pub fn encoded(&self) -> String {
-        base64url_encode(self.as_bytes())
-    }
-}
-
-impl fmt::Debug for OpaqueHandleToken {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter
-            .debug_struct("OpaqueHandleToken")
-            .field("len", &self.len)
-            .field("value", &"<redacted>")
-            .finish_non_exhaustive()
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub enum CorpusOrPortfolioId {
-    Corpus(CorpusId),
-    Portfolio(ReferencePortfolioId),
-}
-
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub enum WorkspaceOrCorpusRef {
-    Workspace(WorkspaceId),
-    Corpus(CorpusId),
-}
-
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct SourceViewRef {
-    pub source_view_digest: Blake3Digest32,
-    pub workspace_view_revision_ref: Option<WorkspaceViewRevisionId>,
-}
-
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct AuthorizedScopeRef {
-    pub scope_domain_id: ScopeDomainId,
-    pub authorized_scope_digest: Blake3Digest32,
-}
-
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct ExactScanPlanRef {
-    pub plan_id: PlanId,
-    pub plan_fingerprint: PlanFingerprint,
+    output
 }

@@ -2,14 +2,8 @@
 
 This recipe owns local-object reachability, archive and import. [Publication](../../search-index-qdrant/search-publication/FUNCTIONS.md)
 owns live Qdrant retirement. [Local scope](../../../docs/architecture/LOCAL_SCOPE.md) selects plain storage, not key migration.
-Main still contains the old retention/restore code; #610's removal has not landed. These are replacement instructions.
-
-## Historical findings and remaining legacy code
-
-The legacy DIRECT collector rebuilds references from the whole source-events log, retaining historical rows while
-missing the target preparation/published/pending owners. Query-time refresh_storage repeats storage scans.
-Do not reuse this reachability algorithm. [Earlier findings](https://github.com/UnknownAlienHuman/eliot-search/blob/6ae24197a1be8695ede5bb7d12dfaf97f5bca1fc/crates/search-runtime/search-retention/FUNCTIONS.md)
-retain exact source seams; recheck callers at the cut. Removing old code does not implement maintenance.
+The unused coordinator Rust package, manifest and exclusive fixtures are removed. Maintenance is not implemented;
+this is policy for its later actual stopped-root consumer.
 
 ## No maintenance scan in the query path
 
@@ -81,10 +75,7 @@ Application encryption is not selected. Reject unsupported encrypted archives/ro
 and keys intact. Do not silently downgrade, generate replacement keys, reset counters, rewrap or migrate them.
 An explicit real user-data export request is separate work, not a prerequisite for the plain product.
 
-## Remaining implementation and verification
+## Future consumer
 
-Replace actual legacy GC/restore/status consumers and remove displaced source/Cargo/fixtures together. Keep the
-root guard, object identity/path checks and preserved originals. Minimal compiler/Clippy follows production code.
-Later cases cover busy refusal, all mark roots, corruption, interruption, partial/marker-stripped archive refusal,
-incomplete-import startup, original/destination sharing an endpoint without original mutations and plain restart.
-No runtime or deletion result is claimed by this document.
+Implement maintenance only with its explicit command and actual retained-data owners. Preserve the root guard,
+object identity/path checks and original files. No deletion or archive capability is delivered by this recipe.

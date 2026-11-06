@@ -330,6 +330,9 @@ impl PublicationRequest {
         if !matches!(command, RootCommand::PublishPrepared | RootCommand::Search) {
             return Err("USAGE_ERROR");
         }
+        if !matches!(command, RootCommand::Search) && argument != OsStr::new("--qdrant-url") {
+            return Err("USAGE_ERROR");
+        }
         let value = arguments
             .get(index + 1)
             .and_then(|v| v.to_str())
@@ -787,16 +790,10 @@ fn validated_response<'a>(
     output: &'a ChildOutput,
     command: RootCommand,
     preparation: &PreparationRequest,
-    publication: &PublicationRequest,
 ) -> Option<DaemonResponse<'a>> {
     if output.stderr.bytes.is_empty() {
         if matches!(command, RootCommand::PublishPrepared) {
-            crate::published_response::validate(
-                &output.stdout.bytes,
-                publication.query.is_some(),
-                publication.limit.unwrap_or(10),
-            )
-            .map(DaemonResponse::Published)
+            crate::published_response::validate(&output.stdout.bytes).map(DaemonResponse::Published)
         } else if matches!(command, RootCommand::PrepareSource) {
             crate::prepared_response::validate(
                 &output.stdout.bytes,
@@ -836,7 +833,7 @@ fn print_help() {
         "  eliot-search discard-incomplete-data-root [ROOT] [--data-root ROOT] [--config-file PATH] [--daemon PATH]\n",
         "  eliot-search retain-file --file PATH [ROOT] [--data-root ROOT] [--config-file PATH] [--daemon PATH]\n",
         "  eliot-search prepare-source --source-id UUID [--unit N] [--data-root ROOT] [--config-file PATH] [--daemon PATH]\n",
-        "  eliot-search publish-prepared --qdrant-url URL [--query TEXT] [--limit N] [--data-root ROOT] [--config-file PATH] [--daemon PATH]\n",
+        "  eliot-search publish-prepared --qdrant-url URL [--data-root ROOT] [--config-file PATH] [--daemon PATH]\n",
         "  eliot-search search --query TEXT [--limit N] --qdrant-url URL [--data-root ROOT] [--config-file PATH] [--daemon PATH]\n",
     ));
 }
@@ -901,7 +898,7 @@ pub fn run_main() -> i32 {
             return emit_error_status(failure.code(), failure.exit_code());
         }
     };
-    let Some(response) = validated_response(&output, command, &preparation, &publication) else {
+    let Some(response) = validated_response(&output, command, &preparation) else {
         return emit_error("DAEMON_RESULT_UNKNOWN");
     };
     let (written, exit_code) = match (output.status.success(), response) {

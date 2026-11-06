@@ -1,11 +1,6 @@
-# Working on handles
+# Working on this policy
 
-Read [FUNCTIONS.md](FUNCTIONS.md) and the [window owner](../search-continuation/FUNCTIONS.md). Recheck current
-protocol/result/daemon callers before removing both old handle catalogues; do not migrate one into the other.
-
-Keep exact retained-range verification and bounded context around successfully emitted items. Use the window's
-owned pending-delivery path, not a shared mutable borrow/lock across object reads or transport writes. A locator
-cannot choose arbitrary revision offsets, renew expiry or switch view/session.
-
-Remove token minting/hashing, catalogue scans/fences, grants, invalidation histories and exclusive fixtures with
-callers. After code run minimal pinned check/Clippy for actual consumers. No forwarding handle platform remains.
+Read [FUNCTIONS.md](FUNCTIONS.md) and the selected receiving owner's real callers.
+The unused Rust package, manifest and exclusive fixtures are removed. This directory retains product policy only.
+Add behavior beside an actual consumer when its delivery stage is selected. Do not restore the old package,
+DTO catalogue, receipts or test-only adapters.

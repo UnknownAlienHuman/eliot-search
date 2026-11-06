@@ -1,16 +1,6 @@
-# search-os-secrets — legacy, not selected
+# Working on this policy
 
-The local product uses plain storage and owned-child communication. Do not add key creation, encryption,
-rotation, pairing or a replacement secret service here. See [local scope](../../../docs/architecture/LOCAL_SCOPE.md).
-
-
-## Removal boundary
-
-This documentation does not delete the existing package. Follow the
-[caller cutover](../../../docs/architecture/LOCAL_SCOPE.md#remove-legacy-security-wiring): move actual CLI/daemon/
-store consumers to the plain path, then remove unused source, Cargo entries and exclusive fixtures together.
-Keep shared OS file/lock behavior where used. Do not delete credentials or old user data as cleanup.
-
-[Prior inventory](https://github.com/UnknownAlienHuman/eliot-search/blob/6ae24197a1be8695ede5bb7d12dfaf97f5bca1fc/crates/search-runtime/search-os-secrets/AGENTS.md) records the previous design,
-not a future integration requirement. Preserve unpublished #598 work without waiting for or importing it.
-After source changes run minimal compiler/Clippy for actual consumers, including Windows targets where affected.
+Read [FUNCTIONS.md](FUNCTIONS.md) and the selected receiving owner's real callers.
+The unused Rust package, manifest and exclusive fixtures are removed. This directory retains product policy only.
+Add behavior beside an actual consumer when its delivery stage is selected. Do not restore the old package,
+DTO catalogue, receipts or test-only adapters.

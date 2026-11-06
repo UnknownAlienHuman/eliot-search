@@ -52,8 +52,6 @@ pub struct RootInvocation {
 
 pub struct PublicationRequest {
     pub(crate) endpoint: String,
-    pub(crate) query: Option<String>,
-    pub(crate) limit: usize,
 }
 
 fn emit_error(code: &str) -> ExitCode {
@@ -88,7 +86,7 @@ fn print_help() {
         "  eliot-searchd --discard-incomplete-data-root [ROOT] [--data-root ROOT] [--config-file PATH]\n",
         "  eliot-searchd --retain-file --source-file PATH [ROOT] [--data-root ROOT] [--config-file PATH]\n",
         "  eliot-searchd --prepare-source --source-id UUID [--unit N] [--data-root ROOT] [--config-file PATH]\n",
-        "  eliot-searchd --publish-prepared --qdrant-url URL [--query TEXT] [--limit N] [--data-root ROOT] [--config-file PATH]\n",
+        "  eliot-searchd --publish-prepared --qdrant-url URL [--data-root ROOT] [--config-file PATH]\n",
         "  eliot-searchd --search-stdio --qdrant-url URL [--data-root ROOT] [--config-file PATH]\n",
     ));
 }

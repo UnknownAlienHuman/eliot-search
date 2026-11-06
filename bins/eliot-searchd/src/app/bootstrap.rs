@@ -115,35 +115,19 @@ fn unit_index(value: &OsStr) -> Result<usize, String> {
 #[derive(Default)]
 struct PublicationOptions {
     endpoint: Option<String>,
-    query: Option<String>,
-    limit: Option<usize>,
 }
 impl PublicationOptions {
     fn take_option(&mut self, arguments: &[OsString], index: usize) -> Result<bool, String> {
         let argument = &arguments[index];
-        if argument == OsStr::new("--qdrant-url") || argument == OsStr::new("--query") {
+        if argument == OsStr::new("--qdrant-url") {
             let value = arguments
                 .get(index + 1)
                 .and_then(|v| v.to_str())
                 .filter(|v| !v.is_empty() && v.len() <= 4096 && !v.as_bytes().contains(&0))
                 .ok_or_else(|| invalid("publication_argument"))?;
-            let slot = if argument == OsStr::new("--query") {
-                &mut self.query
-            } else {
-                &mut self.endpoint
-            };
-            if slot.replace(value.to_owned()).is_some() {
+            if self.endpoint.replace(value.to_owned()).is_some() {
                 return Err(invalid("publication_duplicate"));
             }
-        } else if argument == OsStr::new("--limit") {
-            if self.limit.is_some() {
-                return Err(invalid("limit_duplicate"));
-            }
-            let selected = unit_index(arguments.get(index + 1).ok_or_else(|| invalid("limit"))?)?;
-            if selected == 0 || selected > 64 {
-                return Err(invalid("limit"));
-            }
-            self.limit = Some(selected);
         } else {
             return Ok(false);
         }
@@ -154,23 +138,17 @@ impl PublicationOptions {
         command: RootCommand,
     ) -> Result<(Option<PublicationRequest>, Option<String>), String> {
         if command == RootCommand::Search {
-            if self.endpoint.is_none() || self.query.is_some() || self.limit.is_some() {
+            if self.endpoint.is_none() {
                 return Err(invalid("search_startup"));
             }
             return Ok((None, self.endpoint));
         }
-        if (command == RootCommand::PublishPrepared) != self.endpoint.is_some()
-            || (self.query.is_some() && command != RootCommand::PublishPrepared)
-            || (self.limit.is_some() && self.query.is_none())
-        {
+        if (command == RootCommand::PublishPrepared) != self.endpoint.is_some() {
             return Err(invalid("publication_selection"));
         }
         Ok((
-            self.endpoint.map(|endpoint| PublicationRequest {
-                endpoint,
-                query: self.query,
-                limit: self.limit.unwrap_or(10),
-            }),
+            self.endpoint
+                .map(|endpoint| PublicationRequest { endpoint }),
             None,
         ))
     }

@@ -1,31 +1,12 @@
-# Handle removal and emitted-item expansion
+# Emitted-item expansion
 
-The [prior source audit](https://github.com/UnknownAlienHuman/eliot-search/blob/44ee1661833c1139f1e0f1486f365a3a523fe814/crates/search-query/search-handles/FUNCTIONS.md)
-found two stores, copied source/revision records, random tokens, whole-catalogue scans and unconstrained revision
-ranges. That is revision-specific evidence. Recheck current Cargo/Rust/non-Rust callers before deletion.
+The unused handle Rust package, token store, manifest and exclusive fixtures are removed.
+One-shot cards contain retained provenance and no reusable expansion token.
 
-## Replacement boundary
+When live sessions are selected, expansion resolves an emitted (window_id, item_index) in that same
+session. The window's pinned evidence row supplies the representation and original range.
+Derive a finite relative neighborhood; reserve the operation's remaining read/output allowance and use
+the existing retained reader. Preserve character/coordinate boundaries and original deadline/cancellation.
 
-There is no public handle mint. A card may carry WindowItemRef `{ window_id, item_index }` only for the same live
-session. This is a locator; the window's ordered EvidenceRef and pinned view provide its evidence binding.
-One-shot output provides no reusable locator.
-
-The [window recipe](../search-continuation/FUNCTIONS.md#operation-ownership) owns serialization and pending output.
-`prepare_expand` validates a successfully emitted item, fixed expiry and the real session binding before retained
-I/O. It moves/owns the needed operation state without retaining a shared mutable window borrow or mutex.
-
-Derive a finite relative neighborhood around that item's representation/range, reserve the original operation's
-read/output budget, and use [evidence verification](../search-candidate-validator/FUNCTIONS.md). No arbitrary
-absolute revision offsets, source-catalogue revalidation, latest-source substitution or independent handle TTL.
-Only complete output commits new progress; damaged/partial output closes the session. Ordinary healthy request
-failure follows the window owner's restoration rule, not a second handle lifecycle.
-
-## Delete with consumers
-
-Remove both handle stores, entropy/token hashing, copied authority records, catalogue scans/fences, permits,
-invalidation generations, durable leases and arbitrary-range expansion. Move only useful range verification and
-prepared-output commit into the window/evidence owners. Serialization does not mean holding a mutable borrow
-through I/O. Delete exclusive fixtures and the crate once its callers move.
-
-After code run minimal pinned check/Clippy for real query/window/protocol/daemon consumers. Later cases exercise
-only emitted items, bounded neighborhoods, wrong/missing bytes and expiry/disconnect/restart behavior.
+[The session owner](../search-continuation/FUNCTIONS.md#operation-ownership) owns expiry and complete-output
+commit. No arbitrary absolute revision offsets, latest-source lookup, token minting, second catalogue or TTL.

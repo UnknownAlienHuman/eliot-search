@@ -15,7 +15,7 @@ use crate::{BackendError, MAX_POINT_TEXT_BYTES, PointInput, schema};
 impl Backend {
     /// Proves scoring/index wiring for one exact real saved point and source word.
     ///
-    /// The caller deterministically selects a complete bounded ASCII-alphabetic
+    /// The caller deterministically selects a complete bounded Unicode/code
     /// identifier from captured unit text, independently of the optional user query.
     /// The real text query has a singleton point-ID candidate filter, limit one,
     /// whole-generation IDF and routing-only/no-vector response selection.
@@ -43,7 +43,8 @@ impl Backend {
         if expected.retrieval_text.is_empty()
             || expected.retrieval_text.len() > MAX_POINT_TEXT_BYTES
             || query.is_empty()
-            || !query.bytes().all(|byte| byte.is_ascii_alphabetic())
+            || !query.chars().all(|c| c.is_alphanumeric() || c == '_')
+            || !query.chars().any(char::is_alphanumeric)
         {
             return Err(BackendError::InvalidInput);
         }
@@ -104,7 +105,7 @@ fn verify_hit(points: &[ScoredPoint], expected: PointInput<'_>) -> Result<(), Ba
 
 // Validate only the selected source word; do not produce or emulate a token stream.
 // Official CodeTokenizer identifies maximal alphanumeric/_ runs. With the selected
-// no-stemmer/no-stopword/no-length-clipping profile, a full ASCII-alphabetic run
+// no-stemmer/no-stopword/no-length-clipping profile, a full run containing an alphanumeric
 // shares tokens between document and ranking query, including joined case splits.
 fn saved_word(
     text: &str,

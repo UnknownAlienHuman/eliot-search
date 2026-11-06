@@ -1,7 +1,6 @@
-# Working on source selection
+# Working on this policy
 
-Read [FUNCTIONS.md](FUNCTIONS.md) and actual query/Exact/evidence callers. Selection is not authentication.
-Do not add restricted sessions, grants, revocation, per-member legs or predicate proofs.
-Keep default distinct from explicit empty; never widen unknown membership. Candidate-only narrowing must not
-change IDF population or disappear when the base is the whole collection. Old windows retain their view.
-Implement the direct consumer, remove replaced APIs, then run minimal locked check/Clippy for affected targets.
+Read [FUNCTIONS.md](FUNCTIONS.md) and the selected receiving owner's real callers.
+The unused Rust package, manifest and exclusive fixtures are removed. This directory retains product policy only.
+Add behavior beside an actual consumer when its delivery stage is selected. Do not restore the old package,
+DTO catalogue, receipts or test-only adapters.

@@ -83,12 +83,11 @@ pub async fn query(
         .await
     }
     .await;
-    // Explicit wait is required on every path. kill_on_drop is only an unwind
-    // fallback and is never reported as evidence of OS-process exit.
+    // Success already observed child exit and both output EOFs in exchange.
+    // Failures still require explicit termination/reap; kill_on_drop is only
+    // an unwind fallback, never evidence of OS-process exit.
     if result.is_err() {
         terminate_and_reap(&mut child).await?;
-    } else {
-        child.wait().await.map_err(|_| ClientError::Wait)?;
     }
     result
 }

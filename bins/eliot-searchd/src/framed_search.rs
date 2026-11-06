@@ -8,7 +8,7 @@ use std::sync::{Arc, mpsc};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
-use search_control_redb::publication::open_published;
+use search_control_redb::publication::pin_published;
 use search_provider_protocol::{
     ClientFrame, FailureCode, FrameBuffer, MAX_CLIENT_FRAME_BYTES, MAX_REMAINING_MS, ProtocolError,
     QUERY_REQUEST_ID, QueryOutcome, SearchRequest, Terminal, decode_client_frame,
@@ -63,7 +63,7 @@ fn worker_result(
     let view = root
         .as_ref()
         .ok()
-        .map(|root| open_published(&root.control_path(), deadline, cancel));
+        .map(|root| pin_published(&root.control_path(), deadline, cancel));
     let encoded = match (&root, &view) {
         (Err(error), _) => stopped(QueryFailure::root(*error)),
         (Ok(_), Some(Err(error))) => stopped(QueryFailure::publication(*error)),

@@ -1,4 +1,4 @@
-//! One owned-child corpus publication and actual backend nomination readback.
+//! One owned-child corpus publication from immutable retained preparation.
 
 use std::io::Write;
 use std::path::Path;
@@ -12,13 +12,13 @@ use search_control_redb::publication::{
     PointEvidence, PublicationError, PublishedView, UploadPage, UploadPoint,
 };
 use search_qdrant_bridge::{
-    Backend, BackendError, BackendLimits, Hit, MAX_HITS, MAX_PAGE_BYTES, MAX_PAGE_POINTS,
+    Backend, BackendError, BackendLimits, MAX_HITS, MAX_PAGE_BYTES, MAX_PAGE_POINTS,
     MAX_QUERY_BYTES, MAX_REQUEST_BYTES, MAX_RESPONSE_BYTES, PointInput,
 };
 use search_revision_store::{ObjectStoreError, read_object};
 use search_runtime_owner::{PlainRootError, PlainRootGuard, open_plain};
-use search_source_registry::{MAX_PUBLICATION_RESPONSE_BYTES, ObjectRef};
-use search_unitizer::{PreparationError, PreparationLimits, decode_prepared_utf8};
+use search_source_registry::MAX_PUBLICATION_RESPONSE_BYTES;
+use search_unitizer::{PreparationError, PreparationLimits, PreparedUtf8, decode_prepared_utf8};
 use serde_json::{Value, json};
 
 use crate::app::PublicationRequest;
@@ -41,20 +41,121 @@ const fn limits() -> PreparationLimits {
         max_encoded_bytes: 64 * 1024 * 1024,
     }
 }
-fn inputs(page: &UploadPage) -> Vec<PointInput<'_>> {
-    page.points
-        .iter()
+struct HydratedPoint {
+    point: UploadPoint,
+    text: String,
+}
+
+fn inputs(page: &[HydratedPoint]) -> Vec<PointInput<'_>> {
+    page.iter()
         .map(|point| PointInput {
-            id: point.id,
-            source_id: point.evidence.source_id,
-            retrieval_text: &point.retrieval_text,
+            id: point.point.id,
+            source_id: point.point.evidence.source_id,
+            retrieval_text: &point.text,
         })
         .collect()
 }
+
+fn unit_text<'a>(view: &'a PreparedUtf8<'_>, e: &PointEvidence) -> Result<&'a str, &'static str> {
+    let unit = view
+        .units()
+        .get(usize::try_from(e.unit).map_err(|_| "PUBLICATION_CORRUPT")?)
+        .ok_or("PUBLICATION_CORRUPT")?;
+    if u64::try_from(unit.source_start).ok() != Some(e.start)
+        || u64::try_from(unit.source_end).ok() != Some(e.end)
+        || unit.logical_line_start != e.line_start
+        || unit.logical_line_end != e.line_end
+        || unit.starts_at_line_boundary != e.starts_at_line_boundary
+        || unit.ends_at_line_boundary != e.ends_at_line_boundary
+    {
+        return Err("PUBLICATION_CORRUPT");
+    }
+    view.text()
+        .get(unit.source_start..unit.source_end)
+        .ok_or("PUBLICATION_CORRUPT")
+}
+
+fn hydrate_page(
+    root: &PlainRootGuard,
+    generation: &Generation,
+    page: UploadPage,
+    deadline: Instant,
+    cancel: &AtomicBool,
+) -> Result<Vec<HydratedPoint>, &'static str> {
+    let mut hydrated = Vec::new();
+    hydrated
+        .try_reserve_exact(page.points.len())
+        .map_err(|_| "PUBLICATION_ALLOCATION_FAILED")?;
+    let mut points = page.points.into_iter().peekable();
+    while let Some(first) = points.peek() {
+        check(deadline, cancel)?;
+        let e = &first.evidence;
+        let captured = control::read_generation_source(
+            &root.control_path(),
+            generation,
+            e.source_id,
+            deadline,
+            cancel,
+        )
+        .map_err(PublicationError::code)?;
+        let Some(PreparationOutcome::Ready { artifact }) =
+            captured.preparation.outcome.as_ref().map(|o| o.result)
+        else {
+            return Err("PUBLICATION_CORRUPT");
+        };
+        let stored = read_object(root, artifact, 64 * 1024 * 1024, deadline, cancel)
+            .map_err(ObjectStoreError::code)?;
+        let view = decode_prepared_utf8(
+            &stored,
+            &captured.source,
+            &captured.preparation.settings,
+            limits(),
+            deadline,
+            cancel,
+        )
+        .map_err(PreparationError::code)?;
+        while points
+            .peek()
+            .is_some_and(|p| p.evidence.source_id == captured.source.source_id)
+        {
+            check(deadline, cancel)?;
+            let point = points.next().ok_or("PUBLICATION_CORRUPT")?;
+            if point.evidence.source_namespace_id != captured.source.source_namespace_id
+                || point.evidence.input != captured.source.object_ref
+                || point.evidence.prepared != artifact
+            {
+                return Err("PUBLICATION_CORRUPT");
+            }
+            let text = unit_text(&view, &point.evidence)?;
+            let mut owned = String::new();
+            owned
+                .try_reserve_exact(text.len())
+                .map_err(|_| "PUBLICATION_ALLOCATION_FAILED")?;
+            owned.push_str(text);
+            hydrated.push(HydratedPoint { point, text: owned });
+        }
+    }
+    let wire = Backend::batch_request_bytes(
+        &generation.collection(),
+        &inputs(&hydrated),
+        deadline,
+        cancel,
+    )
+    .map_err(BackendError::code)?;
+    if page
+        .request_bytes
+        .is_some_and(|saved| u64::try_from(wire).ok() != Some(saved))
+    {
+        return Err("PUBLICATION_CORRUPT");
+    }
+    Ok(hydrated)
+}
+
 fn stage_complete_page(
     path: &Path,
     pending: &PendingGeneration,
     page: UploadPage,
+    prepared: &PreparedUtf8<'_>,
     deadline: Instant,
     cancel: &AtomicBool,
 ) -> Result<(), &'static str> {
@@ -62,26 +163,43 @@ fn stage_complete_page(
     let mut stack = vec![page];
     while let Some(mut page) = stack.pop() {
         check(deadline, cancel)?;
+        let page_inputs = page
+            .points
+            .iter()
+            .map(|point| {
+                Ok(PointInput {
+                    id: point.id,
+                    source_id: point.evidence.source_id,
+                    retrieval_text: unit_text(prepared, &point.evidence)?,
+                })
+            })
+            .collect::<Result<Vec<_>, &'static str>>()?;
+        let wire = Backend::batch_request_bytes(&collection, &page_inputs, deadline, cancel);
         let oversized = match control::upload_page_bytes(&page) {
             Err(PublicationError::Limit) => true,
             Err(error) => return Err(error.code()),
             Ok(size) if size > MAX_PAGE_BYTES => true,
-            Ok(_) => {
-                match Backend::batch_request_bytes(&collection, &inputs(&page), deadline, cancel) {
-                    Ok(wire) => wire > MAX_REQUEST_BYTES,
-                    Err(BackendError::RequestTooLarge) => true,
-                    Err(error) => return Err(error.code()),
-                }
-            }
+            Ok(_) => match wire {
+                Ok(size) => size > MAX_REQUEST_BYTES,
+                Err(BackendError::RequestTooLarge) => true,
+                Err(error) => return Err(error.code()),
+            },
         };
         if oversized {
             if page.points.len() <= 1 {
                 return Err("PUBLICATION_UNIT_TOO_LARGE");
             }
             let right = page.points.split_off(page.points.len() / 2);
-            stack.push(UploadPage { points: right });
+            stack.push(UploadPage {
+                points: right,
+                request_bytes: None,
+            });
             stack.push(page);
         } else {
+            page.request_bytes = Some(
+                u64::try_from(wire.map_err(BackendError::code)?)
+                    .map_err(|_| "PUBLICATION_LIMIT")?,
+            );
             control::stage_page(path, pending, &page, deadline, cancel)
                 .map_err(PublicationError::code)?;
         }
@@ -124,18 +242,12 @@ fn stage_source(
                 cancel,
             )
             .map_err(PreparationError::code)?;
-            let mut page = UploadPage { points: Vec::new() };
+            let mut page = UploadPage {
+                points: Vec::new(),
+                request_bytes: None,
+            };
             for (ordinal, unit) in view.units().iter().enumerate() {
                 check(deadline, cancel)?;
-                let text = view
-                    .text()
-                    .get(unit.source_start..unit.source_end)
-                    .ok_or("PUBLICATION_ARTIFACT_RANGE_INVALID")?;
-                let mut retrieval_text = String::new();
-                retrieval_text
-                    .try_reserve_exact(text.len())
-                    .map_err(|_| "PUBLICATION_ALLOCATION_FAILED")?;
-                retrieval_text.push_str(text);
                 let mut id = [0; 16];
                 id[..8].copy_from_slice(&pending.generation.sequence.to_be_bytes());
                 id[8..].copy_from_slice(&next_point.to_be_bytes());
@@ -145,7 +257,6 @@ fn stage_source(
                     .map_err(|_| "PUBLICATION_ALLOCATION_FAILED")?;
                 page.points.push(UploadPoint {
                     id,
-                    retrieval_text,
                     evidence: PointEvidence {
                         source_namespace_id: captured.source.source_namespace_id,
                         source_id: captured.source.source_id,
@@ -166,12 +277,18 @@ fn stage_source(
                         Err(PublicationError::Limit)
                     )
                 {
-                    let full = std::mem::replace(&mut page, UploadPage { points: Vec::new() });
-                    stage_complete_page(&path, pending, full, deadline, cancel)?;
+                    let full = std::mem::replace(
+                        &mut page,
+                        UploadPage {
+                            points: Vec::new(),
+                            request_bytes: None,
+                        },
+                    );
+                    stage_complete_page(&path, pending, full, &view, deadline, cancel)?;
                 }
             }
             if !page.points.is_empty() {
-                stage_complete_page(&path, pending, page, deadline, cancel)?;
+                stage_complete_page(&path, pending, page, &view, deadline, cancel)?;
             }
             control::finish_source(
                 &path,
@@ -211,11 +328,12 @@ fn settle(
 }
 fn upload(
     backend: &Backend,
-    path: &Path,
+    root: &PlainRootGuard,
     mut pending: PendingGeneration,
     deadline: Instant,
     cancel: &AtomicBool,
 ) -> Result<PendingGeneration, &'static str> {
+    let path = &root.control_path();
     let collection = pending.generation.collection();
     if !pending.created {
         if backend
@@ -246,6 +364,7 @@ fn upload(
     for number in pending.uploaded_pages..pending.generation.page_count {
         let page = control::read_upload_page(path, &pending.generation, number, deadline, cancel)
             .map_err(PublicationError::code)?;
+        let page = hydrate_page(root, &pending.generation, page, deadline, cancel)?;
         let revision = control::record_dispatch(
             path,
             &pending,
@@ -271,14 +390,14 @@ fn upload(
         .map_err(PublicationError::code)?
         .ok_or("PUBLICATION_STALE")
 }
-fn verify_and_query(
+fn verify_generation(
     backend: &Backend,
-    path: &Path,
+    root: &PlainRootGuard,
     generation: &Generation,
-    request: &PublicationRequest,
     deadline: Instant,
     cancel: &AtomicBool,
-) -> Result<Vec<Hit>, &'static str> {
+) -> Result<(), &'static str> {
+    let path = &root.control_path();
     control::validate_generation(path, generation, deadline, cancel)
         .map_err(PublicationError::code)?;
     let collection = generation.collection();
@@ -286,21 +405,39 @@ fn verify_and_query(
         .verify_schema(&collection, deadline, cancel)
         .map_err(BackendError::code)?;
     let mut canary = None;
+    let mut tokenless = true;
     let mut point_count = 0_u64;
     for number in 0..generation.page_count {
         check(deadline, cancel)?;
         let page = control::read_upload_page(path, generation, number, deadline, cancel)
             .map_err(PublicationError::code)?;
+        let page = hydrate_page(root, generation, page, deadline, cancel)?;
         backend
             .verify_points(&collection, &inputs(&page), deadline, cancel)
             .map_err(BackendError::code)?;
-        if canary.is_none() {
-            canary = page.points.iter().find_map(|point| {
-                canary_query(&point.retrieval_text).map(|query| (point.clone(), query.to_owned()))
-            });
+        for point in &page {
+            tokenless &= !point.text.chars().any(char::is_alphanumeric);
+            if canary.is_none()
+                && let Some(query) = canary_query(&point.text)
+            {
+                backend
+                    .verify_canary(
+                        &collection,
+                        PointInput {
+                            id: point.point.id,
+                            source_id: point.point.evidence.source_id,
+                            retrieval_text: &point.text,
+                        },
+                        query,
+                        deadline,
+                        cancel,
+                    )
+                    .map_err(BackendError::code)?;
+                canary = Some(());
+            }
         }
         point_count = point_count
-            .checked_add(u64::try_from(page.points.len()).map_err(|_| "PUBLICATION_LIMIT")?)
+            .checked_add(u64::try_from(page.len()).map_err(|_| "PUBLICATION_LIMIT")?)
             .ok_or("PUBLICATION_LIMIT")?;
     }
     let remote_count = backend
@@ -309,40 +446,19 @@ fn verify_and_query(
     if remote_count != generation.point_count || point_count != generation.point_count {
         return Err("PUBLICATION_POINT_COUNT_MISMATCH");
     }
-    if point_count == 0 {
-        return Ok(Vec::new());
+    if point_count != 0 && canary.is_none() && !tokenless {
+        return Err("PUBLICATION_READINESS_NOT_PROVEN");
     }
-    let (point, query) = canary.ok_or("PUBLICATION_READINESS_NOT_PROVEN")?;
-    backend
-        .verify_canary(
-            &collection,
-            PointInput {
-                id: point.id,
-                source_id: point.evidence.source_id,
-                retrieval_text: &point.retrieval_text,
-            },
-            &query,
-            deadline,
-            cancel,
-        )
-        .map_err(BackendError::code)?;
-    request.query.as_deref().map_or_else(
-        || Ok(Vec::new()),
-        |text| {
-            backend
-                .query_text(&collection, text, request.limit, deadline, cancel)
-                .map_err(BackendError::code)
-        },
-    )
+    Ok(())
 }
 
 fn canary_query(text: &str) -> Option<&str> {
-    // Select an existing complete ASCII word under the fixed Code/BM25 profile.
-    // This does not reconstruct tokenization, aliases or scores, and does not establish
-    // that all other text is tokenless. No candidate means readiness remains unproven.
-    text.split_ascii_whitespace().find(|word| {
-        word.len() <= MAX_QUERY_BYTES && word.bytes().all(|byte| byte.is_ascii_alphabetic())
-    })
+    // Official CodeTokenizer (222b2e44, code.rs:87-116) separates maximal
+    // Unicode alphanumeric/_ runs. Documents and ranking queries share their
+    // subword/joined path. Underscore-only input emits no tokens (split_classes).
+    // Select a real complete identifier, without reproducing its token stream or score.
+    text.split(|c: char| !c.is_alphanumeric() && c != '_')
+        .find(|word| word.len() <= MAX_QUERY_BYTES && word.chars().any(char::is_alphanumeric))
 }
 fn cleanup(
     backend: &Backend,
@@ -374,10 +490,9 @@ fn cleanup(
 fn prepare_view(
     root: &PlainRootGuard,
     backend: &Backend,
-    request: &PublicationRequest,
     deadline: Instant,
     cancel: &AtomicBool,
-) -> Result<(PublishedView, Vec<Hit>), &'static str> {
+) -> Result<PublishedView, &'static str> {
     let path = root.control_path();
     let capture =
         control::capture_corpus(&path, deadline, cancel).map_err(PublicationError::code)?;
@@ -393,10 +508,9 @@ fn prepare_view(
     }
     cleanup(backend, &path, deadline, cancel)?;
     let generation;
-    let hits;
     if capture.pending.is_none() && capture.current_matches() {
         generation = capture.current.ok_or("PUBLICATION_NOT_PUBLISHED")?;
-        hits = verify_and_query(backend, &path, &generation, request, deadline, cancel)?;
+        verify_generation(backend, root, &generation, deadline, cancel)?;
     } else {
         let pending = if let Some(pending) = capture.pending.clone() {
             pending
@@ -410,15 +524,8 @@ fn prepare_view(
             control::complete_capture(&path, &pending, deadline, cancel)
                 .map_err(PublicationError::code)?
         };
-        let pending = upload(backend, &path, pending, deadline, cancel)?;
-        hits = verify_and_query(
-            backend,
-            &path,
-            &pending.generation,
-            request,
-            deadline,
-            cancel,
-        )?;
+        let pending = upload(backend, root, pending, deadline, cancel)?;
+        verify_generation(backend, root, &pending.generation, deadline, cancel)?;
         generation = control::commit_generation(&path, &pending, deadline, cancel)
             .map_err(PublicationError::code)?;
     }
@@ -426,53 +533,13 @@ fn prepare_view(
     if view.generation != generation {
         return Err("PUBLICATION_STALE");
     }
-    Ok((view, hits))
+    Ok(view)
 }
-fn hex(bytes: &[u8]) -> String {
-    const DIGITS: &[u8; 16] = b"0123456789abcdef";
-    let mut output = String::with_capacity(bytes.len() * 2);
-    for byte in bytes {
-        output.push(char::from(DIGITS[usize::from(byte >> 4)]));
-        output.push(char::from(DIGITS[usize::from(byte & 15)]));
-    }
-    output
-}
-fn object(reference: ObjectRef) -> Value {
-    json!({"version":reference.format_version,"kind":reference.kind.name(),
-        "digest":hex(reference.digest.as_bytes()),"bytes":reference.byte_length})
-}
-fn response(
-    view: &PublishedView,
-    hits: Vec<Hit>,
-    request: &PublicationRequest,
-) -> Result<Value, &'static str> {
-    if hits.len() > request.limit || hits.len() > MAX_HITS {
-        return Err("BACKEND_RESPONSE_MALFORMED");
-    }
-    let mut resolved = Vec::new();
-    resolved
-        .try_reserve_exact(hits.len())
-        .map_err(|_| "PUBLICATION_ALLOCATION_FAILED")?;
-    for hit in hits {
-        let e = view
-            .resolve_point(hit.id)
-            .map_err(PublicationError::code)?
-            .evidence;
-        if e.source_id != hit.source_id || !hit.score.is_finite() {
-            return Err("PUBLICATION_HIT_MISMATCH");
-        }
-        resolved.push(json!({"point_id":hex(&hit.id),"source_namespace_id":e.source_namespace_id.to_string(),
-            "source_id":e.source_id.to_string(),"score":hit.score,"input":object(e.input),"prepared":object(e.prepared),
-            "unit":e.unit,"start":e.start,"end":e.end,"line_start":e.line_start,"line_end":e.line_end,
-            "starts_at_line_boundary":e.starts_at_line_boundary,"ends_at_line_boundary":e.ends_at_line_boundary}));
-    }
+fn response(view: &PublishedView) -> Value {
     let g = &view.generation;
-    Ok(
-        json!({"operation":"publish-prepared","state":"published","collection":g.collection(),
+    json!({"operation":"publish-prepared","state":"published","collection":g.collection(),
         "generation":g.sequence,"source_count":g.source_count,"gap_count":g.gap_count,
-        "point_count":g.point_count,"page_count":g.page_count,
-        "query_performed":request.query.is_some() && g.point_count != 0,"hits":resolved}),
-    )
+        "point_count":g.point_count,"page_count":g.page_count})
 }
 pub fn api_key() -> Result<Option<String>, &'static str> {
     let Some(value) = std::env::var_os("ELIOT_QDRANT_API_KEY") else {
@@ -509,8 +576,8 @@ pub fn run(
             cancel,
         )
         .map_err(BackendError::code)?;
-        let (view, hits) = prepare_view(&root, &backend, request, deadline, cancel)?;
-        let result = response(&view, hits, request)?;
+        let view = prepare_view(&root, &backend, deadline, cancel)?;
+        let result = response(&view);
         let bytes = serde_json::to_vec(&result).map_err(|_| "PUBLICATION_RESPONSE_INVALID")?;
         if bytes.len() >= MAX_PUBLICATION_RESPONSE_BYTES {
             return Err("PUBLICATION_RESPONSE_TOO_LARGE");

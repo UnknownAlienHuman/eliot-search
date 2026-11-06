@@ -258,22 +258,22 @@ pub struct PointEvidence {
     pub ends_at_line_boundary: bool,
 }
 
-/// One actual complete unit in an upload page.
+/// One fixed point and retained unit binding in a generation page.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct UploadPoint {
     /// Generation-bound collision-checked backend identifier.
     pub id: [u8; 16],
     /// Complete retained evidence binding.
     pub evidence: PointEvidence,
-    /// Actual prepared unit text, never aliases, vectors or a digest substitute.
-    pub retrieval_text: String,
 }
 
-/// One bounded complete durable upload page.
+/// A bounded durable page of references; unit text lives only in the Prepared object.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct UploadPage {
     /// Ordered actual points.
     pub points: Vec<UploadPoint>,
+    /// Actual SDK request bytes measured before persistence; absent only in read-only legacy v1 pages.
+    pub request_bytes: Option<u64>,
 }
 
 struct SourceEntry {
@@ -707,7 +707,7 @@ pub fn upload_page_bytes(page: &UploadPage) -> Result<usize> {
     codec::page_size(page)
 }
 
-/// Persists actual upload text and matching evidence in one bounded transaction.
+/// Persists fixed retained-unit references and matching evidence in one bounded transaction.
 ///
 /// # Errors
 /// Rejects changed/captured-complete builds, duplicate IDs, invalid source bindings and limits.
@@ -879,7 +879,7 @@ pub fn load_pending(
     observe(path, deadline, cancel, |tx| Ok(read_state(tx)?.pending))
 }
 
-/// Reads one immutable saved upload page, including actual text.
+/// Reads one immutable saved upload page of retained-unit references.
 ///
 /// # Errors
 /// Refuses missing/corrupt pages and invalid point bindings.
@@ -910,6 +910,43 @@ pub fn read_upload_page(
             .map_err(|_| PublicationError::Database)?
             .ok_or(PublicationError::Corrupt)?;
         codec::decode_page(value.value())
+    })
+}
+
+/// Reads the fixed decoder binding saved for this generation, never current preparation.
+///
+/// # Errors
+/// Refuses stale generations and missing, incomplete or corrupt captured source rows.
+pub fn read_generation_source(
+    path: &Path,
+    generation: &Generation,
+    source_id: SourceId,
+    deadline: Instant,
+    cancel: &AtomicBool,
+) -> Result<CapturedSource> {
+    observe(path, deadline, cancel, |tx| {
+        let state = read_state(tx)?;
+        if !(state.current.as_ref() == Some(generation)
+            || state
+                .pending
+                .as_ref()
+                .is_some_and(|p| p.capture_complete && &p.generation == generation))
+        {
+            return Err(PublicationError::Stale);
+        }
+        let table = tx
+            .open_table(SOURCES)
+            .map_err(|_| PublicationError::Corrupt)?;
+        let source_key = key(generation.sequence, source_id.as_bytes());
+        let value = table
+            .get(source_key.as_slice())
+            .map_err(|_| PublicationError::Database)?
+            .ok_or(PublicationError::Corrupt)?;
+        let entry = codec::decode_source(value.value())?;
+        if !entry.complete || entry.captured.source.source_id != source_id {
+            return Err(PublicationError::Corrupt);
+        }
+        Ok(entry.captured)
     })
 }
 
@@ -1270,7 +1307,10 @@ impl PublishedView {
     /// # Errors
     /// Missing/corrupt metadata is an error, never an invented hit or empty result.
     pub fn resolve_point(&self, id: [u8; 16]) -> Result<ResolvedPoint> {
-        if id[..8] != self.generation.sequence.to_be_bytes() {
+        if id[..8] != self.generation.sequence.to_be_bytes()
+            || u64::from_be_bytes(id[8..].try_into().map_err(|_| PublicationError::Corrupt)?)
+                >= self.generation.point_count
+        {
             return Err(PublicationError::Corrupt);
         }
         let table = self
@@ -1294,6 +1334,7 @@ impl PublishedView {
             .ok_or(PublicationError::Corrupt)?;
         let entry = codec::decode_source(source.value())?;
         if !entry.complete
+            || evidence.source_id != entry.captured.source.source_id
             || evidence.unit >= entry.staged_units
             || evidence.source_namespace_id != entry.captured.source.source_namespace_id
             || evidence.input != entry.captured.source.object_ref
@@ -1320,15 +1361,11 @@ impl PublishedView {
     }
 }
 
-/// Opens the current pointer and evidence tables from the same native read-only snapshot.
+/// Pins the committed header and table handles without scanning the corpus.
 ///
 /// # Errors
-/// Fresh unpublished roots, partial metadata, corruption and I/O are distinct failures.
-pub fn open_published(
-    path: &Path,
-    deadline: Instant,
-    cancel: &AtomicBool,
-) -> Result<PublishedView> {
+/// Refuses absent/corrupt headers and missing tables. Returned point/object checks belong to the reader.
+pub fn pin_published(path: &Path, deadline: Instant, cancel: &AtomicBool) -> Result<PublishedView> {
     check(deadline, cancel)?;
     let database = ReadOnlyDatabase::open(path).map_err(|_| PublicationError::Database)?;
     let transaction = database
@@ -1337,11 +1374,40 @@ pub fn open_published(
     let generation = read_state(&transaction)?
         .current
         .ok_or(PublicationError::NotPublished)?;
-    verify::generation(&transaction, &generation, deadline, cancel)?;
+    drop(
+        transaction
+            .open_table(SOURCES)
+            .map_err(|_| PublicationError::Corrupt)?,
+    );
+    drop(
+        transaction
+            .open_table(EVIDENCE)
+            .map_err(|_| PublicationError::Corrupt)?,
+    );
+    drop(
+        transaction
+            .open_table(PAGES)
+            .map_err(|_| PublicationError::Corrupt)?,
+    );
     check(deadline, cancel)?;
     Ok(PublishedView {
         generation,
         transaction,
         database,
     })
+}
+
+/// Exhaustively accepts the saved generation for publication or recovery.
+///
+/// # Errors
+/// Refuses missing/orphan/corrupt source/page/evidence bindings, bounds and I/O.
+/// Ordinary search uses `pin_published` and validates only returned evidence plus retained objects.
+pub fn open_published(
+    path: &Path,
+    deadline: Instant,
+    cancel: &AtomicBool,
+) -> Result<PublishedView> {
+    let view = pin_published(path, deadline, cancel)?;
+    verify::generation(&view.transaction, &view.generation, deadline, cancel)?;
+    Ok(view)
 }
