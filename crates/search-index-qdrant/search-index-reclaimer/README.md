@@ -1,16 +1,9 @@
-# Index cleanup — move the whole-collection effect, remove this package
+# Index cleanup — retired Rust package
 
-Publication owns cleanup. Stage 2/3A uses immutable physical generations; Stage 3B, when selected, also keeps
-individual points until their entire generation is retired. Neither profile physically deletes individual points.
+Q1 physically removed this package's Cargo/src and exclusive fixtures. The concrete bridge now performs
+whole-collection delete/absence; daemon publication and CONTROL own eligibility and bounded cleanup metadata.
 
-[Publication](../search-publication/FUNCTIONS.md#view-lifetime-and-whole-generation-cleanup) owns eligibility,
-unfinished cleanup state and uncertainty. [FUNCTIONS.md](FUNCTIONS.md) maps the old reclaimer's useful private
-collection delete/absence helper and removal boundary. Do not reintroduce point pages, cleanup cursors,
-watermarks or a separate journal.
-
-All live view/window guards and targetable unresolved attempts matter, not just the immediate predecessor.
-Last guard drop only wakes cleanup. Local immutable-object GC is separate stopped-root maintenance.
-
-Trace current callers, move the useful helper into publication/bridge, and delete this package and exclusive
-fixtures. Logical absence is not a physical-erasure claim. Evidence lives in the
-[registry](../../../docs/audit/ANALYSIS_REGISTRY.md#evidence-status).
+[FUNCTIONS.md](FUNCTIONS.md) retains the whole-generation policy/removal history.
+[Publication](../search-publication/FUNCTIONS.md#view-lifetime-and-whole-generation-cleanup) owns view and
+unresolved-writer guards. No point-delete plan, receipt, cursor or reclaimer service is restored.
+Local immutable-object GC remains separate stopped-root maintenance.

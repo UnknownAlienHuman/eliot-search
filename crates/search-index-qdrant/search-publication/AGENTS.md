@@ -2,6 +2,10 @@
 
 Read [FUNCTIONS.md](FUNCTIONS.md), then only the affected bridge/control/view/query consumers.
 
+Current Q1 composition lives in daemon published_corpus.rs and CONTROL publication.rs, linked by the recipe.
+This is a recipe-only directory; do not resurrect its retired source/manifests/fixtures. Preserve whole-graph
+RO validation and the independent checked singleton canary when adding the next actual consumer.
+
 Stage 2/3A uses one serialized publisher, fixed complete generation input, InsertOnly build, exact readiness,
 bounded evidence/current commit and explicit view installation. No sequence, closure or occurrence matching.
 Conditional Stage 3B follows its own recipe only after failed measured budgets.

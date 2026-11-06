@@ -1,6 +1,6 @@
-# Daemon — root, retained file and stored preparation
+# Daemon — root, retained file, preparation and publication
 
-The daemon owns native invocation capture, bootstrap settings, root dispatch and factual output. Retain-file and prepare-source extend the existing root-owned CLI child.
+The daemon owns native invocation, bootstrap settings, root dispatch and factual output. Retention, preparation and publish-prepared use the existing root-owned CLI child.
 
 ## retain-file path
 
@@ -30,6 +30,22 @@ Input/output text ceilings are 8 MiB; encoded artifact allowance is 64 MiB, with
 Preparation stdout is bounded at 397312 bytes for one full 64 KiB unit under worst-case JSON escaping plus metadata/framing. Other root/retention stdout and stderr bounds remain unchanged. Root guard, original deadline/cancellation and child cleanup cover the operation through output.
 
 No operation executes input or implicitly starts a network/model/Qdrant service. Root initialization, inspection, persistent-savepoint safety and incomplete discard are unchanged. [CONTROL](../../crates/search-control-redb/FUNCTIONS.md) owns CAS; [unitization](../../crates/search-prep/search-unitizer/FUNCTIONS.md) owns the complete artifact.
+
+## publish-prepared path
+
+    eliot-searchd --publish-prepared --qdrant-url URL [--query TEXT] [--limit N] [ROOT] [--data-root ROOT] [--config-file PATH]
+
+[published_corpus.rs](src/published_corpus.rs) is the concrete serialized publisher and query-nomination consumer. It holds PlainRootGuard and the original 120-second deadline/cancellation through output:
+
+1. Capture every current retained source and matching selected preparation, including empty/Gap. Refuse absent/stale preparation instead of omitting a source.
+2. Persist fixed source inputs, full upload text/pages and point/range evidence in bounded CONTROL transactions. Read Prepared objects through the shared verified reader and borrowed decoder; never reopen live locators.
+3. Use the [bridge](../../crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md) for the exact vectorless generation, index, InsertOnly/wait, complete point/payload/count/schema readback and independent saved-point TextQuery canary.
+4. Compare/commit current pointer, predecessor cleanup and pending clear atomically; then open the matching complete native RO snapshot. No database writer spans object/backend I/O.
+5. Resolve optional SDK hits through that snapshot and return metadata only. Publication success is not an excerpt/citation result.
+
+The query is at most 4096 bytes, default/max hits 10/64, and output at most 135168 bytes. A known zero-point generation has explicit complete inventory/schema/count checks. Nonzero populations require a whole saved ASCII-word candidate and exact singleton ID/source/positive-score canary; no known candidate or unexpected empty response refuses acceptance. Optional user queries run independently and may return zero.
+
+The operator owns the loopback Qdrant service/storage. The optional existing ELIOT_QDRANT_API_KEY is consumed without logging. Unknown mutations retain an unserved pending target; do not clear them from a matching readback or reset the failed root. See [CONTROL](../../crates/search-control-redb/FUNCTIONS.md#publication-state-and-snapshot) for whole-graph validation and guards, and [root guidance](../../crates/search-runtime/search-runtime-owner/FUNCTIONS.md#operator-qdrant-storage) for the observed Windows storage constraint.
 
 ## Verification state
 

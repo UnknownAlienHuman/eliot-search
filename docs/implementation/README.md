@@ -7,8 +7,9 @@ This page owns delivery order and cross-owner values. Use [code map](CODE_MAP.md
 ## Connected path
 
 The current binaries expose four root operations, retain-file and retained-only prepare-source. Stage 2 connects
-the source/current row and complete stored preparation/current outcome. Qdrant publication, framed queries and
-later stages remain future work; exact native scopes belong in the registry.
+the source/current row, stored preparation/current outcome and Qdrant generation/current evidence/view.
+publish-prepared returns real SDK nominations and range metadata. Framed read-only retained-excerpt search
+and later stages remain future work; exact native scopes belong in the registry.
 
 ```text
 selected source → stable acquired bytes → immutable ObjectRef/current SourceRecord
@@ -96,9 +97,9 @@ Coordinator #264. S1 connects one explicit local file → one stable native-hand
 
 P1 connects prepare-source --source-id UUID [--unit N] through the existing owned child. It reads verified retained input without reopening the live path, creates exact UTF-8 text and bounded ranges, stores the complete artifact through the shared writer, decodes its stored bytes, then installs a guarded current outcome and returns one complete stored unit. Empty and Gap are explicit. CONTROL preserves selected settings and compares source/registration/input/settings and expected outcome with non-reset revisions. [Owner rules](../../crates/search-control-redb/FUNCTIONS.md#current-preparation) and the [registry](../audit/ANALYSIS_REGISTRY.md#evidence-status) distinguish implementation from exact native/gate scopes.
 
-Next Q1 consumes actual stored text/units into a fresh vectorless Qdrant collection, the scoring-text index, InsertOnly/readback/canary, matching current/evidence commit and PublishedView. U1 then connects TextQuery and a retained excerpt. Upgrade exact Qdrant client/server/schema and real consumers together at that cut. Use lexical/bridge owner settings and the operator-started local server. A fresh root without a published generation is buildable, not a corrupt root or a successful empty search.
+Q1 now consumes actual saved text/units into a fresh vectorless Qdrant 1.20.0 collection, verifies exact schema/payload/count and an independent checked TextQuery canary, commits current/evidence/predecessor cleanup and opens the complete validated PublishedView. Empty/Gap sources remain in inventory. Optional user queries return backend nominations plus snapshot range metadata. U1 must turn those into verified retained text/citations through a read-only command. Use the operator-started local server and the [observed Windows storage guidance](../../crates/search-runtime/search-runtime-owner/FUNCTIONS.md#operator-qdrant-storage). A fresh unpublished root is buildable, not a successful empty search.
 
-Both source operations use the existing root-owned one-shot child, with no temporary protocol or automatic second preparation route inside retain-file. Live paging/windows arrive in Stage 4. Broad inventory, watchers, point mutation and cleanup remain later scope; encryption/permission platforms are outside local scope. Missing or corrupt retained evidence is not a card. S1/P1 do not complete Stage 2 or the product.
+Retention, preparation and publication use the existing root-owned one-shot child, with no temporary protocol or automatic preparation route inside retain-file. Live paging/windows arrive in Stage 4. Broad inventory, watchers, point mutation and cleanup remain later scope; encryption/permission platforms are outside local scope. Missing or corrupt retained evidence is not a card. S1/P1 do not complete Stage 2 or the product.
 <a id="3a-fresh-generation-convergence"></a>
 ### 3A. Fresh-generation convergence
 
@@ -133,8 +134,8 @@ consumers. No encryption or restricted-user phase. Qdrant Edge, if studied later
 <a id="publication-and-retrieval"></a>
 ## Lifetime and lock order
 
-PlainRootGuard currently covers a one-shot root operation through output. The following publication/view/session
-ordering applies when those future owners are connected.
+PlainRootGuard covers the current one-shot operations and published snapshot through output. The ordering below
+also applies to future retained query views/sessions when U1 and later window owners are connected.
 
 Root guard precedes and outlives stores. Publication serializes selection, performs object/backend I/O outside
 redb writers, commits bounded metadata, opens/verifies its snapshot, then installs under a short view lock.

@@ -5,6 +5,8 @@ ad8cc9e8fa498d43b644246af3b7f4900890317a. S1 final Windows debug checks, strict 
 execution passed at 06bb6877487d7e3caac9d955be855c86dec1a1b5. This is not an installed baseline or a connected Search product.
 P1 adds retained-only preparation: core native cases ran with 88e00ef binaries; the d2ccb596 CLI passed the
 focused request-binding regressions and a nonzero unit selection using the unchanged daemon/libraries.
+Q1 at 3c33d831 passed actual Windows debug CLI publication/current/evidence/view qualification with Qdrant 1.20.0.
+It returns backend nominations and stored range metadata; read-only verified excerpt search remains U1.
 See the [exact source, artifacts and verification scope](docs/audit/ANALYSIS_REGISTRY.md#evidence-status).
 
 ## Root operator commands
@@ -70,6 +72,31 @@ metadata. This returns stored text, not Qdrant search results or citations.
 [Daemon](bins/eliot-searchd/FUNCTIONS.md#prepare-source-path) and
 [unitizer](crates/search-prep/search-unitizer/FUNCTIONS.md) describe the actual path.
 
+## Publish the prepared corpus
+
+Start the selected same-host Qdrant 1.20.0 service as its operator, with separately owned storage. The ordinary
+gRPC endpoint is port 6334; the application neither starts nor stops that service. Use a current application
+root whose selected sources already have matching preparation outcomes:
+
+    eliot-search publish-prepared --qdrant-url http://127.0.0.1:6334 --data-root "C:\example\root"
+    eliot-search publish-prepared --qdrant-url http://127.0.0.1:6334 --query "identifier" --limit 10 --data-root "C:\example\root"
+    eliot-searchd --publish-prepared --qdrant-url http://127.0.0.1:6334 --query "identifier" --data-root "C:\example\root"
+
+If that operator service requires an existing key, supply ELIOT_QDRANT_API_KEY in the environment; never pass
+it in argv. Publication reads retained artifacts only. Deleted-original qualification uses private fixtures,
+not a requirement to remove user input.
+
+The result reports exact collection/generation, complete source/Gap/point/page counts and optional SDK
+point/evidence metadata. Readiness uses a separate checked saved-point canary; the user query may have no hits.
+Missing preparation/backend/current data, corrupt evidence and unresolved effects remain errors, not empty success.
+This command does not emit retained excerpts or citations.
+
+The Windows native run used a fresh 48-character operator storage root. Controlled 76/49-character storage-path
+cases showed depth sensitivity during Gridstore index creation; this is not a universal MAX_PATH threshold or
+an application path/name/profile workaround. See [operator storage](crates/search-runtime/search-runtime-owner/FUNCTIONS.md#operator-qdrant-storage)
+and [exact evidence](docs/audit/ANALYSIS_REGISTRY.md#evidence-status). The original failed root remains preserved
+with an unresolved target; do not reset it to claim recovery.
+
 ## File, environment and CLI settings
 
 An explicit UTF-8 TOML file at C:\example\settings\operator.toml may contain:
@@ -109,7 +136,8 @@ the ad8 recovery/config batch and records the exact checked revisions.
 ## First persistent path
 
 One explicit file connects through no-execute acquisition, verified plain ObjectRef storage and a guarded
-CurrentSourceRecord. prepare-source consumes that retained object, stores the complete representation/ranges and
-installs a guarded current preparation outcome in the same CONTROL file. Next Q1 must connect actual Qdrant
-publication before U1 returns a verified search excerpt. The [one-file path](docs/implementation/README.md#2-walking-skeleton--one-file-to-one-cli-result)
+CurrentSourceRecord. prepare-source consumes retained bytes and stores the complete representation/ranges/current
+outcome. publish-prepared connects those stored inputs to actual Qdrant/current/evidence/PublishedView.
+Next U1 returns a verified retained search excerpt through a read-only command. The
+[one-file product path](docs/implementation/README.md#2-walking-skeleton--one-file-to-one-cli-result)
 and installed-baseline qualification remain unfinished.

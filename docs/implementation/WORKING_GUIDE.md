@@ -28,8 +28,8 @@ cargo +1.98.0 metadata --locked --no-deps --format-version 1
 ```
 
 Inspect Cargo target paths, module declarations, feature gates and the dispatch which reaches the function.
-A file, re-export or test fixture is not a product caller. Both actual binary targets currently start in
-`src/entry.rs`; their `src/main.rs` files are legacy test targets. Recheck after moving them.
+A file, re-export or test fixture is not a product caller. Both actual binary targets start in
+`src/entry.rs`; their old main/sealed/library harnesses are removed. Check the declared real targets.
 
 Move real consumers together; delete the displaced route, exclusive fixtures and dependency edges. Do not delete
 user data or shared OS/file helpers with crypto/pairing wrappers. A retained legacy path needs a concrete next

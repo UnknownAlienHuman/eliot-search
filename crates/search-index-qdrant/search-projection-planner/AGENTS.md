@@ -2,6 +2,9 @@
 
 Read [FUNCTIONS.md](FUNCTIONS.md) and the affected [publication recipe](../search-publication/FUNCTIONS.md).
 
+The current concrete assembler lives in the daemon/CONTROL paths linked by the recipe. This directory remains
+policy-only after source retirement; no compatibility planner or fixture API is required by Q1.
+
 Stage 2/3A builds complete bounded pages with actual retrieval text, evidence bindings and generation-bound IDs.
 Do not require old/new matching, stable cross-generation IDs, sequence or closure. Query-time k/b never changes
 projection identity or causes a rebuild; the lexical owner separates physical and query profiles.

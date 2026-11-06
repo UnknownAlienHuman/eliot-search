@@ -3,6 +3,33 @@
 One serialized publisher owns fixed build input, external effects, matching durable evidence/current state, view
 installation and finite cleanup obligations. It owns no reader/parser/query window or second recovery platform.
 
+## Current Q1 consumer
+
+The current implementation is [daemon published_corpus.rs](../../../bins/eliot-searchd/src/published_corpus.rs)
+with [CONTROL publication.rs](../../search-control-redb/src/publication.rs), reached by publish-prepared.
+This directory retains the canonical policy; it has no restored Cargo/src crate or legacy admission machine.
+
+The one-shot owner captures all current retained/prepared outcomes and non-reset guards, stores complete
+source inputs/upload text/evidence, builds through the concrete bridge, verifies exact schema/points/count,
+then commits current/predecessor cleanup/pending clear and opens the matching complete RO snapshot.
+Source/Prepared objects remain immutable; original source locators are never reopened.
+
+Readiness is independent of optional user query. A deterministic whole ASCII-alphabetic word from a real saved
+unit drives a singleton HasId TextQuery with global IDF and limit one. Exact expected ID/source and finite
+positive score are mandatory. No known bounded candidate across a nonzero corpus means readiness unproven,
+not an inferred tokenless corpus. A genuine zero-point generation instead verifies complete inventory/evidence,
+schema and count zero, with no sentinel point. The user query may legitimately yield no nominations.
+
+Full graph validation checks every source/page/evidence binding in one RO snapshot before acceptance and on
+view open. Missing/malformed unqueried evidence refuses publication too. Unknown mutations retain pending
+targets unserved; standalone readback never clears them. The current synchronous root owner has no concurrent
+query windows; cleanup occurs before its view opens, with exact whole-collection ownership/absence checks.
+The broader convergence, retained-view and conditional incremental rules below remain obligations for their stages.
+
+Windows debug SOURCE/native acceptance is recorded at 3c33d831 in the existing
+[registry](../../../docs/audit/ANALYSIS_REGISTRY.md#evidence-status). Q1 returns routing/evidence metadata;
+retained excerpt/citation emission remains U1.
+
 <a id="reconcile-desired-and-published-state"></a>
 ## Desired state
 
