@@ -1,8 +1,8 @@
 # Working on index cleanup
 
-This package is a removal target. Read [FUNCTIONS.md](FUNCTIONS.md) and the
+The Rust package was retired in Q1. Read the remaining policy in [FUNCTIONS.md](FUNCTIONS.md) and the
 [publication cleanup rule](../search-publication/FUNCTIONS.md#view-lifetime-and-whole-generation-cleanup).
-Move only the exact whole-collection deletion/absence helper with its real callers.
+The concrete whole-collection effect now belongs to the bridge and actual publisher; no crate/fixture resurrection.
 
 No individual-point physical deletion, point manifests, cleanup cursors, watermarks, receipts or separate
 reclaimer journal in Stage 2/3A or conditional Stage 3B. Closed Stage 3B points remain until whole-generation

@@ -21,6 +21,7 @@ pub enum RootCommand {
     DiscardIncomplete,
     RetainFile,
     PrepareSource,
+    PublishPrepared,
 }
 
 impl RootCommand {
@@ -32,6 +33,7 @@ impl RootCommand {
             Self::DiscardIncomplete => "discard-incomplete-data-root",
             Self::RetainFile => "retain-file",
             Self::PrepareSource => "prepare-source",
+            Self::PublishPrepared => "publish-prepared",
         }
     }
 }
@@ -42,6 +44,13 @@ pub struct RootInvocation {
     pub(crate) source_file: Option<PathBuf>,
     pub(crate) source_id: Option<SourceId>,
     pub(crate) unit: Option<usize>,
+    pub(crate) publication: Option<PublicationRequest>,
+}
+
+pub struct PublicationRequest {
+    pub(crate) endpoint: String,
+    pub(crate) query: Option<String>,
+    pub(crate) limit: usize,
 }
 
 fn emit_error(code: &str) -> ExitCode {
@@ -76,6 +85,7 @@ fn print_help() {
         "  eliot-searchd --discard-incomplete-data-root [ROOT] [--data-root ROOT] [--config-file PATH]\n",
         "  eliot-searchd --retain-file --source-file PATH [ROOT] [--data-root ROOT] [--config-file PATH]\n",
         "  eliot-searchd --prepare-source --source-id UUID [--unit N] [--data-root ROOT] [--config-file PATH]\n",
+        "  eliot-searchd --publish-prepared --qdrant-url URL [--query TEXT] [--limit N] [--data-root ROOT] [--config-file PATH]\n",
     ));
 }
 

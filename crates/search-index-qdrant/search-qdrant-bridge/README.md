@@ -1,15 +1,21 @@
 # Qdrant bridge
 
-The private boundary for actual Qdrant schema, point, query and readback calls. One client/runtime serves
-publication and query. Publication owns effect ordering/recovery/view commit; retained objects and pinned metadata
-establish citations.
+The concrete Backend privately owns one reusable tonic channel and one Tokio runtime over the exact
+Qdrant 1.20.0 SDK's public generated clients. SDK/transport types and actual credentials remain inside
+this crate. [FUNCTIONS.md](FUNCTIONS.md) owns the selected physical/query profile and acceptance rules.
 
-[FUNCTIONS.md](FUNCTIONS.md) owns SDK operations and readback.
-[Lexical](../../search-lexical/FUNCTIONS.md) owns physical/query profile semantics;
-[publication](../search-publication/FUNCTIONS.md) owns uncertainty and cleanup.
-The selected scoring-text/TextQuery path replaces baseline sparse inference, not an additional backend.
+Publication supplies fixed complete PointInput pages. Pure batch_request_bytes measures their actual
+SDK protobuf size before persistence, and insert_only repeats the same checked encoding with InsertOnly
+and wait=true. Exact schema/point/count readback and a real TextQuery canary precede publication's
+CONTROL commit. Query returns only point/source routing and finite server score; retained objects supply text.
+The gRPC point uses the SDK's required present named-vector map with zero entries, not an omitted container
+or any dense/sparse vector values; actual size measurement includes its framing.
 
-The lock still contains client 1.19.0; selected 1.20.x integration is not implemented. Earlier gate-removal library
-checks do not establish daemon/server behavior. [Registry](../../../docs/audit/ANALYSIS_REGISTRY.md#evidence-status)
-owns evidence; [historical source inventory](https://github.com/UnknownAlienHuman/eliot-search/blob/45ddf887c9e84861b1302334a1f5ecabb263f7f3/crates/search-index-qdrant/search-qdrant-bridge/README.md)
-records remaining legacy wrappers at that revision.
+The operator owns Qdrant startup/storage/shutdown. This crate has no supervisor, capability/qualification
+registry, auth lease, sparse/local BM25 encoder, mutation ledger or model fallback. UnknownDispatch leaves
+publication's target unserved until its real uncertain-effect rules permit progress.
+
+[Lexical policy](../../search-lexical/FUNCTIONS.md) defines the fixed Code/BM25 semantics;
+[publication](../search-publication/FUNCTIONS.md) owns durable pages, current/evidence and view installation.
+Source check, dependency resolution and native acceptance are separate evidence recorded by the designated
+verifier; this README alone does not claim that SDK/server operations have executed successfully.

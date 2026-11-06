@@ -1,24 +1,21 @@
 # Work register
 
-Current checkpoint, 2026-11-06: Windows debug root operator qualified at source
-ad8cc9e8fa498d43b644246af3b7f4900890317a. S1 source 06bb6877487d7e3caac9d955be855c86dec1a1b5 connects one retained
-file/current row and is qualified for the Windows debug S1 scope. P1 candidate d2ccb59638d9802d00933ee578a85f4f657a1980
-connects complete stored preparation/current outcome and actual unit text. SOURCE review, source gate coverage
-and bounded native cases passed; merge is pending. Exact binary scopes are below. Qdrant publication and
-verified search remain unconnected.
+Current checkpoint, 2026-11-06: S1/P1 are merged and qualified in their separately recorded Windows debug scopes.
+Q1 candidate 3c33d8316ce7edf19b3100387bdaed04e5642813 connects the full prepared corpus to actual Qdrant
+publication, guarded current/evidence and validated PublishedView. Sol SOURCE review and Windows debug publisher
+native acceptance passed; PR #628 merge is pending. U1 read-only retained-excerpt search is next.
 
 <a id="resume"></a>
 <a id="resume-after-interruption"></a>
 ## Next task
 
-**Q1: connect actual vectorless Qdrant publication after P1 merge.** Consume P1's stored representation,
-bounded unit ranges and captured current outcomes. Follow the retained
-[projection](../../crates/search-index-qdrant/search-projection-planner/FUNCTIONS.md) and
-[publication](../../crates/search-index-qdrant/search-publication/FUNCTIONS.md) recipes: bounded uploadable text/pages,
-actual collection/schema/readback, matching current/evidence commit and installed PublishedView.
-The [lexical](../../crates/search-lexical/FUNCTIONS.md) and
-[bridge](../../crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md) owners select server-side BM25 text
-retrieval without a model/embedding provider. P1 Ready is preparation, not publication; U1 search remains later.
+**U1: connect read-only search to a verified retained excerpt/citation after Q1 merge.** Pin the existing
+PublishedView, call the concrete Backend query, resolve each point and captured decoder binding from that same
+snapshot, then verify retained object length/BLAKE3 and exact saved unit/range before emitting text.
+Use the [evidence recipe](../../crates/search-query/search-candidate-validator/FUNCTIONS.md),
+[protocol](../../crates/search-provider-protocol/FUNCTIONS.md), client and actual CLI/daemon.
+No implicit publish/reprepare, latest-preparation lookup, live-source fallback or local BM25. Q1 routing metadata
+is not an excerpt/citation. The full product remains unfinished.
 
 <a id="work-register"></a>
 <a id="delivery-remaining"></a>
@@ -33,9 +30,9 @@ DONE below is the named delivered scope, not completion of the product.
 | F1 / DONE, Windows debug root scope | None | CLI/daemon entry/app; [settings](../../crates/search-config/FUNCTIONS.md) | Consumed native file/environment/CLI root settings and effect-free help/version. |
 | F2 / DONE, Windows debug root scope | F1 | daemon native_root_command; [root](../../crates/search-runtime/search-runtime-owner/FUNCTIONS.md), [control](../../crates/search-control-redb/FUNCTIONS.md) | Four plain root operations, stable exclusion, actual control format and bounded factual output. |
 | S1 / DONE, Windows debug scope | F2 | current daemon/CLI + [source owners](../../crates/search-source/README.md#ownership), root, object store, control | One bounded file read → verified ObjectRef → guarded CurrentSourceRecord; final source 06bb6877 and distinct native scopes below. |
-| P1 / VERIFIED, Windows debug scope; merge pending | S1 | Materializer/unitizer, shared object writer, CONTROL and actual prepare-source child consumer | Complete artifact/current outcome with actual stored text/ranges, empty/Gap and guarded CAS; source d2ccb596, distinct binary scopes below. |
-| Q1 / NEXT after P1 merge | P1 | Control, Qdrant bridge and publisher recipes | Actual build/readback → matching current/evidence state → installed PublishedView. |
-| U1 / WAIT | Q1 | CLI app and provider client/protocol owners | Owned-child framed search returning a verified retained excerpt. |
+| P1 / DONE, Windows debug scope | S1 | Materializer/unitizer, shared writer, CONTROL and actual prepare-source child | Complete artifact/current outcome with actual stored text/ranges, empty/Gap and guarded CAS; source d2ccb596 scopes below. |
+| Q1 / ACCEPTED, Windows debug; merge pending | P1 | Actual daemon publisher, CONTROL and concrete bridge | Full corpus → exact backend/readback/canary → guarded current/evidence → validated PublishedView; source 3c33d831. |
+| U1 / READY after Q1 merge | Q1 | CONTROL resolver, daemon/CLI, protocol/client | Read-only owned-child search returning verified retained text/citation from the pinned snapshot. |
 | R1 / WAIT | U1 | Source reconciliation, control and publication | Restart/inventory convergence and whole-generation lifetime/cleanup. |
 | X1 / WAIT | R1 | Exact/query window and client owners | Retained exact denominator, same-session paging/expansion and expiry. |
 | M1 / WAIT | R1 | Retention and future stopped-root maintenance caller | Conservative collection/archive/import preserving originals. |
@@ -68,9 +65,63 @@ Current root operations use the same control/control.redb format through the con
 the old 2.6 implementation is removed. The vendor data-safety patch exposes persistent-savepoint information
 through the native read-only API. [Vendor provenance](../../vendor/redb/ELIOT_VENDOR.md) records that patch.
 
+Q1 records 157 deleted files with --no-renames against main base 7ba271ac through source 3c33d831, not net file
+loss. Old bridge qualification/oracle/live-launch/sparse families, lexical Rust, reclaimer/overlay/executor
+source/manifests/exclusive fixtures and LexicalEncoderPort callers were retired. Canonical policy recipes remain.
+
 <a id="evidence-status"></a>
 <a id="execution-evidence"></a>
 ## Verification and known blockers
+
+Q1 evidence scopes, Windows debug / Rust 1.98.0:
+
+- Exact source 3c33d831: Sol SOURCE review PASS after whole saved-source/page/evidence graph validation and
+  independent checked singleton TextQuery canary fixes. Earlier changed-owner/bin locked checks and direct strict
+  Clippy were run on frozen precommit source matching the committed code; they are not fresh 3c33 runs.
+  Bridge all-target strict Clippy passed; the fresh 3c33 locked daemon/CLI builds exited 0.
+  The separate fresh 3c33 cargo +1.98.0 clippy --locked -p search-retention --lib --no-deps -- -D warnings
+  exited 0 with zero warnings once; log candidate-Q1-retention-final-clippy.log.
+  Actual selected dependencies:
+  qdrant-client 1.20.0 (SDK only in bridge), prost 0.14.3, tonic 0.14.6 and real TLS-chain rustls 0.23.46.
+  Vectorless requests use the required Some(empty NamedVectors map), with zero vector entries.
+  Read-only lock audit SHA256: 89F14154460ABC0D2E0B3DF001C304298FD37EF38EA67EC262D8629ED41689EE.
+- Actual CLI PID 96244 / daemon PID 79080 exited 0 on a fresh application root with original locators absent
+  and fresh 48-character operator storage. Independent current/RO snapshot/evidence/saved source/Prepared
+  artifacts and remote exact schema/payload/count/query verification passed: four sources, three points,
+  two pages, one Gap. Saved unit 1 [17002,17081) was the expected canary hit, score 0.8142733.
+  A separate no-match user query returned no hits while the independent readiness canary remained positive.
+- P2 native RED/GREEN: missing/malformed unqueried evidence let old 5af falsely report published; corrected
+  3c33 returned exit 2 PUBLICATION_CORRUPT with CONTROL byte identity, both without query and with a no-match
+  query. Backend count mismatch/missing collection, corrupt generation metadata, unprepared source,
+  unresolved effects and unavailable backend produced typed exit 2, never empty success or foreign adoption.
+- Restart/reopen and a real empty generation passed. Republish installed generation 2, deleted the owned
+  predecessor generation 1, left retirement inventory empty and did not reuse the old name. Final operator
+  server PID 87120 was guarded-stopped with OS absence; the report records zero owned live processes.
+- Earlier 5af/09FF-C1 publisher execution failed at Gridstore index creation, BACKEND_UNKNOWN_DISPATCH/exit 2.
+  Read-only observer PID 114020/exit 0, using CONTROL code matching 3c33, found current absent,
+  open_published=PUBLICATION_NOT_PUBLISHED, pending.in_flight=Create, complete capture and zero uploaded pages.
+  It independently verified four retained sources and three staged points/two pages against saved artifacts.
+  The failed root remains unchanged at SHA256 89D5D06FCDF04E14027F81BEC69B46300F6A8B491D82602FF4E4D7948D9EC361.
+- Controlled same-binary/driver/cwd/ports/profile/collection/corpus A/B varied only operator storage path:
+  76-character root failed (index path 231/config path 243); 49-character root succeeded
+  (index path 204/config path 216). This establishes observed storage-depth sensitivity, not a universal
+  MAX_PATH threshold, exact failing leaf/syscall or application path/name/profile strategy.
+- Separate earlier scopes remain separate: raw SDK 27 RPC/13 assertions; actual public Backend 67 calls/
+  40 checks. Saved source blobs distinguish those runs; they are not full publisher or later canary reruns.
+- NOT_RUN: unexpected-zero/misroute readiness-canary fault injection, independent wrong-version server,
+  concurrent publication stale-CAS/namespace/settings/outcome ABA races, power-loss/kill recovery, other
+  platforms and installed baseline. The original unknown-dispatch root's recovery remains PENDING, without reset.
+  No U1 retained-excerpt/citation command is qualified.
+
+Q1 publisher report: C:\Development\Rust\targets\task-q1-publisher-native\run-20261106-v1\native-publisher-3c33-report.json.
+Failed-root observer: the same run's logs/readonly-control-plato-3c33.json.
+Earlier raw SDK and Backend evidence: task-q1-sdk-native and task-q1-product-backend-native under the same targets
+directory. Build/check logs remain in C:\Development\Rust\targets\eliot-search-product-runtime.
+
+Pinned corrected Q1 SHA-256:
+
+    CLI     09FF5FEB8A5C7458306542340596DC94FC494E11A59E46105B103873316A50C9
+    daemon  B8F7AA398A64FBCEACE36D7D3BF05527E7401A7DF332CB1FB275ECD41171FCF7
 
 P1 evidence scopes, Windows debug / Rust 1.98.0:
 
@@ -177,9 +228,9 @@ The ad8 recovery/config artifact SHA-256 values are:
     CLI     473868F3DD18A6D30CE58B6AC19AFEC16E88405891E17603E124134EDA860D3D
     daemon  F71ABD97C1A051709D8F7E8871139EED2F153900A044FF850932C024D60E03D0
 
-Actual process-kill/power-loss recovery, other platforms and installed baseline remain NOT_RUN. Qdrant publication
-and verified search remain unconnected. [Quickstart](../../QUICKSTART.md) names root, retained-file and retained-only
-preparation commands. S1/P1 evidence is limited to the scopes above; the full product goal remains open.
+Actual process-kill/power-loss recovery, other platforms and installed baseline remain NOT_RUN.
+[Quickstart](../../QUICKSTART.md) names root, retention, preparation and actual corpus publication commands.
+Q1 is accepted only in its recorded Windows debug scope; U1 verified retained search and the full product remain open.
 
 ## Update and finish a task
 

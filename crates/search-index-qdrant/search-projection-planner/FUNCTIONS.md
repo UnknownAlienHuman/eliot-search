@@ -4,6 +4,16 @@ Projection turns prepared units into bounded uploadable pages and matching evide
 redb/Qdrant effect, publication state or recovery ledger. Keep it inside preparation/publication unless a
 substantial independent algorithm justifies the package.
 
+## Current assembler
+
+Q1's actual assembler is [stage_source/stage_complete_page](../../../bins/eliot-searchd/src/published_corpus.rs)
+with the [bounded CONTROL page codec](../../search-control-redb/src/publication/codec.rs).
+It consumes verified saved UTF-8 descriptors, persists complete unit text, and checks both actual durable page
+bytes and the bridge's real SDK encoded request size before persistence. Units are split between pages only.
+Point IDs contain generation sequence and global point ordinal; collision/contiguity and retained source/input/
+Prepared/unit/range bindings are checked by staging and the complete RO graph validator. SourceId is never an ordinal.
+No planner crate, full-plan object, vector or alias producer was restored.
+
 ## Current source seam
 
 The baseline audit at `c8e38b6` found `plan_projection`/`PublicationAdmissionOwners` connected to fixtures rather

@@ -1,14 +1,14 @@
 # Index cleanup — extract whole-collection helper, delete the platform
 
-This package has no independent durable responsibility in the target product. It contains some exact Qdrant
-delete/readback mechanics surrounded by plans, digests, receipts, watermarks and checkpoints. Move the useful
-private whole-collection helper into publication/bridge, then delete this package and its workspace edges.
+Q1 retired this Rust package, manifests and exclusive fixtures. The actual whole-collection effect is now
+Backend::delete_generation/exists; daemon publication and CONTROL retain cleanup guards/obligations.
+The policy below remains authoritative for later view/window work; the old platform is not a current API.
 
 Read the [publication owner](../search-publication/FUNCTIONS.md),
 [Qdrant bridge](../search-qdrant-bridge/FUNCTIONS.md) and
 [stopped-root maintenance](../../search-runtime/search-retention/FUNCTIONS.md).
 
-## Current source findings
+## Historical source findings, retired in Q1
 
 - `manifest.rs` validates caller-supplied retired structures instead of deriving cleanup from committed current/view state.
 - `plan.rs` copies manifests and creates another identity/plan layer.

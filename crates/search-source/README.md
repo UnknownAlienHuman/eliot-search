@@ -39,7 +39,18 @@ Use the SourceId returned by retain-file. The daemon resolves the current source
 
 PreparationSettings affects output identity; fail-only execution ceilings do not. Settings selection is idempotent and prepare-source preserves an existing selection. Empty UTF-8 produces a complete zero-unit artifact; binary/invalid UTF-8 and selected ceiling refusals are distinct bound Gaps. Missing/corrupt retained objects, stale completion, cancellation and deadline remain errors. A missing/corrupt current Ready artifact is never rebuilt implicitly.
 
-[Unitizer](../search-prep/search-unitizer/FUNCTIONS.md) owns the complete artifact and borrowed decoder; [CONTROL](../search-control-redb/FUNCTIONS.md#current-preparation) owns settings/outcome revisions and atomic expected-outcome CAS. Q1 publication and verified search remain unconnected. Git acquisition, inventory and reconciliation are later work.
+[Unitizer](../search-prep/search-unitizer/FUNCTIONS.md) owns the complete artifact and borrowed decoder; [CONTROL](../search-control-redb/FUNCTIONS.md#current-preparation) owns settings/outcome revisions and atomic expected-outcome CAS.
+
+## Prepared corpus publication
+
+    eliot-search publish-prepared --qdrant-url http://127.0.0.1:6334 --query "identifier" --data-root "C:\example\root"
+
+The operator starts the selected local Qdrant 1.20.0 service. Q1 captures all retained sources and matching
+preparations, publishes actual saved unit text, verifies the backend and checked canary, and installs current
+plus a complete validated evidence snapshot. A source/settings/outcome mutation advances the shared non-reset
+wanted guard atomically. Optional query output contains real point/evidence metadata, not retained excerpts.
+See [publication](../search-index-qdrant/search-publication/FUNCTIONS.md#current-q1-consumer).
+U1 retained search/citations, Git acquisition, inventory and reconciliation remain later work.
 
 ## Ownership
 

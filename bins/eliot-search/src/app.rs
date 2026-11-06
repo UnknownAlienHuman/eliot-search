@@ -1,6 +1,6 @@
 //! Four root operations over one bounded, owned daemon child.
 
-use search_source_registry::MAX_PREPARATION_RESPONSE_BYTES;
+use search_source_registry::{MAX_PREPARATION_RESPONSE_BYTES, MAX_PUBLICATION_RESPONSE_BYTES};
 use std::env;
 use std::ffi::{OsStr, OsString};
 use std::io::{Read, Write};
@@ -26,6 +26,7 @@ enum RootCommand {
     DiscardIncomplete,
     RetainFile,
     PrepareSource,
+    PublishPrepared,
 }
 
 impl RootCommand {
@@ -37,6 +38,7 @@ impl RootCommand {
             Self::DiscardIncomplete => "discard-incomplete-data-root",
             Self::RetainFile => "retain-file",
             Self::PrepareSource => "prepare-source",
+            Self::PublishPrepared => "publish-prepared",
         }
     }
 
@@ -48,6 +50,7 @@ impl RootCommand {
             Self::DiscardIncomplete => "--discard-incomplete-data-root",
             Self::RetainFile => "--retain-file",
             Self::PrepareSource => "--prepare-source",
+            Self::PublishPrepared => "--publish-prepared",
         }
     }
 }
@@ -60,6 +63,7 @@ enum Parsed {
         settings: Vec<OsString>,
         daemon: Option<PathBuf>,
         preparation: PreparationRequest,
+        publication: PublicationRequest,
     },
 }
 
@@ -67,6 +71,13 @@ enum Parsed {
 struct PreparationRequest {
     source_id: Option<String>,
     unit: Option<u64>,
+}
+
+#[derive(Default)]
+struct PublicationRequest {
+    endpoint: Option<String>,
+    query: Option<String>,
+    limit: Option<usize>,
 }
 
 struct Captured {
@@ -122,6 +133,7 @@ enum DaemonResponse<'a> {
     Snapshot(&'a str),
     Retained(&'a str),
     Prepared(&'a str),
+    Published(&'a str),
     Error(&'a str),
 }
 
@@ -172,6 +184,7 @@ fn command(value: &OsStr) -> Option<RootCommand> {
         "discard-incomplete-data-root" => Some(RootCommand::DiscardIncomplete),
         "retain-file" => Some(RootCommand::RetainFile),
         "prepare-source" => Some(RootCommand::PrepareSource),
+        "publish-prepared" => Some(RootCommand::PublishPrepared),
         _ => None,
     }
 }
@@ -186,6 +199,7 @@ fn is_daemon_root_flag(value: &OsStr) -> bool {
                 | "--discard-incomplete-data-root"
                 | "--retain-file"
                 | "--prepare-source"
+                | "--publish-prepared"
         )
     )
 }
@@ -260,6 +274,90 @@ const fn valid_source_selection(
         _ => !file && !id,
     }
 }
+
+impl PreparationRequest {
+    fn take_option(
+        &mut self,
+        command: RootCommand,
+        arguments: &[OsString],
+        index: usize,
+        settings: &mut Vec<OsString>,
+    ) -> Result<bool, &'static str> {
+        let argument = &arguments[index];
+        let value = if argument == OsStr::new("--source-id") {
+            if self.source_id.is_some() {
+                return Err("USAGE_ERROR");
+            }
+            let (value, id) = source_id_option(arguments, index, command)?;
+            self.source_id = Some(id.to_owned());
+            value
+        } else if argument == OsStr::new("--unit") {
+            if self.unit.is_some() {
+                return Err("USAGE_ERROR");
+            }
+            let (value, unit) = unit_option(arguments, index, command)?;
+            self.unit = Some(unit);
+            value
+        } else {
+            return Ok(false);
+        };
+        settings.push(argument.clone());
+        settings.push(value.clone());
+        Ok(true)
+    }
+}
+
+impl PublicationRequest {
+    fn take_option(
+        &mut self,
+        command: RootCommand,
+        arguments: &[OsString],
+        index: usize,
+        settings: &mut Vec<OsString>,
+    ) -> Result<bool, &'static str> {
+        let argument = &arguments[index];
+        if argument != OsStr::new("--qdrant-url")
+            && argument != OsStr::new("--query")
+            && argument != OsStr::new("--limit")
+        {
+            return Ok(false);
+        }
+        if !matches!(command, RootCommand::PublishPrepared) {
+            return Err("USAGE_ERROR");
+        }
+        let value = arguments
+            .get(index + 1)
+            .and_then(|v| v.to_str())
+            .ok_or("USAGE_ERROR")?;
+        if argument == OsStr::new("--limit") {
+            if self.limit.is_some() {
+                return Err("USAGE_ERROR");
+            }
+            self.limit = Some(
+                canonical_decimal(value, false)
+                    .and_then(|n| usize::try_from(n).ok())
+                    .filter(|n| *n > 0 && *n <= 64)
+                    .ok_or("USAGE_ERROR")?,
+            );
+        } else {
+            if value.is_empty() || value.len() > 4096 || value.as_bytes().contains(&0) {
+                return Err("USAGE_ERROR");
+            }
+            let slot = if argument == OsStr::new("--query") {
+                &mut self.query
+            } else {
+                &mut self.endpoint
+            };
+            if slot.replace(value.to_owned()).is_some() {
+                return Err("USAGE_ERROR");
+            }
+        }
+        settings.push(argument.clone());
+        settings.push(OsString::from(value));
+        Ok(true)
+    }
+}
+
 fn parse(arguments: &[OsString]) -> Result<Parsed, &'static str> {
     if let Some(local) = local_invocation(arguments) {
         return Ok(local);
@@ -275,6 +373,7 @@ fn parse(arguments: &[OsString]) -> Result<Parsed, &'static str> {
     let mut config_seen = false;
     let mut source_file_seen = false;
     let mut preparation = PreparationRequest::default();
+    let mut publication = PublicationRequest::default();
     let mut index = 1;
     while index < arguments.len() {
         let argument = &arguments[index];
@@ -319,23 +418,9 @@ fn parse(arguments: &[OsString]) -> Result<Parsed, &'static str> {
             settings.push(value.clone());
             source_file_seen = true;
             index += 2;
-        } else if argument == OsStr::new("--source-id") {
-            if preparation.source_id.is_some() {
-                return Err("USAGE_ERROR");
-            }
-            let (value, source_id) = source_id_option(arguments, index, root_command)?;
-            settings.push(argument.clone());
-            settings.push(value.clone());
-            preparation.source_id = Some(source_id.to_owned());
-            index += 2;
-        } else if argument == OsStr::new("--unit") {
-            if preparation.unit.is_some() {
-                return Err("USAGE_ERROR");
-            }
-            let (value, unit) = unit_option(arguments, index, root_command)?;
-            settings.push(argument.clone());
-            settings.push(value.clone());
-            preparation.unit = Some(unit);
+        } else if preparation.take_option(root_command, arguments, index, &mut settings)?
+            || publication.take_option(root_command, arguments, index, &mut settings)?
+        {
             index += 2;
         } else if argument
             .to_str()
@@ -355,11 +440,17 @@ fn parse(arguments: &[OsString]) -> Result<Parsed, &'static str> {
     if !valid_source_selection(root_command, source_file_seen, &preparation) {
         return Err("USAGE_ERROR");
     }
+    if matches!(root_command, RootCommand::PublishPrepared) != publication.endpoint.is_some()
+        || (publication.limit.is_some() && publication.query.is_none())
+    {
+        return Err("USAGE_ERROR");
+    }
     Ok(Parsed::Root {
         command: root_command,
         settings,
         daemon,
         preparation,
+        publication,
     })
 }
 
@@ -518,6 +609,8 @@ fn capture_child(
     };
     let stdout_limit = if matches!(command, RootCommand::PrepareSource) {
         MAX_PREPARATION_RESPONSE_BYTES
+    } else if matches!(command, RootCommand::PublishPrepared) {
+        MAX_PUBLICATION_RESPONSE_BYTES
     } else {
         MAX_CAPTURE_BYTES
     };
@@ -576,7 +669,9 @@ fn validated_snapshot(bytes: &[u8], command: RootCommand) -> Option<&str> {
     }
     let states: &[&str] = match command {
         RootCommand::Initialize | RootCommand::CheckExistingOwner => &["current"],
-        RootCommand::RetainFile | RootCommand::PrepareSource => return None,
+        RootCommand::RetainFile | RootCommand::PrepareSource | RootCommand::PublishPrepared => {
+            return None;
+        }
         RootCommand::Inspect | RootCommand::DiscardIncomplete => &[
             "absent",
             "empty",
@@ -678,9 +773,17 @@ fn validated_response<'a>(
     output: &'a ChildOutput,
     command: RootCommand,
     preparation: &PreparationRequest,
+    publication: &PublicationRequest,
 ) -> Option<DaemonResponse<'a>> {
     if output.stderr.bytes.is_empty() {
-        if matches!(command, RootCommand::PrepareSource) {
+        if matches!(command, RootCommand::PublishPrepared) {
+            crate::published_response::validate(
+                &output.stdout.bytes,
+                publication.query.is_some(),
+                publication.limit.unwrap_or(10),
+            )
+            .map(DaemonResponse::Published)
+        } else if matches!(command, RootCommand::PrepareSource) {
             crate::prepared_response::validate(
                 &output.stdout.bytes,
                 preparation.source_id.as_deref()?,
@@ -719,6 +822,7 @@ fn print_help() {
         "  eliot-search discard-incomplete-data-root [ROOT] [--data-root ROOT] [--config-file PATH] [--daemon PATH]\n",
         "  eliot-search retain-file --file PATH [ROOT] [--data-root ROOT] [--config-file PATH] [--daemon PATH]\n",
         "  eliot-search prepare-source --source-id UUID [--unit N] [--data-root ROOT] [--config-file PATH] [--daemon PATH]\n",
+        "  eliot-search publish-prepared --qdrant-url URL [--query TEXT] [--limit N] [--data-root ROOT] [--config-file PATH] [--daemon PATH]\n",
     ));
 }
 
@@ -732,13 +836,14 @@ pub fn run_main() -> i32 {
         Ok(parsed) => parsed,
         Err(error) => return emit_error(error),
     };
-    let (command, settings, explicit_daemon, preparation) = match parsed {
+    let (command, settings, explicit_daemon, preparation, publication) = match parsed {
         Parsed::Root {
             command,
             settings,
             daemon,
             preparation,
-        } => (command, settings, daemon, preparation),
+            publication,
+        } => (command, settings, daemon, preparation, publication),
         Parsed::Help => {
             print_help();
             return 0;
@@ -765,7 +870,7 @@ pub fn run_main() -> i32 {
             return emit_error_status(failure.code(), failure.exit_code());
         }
     };
-    let Some(response) = validated_response(&output, command, &preparation) else {
+    let Some(response) = validated_response(&output, command, &preparation, &publication) else {
         return emit_error("DAEMON_RESULT_UNKNOWN");
     };
     let (written, exit_code) = match (output.status.success(), response) {
@@ -773,7 +878,8 @@ pub fn run_main() -> i32 {
             true,
             DaemonResponse::Snapshot(result)
             | DaemonResponse::Retained(result)
-            | DaemonResponse::Prepared(result),
+            | DaemonResponse::Prepared(result)
+            | DaemonResponse::Published(result),
         ) => (write_line(&mut std::io::stdout().lock(), result), 0),
         (false, DaemonResponse::Error(error)) => (
             write_line(&mut std::io::stderr().lock(), error),

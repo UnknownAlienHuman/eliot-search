@@ -1,6 +1,11 @@
 # search-overlay — source audit and optional replacement
 
-## Current source and caller reality
+## Current disposition
+
+Q1 physically retired the disconnected Rust package/manifests/exclusive fixtures. This directory retains
+optional editor policy only; no overlay command or second local BM25 route is installed.
+
+## Historical source and caller reality
 
 - `src/lib.rs` is 62,649 bytes of production Rust.
 - Repository search for `search_overlay::` found the package's own integration test; no daemon/query/LSP

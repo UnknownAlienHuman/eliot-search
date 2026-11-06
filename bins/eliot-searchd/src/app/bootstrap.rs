@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use search_contracts::SourceId;
 use serde::Deserialize;
 
-use super::{RootCommand, RootInvocation};
+use super::{PublicationRequest, RootCommand, RootInvocation};
 
 const MAX_CONFIG_BYTES: usize = 64 * 1024;
 const MAX_ENV_BYTES: usize = 4 * 1024;
@@ -29,6 +29,7 @@ pub(super) struct RootCli {
     source_file: Option<PathBuf>,
     source_id: Option<SourceId>,
     unit: Option<usize>,
+    publication: Option<PublicationRequest>,
 }
 
 #[derive(Default)]
@@ -70,6 +71,7 @@ fn is_command(value: &OsStr) -> Option<RootCommand> {
         "--discard-incomplete-data-root" => Some(RootCommand::DiscardIncomplete),
         "--retain-file" => Some(RootCommand::RetainFile),
         "--prepare-source" => Some(RootCommand::PrepareSource),
+        "--publish-prepared" => Some(RootCommand::PublishPrepared),
         _ => None,
     }
 }
@@ -108,6 +110,75 @@ fn unit_index(value: &OsStr) -> Result<usize, String> {
     Ok(parsed)
 }
 
+#[derive(Default)]
+struct PublicationOptions {
+    endpoint: Option<String>,
+    query: Option<String>,
+    limit: Option<usize>,
+}
+impl PublicationOptions {
+    fn take_option(&mut self, arguments: &[OsString], index: usize) -> Result<bool, String> {
+        let argument = &arguments[index];
+        if argument == OsStr::new("--qdrant-url") || argument == OsStr::new("--query") {
+            let value = arguments
+                .get(index + 1)
+                .and_then(|v| v.to_str())
+                .filter(|v| !v.is_empty() && v.len() <= 4096 && !v.as_bytes().contains(&0))
+                .ok_or_else(|| invalid("publication_argument"))?;
+            let slot = if argument == OsStr::new("--query") {
+                &mut self.query
+            } else {
+                &mut self.endpoint
+            };
+            if slot.replace(value.to_owned()).is_some() {
+                return Err(invalid("publication_duplicate"));
+            }
+        } else if argument == OsStr::new("--limit") {
+            if self.limit.is_some() {
+                return Err(invalid("limit_duplicate"));
+            }
+            let selected = unit_index(arguments.get(index + 1).ok_or_else(|| invalid("limit"))?)?;
+            if selected == 0 || selected > 64 {
+                return Err(invalid("limit"));
+            }
+            self.limit = Some(selected);
+        } else {
+            return Ok(false);
+        }
+        Ok(true)
+    }
+    fn finish(self, command: RootCommand) -> Result<Option<PublicationRequest>, String> {
+        if (command == RootCommand::PublishPrepared) != self.endpoint.is_some()
+            || (self.query.is_some() && command != RootCommand::PublishPrepared)
+            || (self.limit.is_some() && self.query.is_none())
+        {
+            return Err(invalid("publication_selection"));
+        }
+        Ok(self.endpoint.map(|endpoint| PublicationRequest {
+            endpoint,
+            query: self.query,
+            limit: self.limit.unwrap_or(10),
+        }))
+    }
+}
+
+fn validate_source_selection(
+    command: RootCommand,
+    file: bool,
+    id: bool,
+    unit: bool,
+) -> Result<(), String> {
+    if (command == RootCommand::RetainFile) != file {
+        return Err(invalid("source_file_required"));
+    }
+    if (command == RootCommand::PrepareSource) != id
+        || (unit && command != RootCommand::PrepareSource)
+    {
+        return Err(invalid("source_id_or_unit"));
+    }
+    Ok(())
+}
+
 pub(super) fn parse(arguments: &[OsString]) -> Result<Parsed, String> {
     if arguments.is_empty() {
         return Ok(Parsed::Help);
@@ -126,6 +197,7 @@ pub(super) fn parse(arguments: &[OsString]) -> Result<Parsed, String> {
     let mut source_file = None;
     let mut source_id = None;
     let mut unit = None;
+    let mut publication = PublicationOptions::default();
     let mut positional_root = None;
     let mut index = 0;
     while index < arguments.len() {
@@ -174,6 +246,8 @@ pub(super) fn parse(arguments: &[OsString]) -> Result<Parsed, String> {
             }
             unit = Some(unit_index(option_value(arguments, index, "unit")?)?);
             index += 2;
+        } else if publication.take_option(arguments, index)? {
+            index += 2;
         } else if argument
             .to_str()
             .is_some_and(|value| value.starts_with("--"))
@@ -189,14 +263,13 @@ pub(super) fn parse(arguments: &[OsString]) -> Result<Parsed, String> {
     }
 
     let command = command.ok_or_else(|| "UNKNOWN_ARGUMENT".to_owned())?;
-    if (command == RootCommand::RetainFile) != source_file.is_some() {
-        return Err(invalid("source_file_required"));
-    }
-    if (command == RootCommand::PrepareSource) != source_id.is_some()
-        || (unit.is_some() && command != RootCommand::PrepareSource)
-    {
-        return Err(invalid("source_id_or_unit"));
-    }
+    let publication = publication.finish(command)?;
+    validate_source_selection(
+        command,
+        source_file.is_some(),
+        source_id.is_some(),
+        unit.is_some(),
+    )?;
     if data_root.is_some() && positional_root.is_some() {
         return Err(invalid("data_root_duplicate"));
     }
@@ -207,6 +280,7 @@ pub(super) fn parse(arguments: &[OsString]) -> Result<Parsed, String> {
         source_file,
         source_id,
         unit,
+        publication,
     }))
 }
 
@@ -292,5 +366,6 @@ pub(super) fn resolve(cli: RootCli, startup_cwd: &Path) -> Result<RootInvocation
             .map(|path| resolve_layer_path(&path, startup_cwd)),
         source_id: cli.source_id,
         unit: cli.unit,
+        publication: cli.publication,
     })
 }

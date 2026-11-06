@@ -1,5 +1,8 @@
 # Retrieval execution — one bounded query
 
+The disconnected Rust package/manifests/exclusive fixtures were retired in Q1. The daemon now owns actual
+publication nominations through Backend; this recipe remains policy for the next U1 search consumer.
+
 Replace the disconnected scheduler/ticket/leg framework with a direct handler in the query owner:
 
 ```text

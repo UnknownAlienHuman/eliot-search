@@ -6,7 +6,7 @@ The retained CONTROL implementation owns control/control.redb through vendored r
 
 current_source adds three ordinary current tables on the first successful retained-source commit:
 
-- source_state stores the source-row schema version and one persisted root-local SourceNamespaceId.
+- source_state stores the source-row schema version, persisted root-local SourceNamespaceId and non-reset wanted_corpus_revision.
 - current_source_rows stores typed CurrentSourceRecord values by independently generated SourceId.
 - current_source_locators maps exact OS-native path bytes to a stored SourceId.
 
@@ -32,9 +32,28 @@ Only explicit settings selection/initialization and outcome commit open a writab
 Preparation rows are ordinary Current-root user data. They do not change the root format or weaken persistent-savepoint/incomplete-discard safety. [Daemon](../../bins/eliot-searchd/FUNCTIONS.md#prepare-source-path) is the actual caller; [unitizer](../search-prep/search-unitizer/FUNCTIONS.md) owns artifact encoding/validation, not CONTROL.
 
 <a id="restartable-generation-input-capture"></a>
-## Future Q1 generation capture
+<a id="publication-state-and-snapshot"></a>
+## Publication state and snapshot
 
-P1 current preparations are not a published generation or complete inventory capture. Q1 must connect bounded fixed generation input, staging evidence and atomic matching current/evidence state before installing a view, as required by the retained [publication recipe](../search-index-qdrant/search-publication/FUNCTIONS.md#fixed-pending-generation-input). Those generation tables and publisher are not implemented by this P1 cut. Do not infer publication from a Ready preparation or introduce a second ledger.
+[publication.rs](src/publication.rs) owns five ordinary tables in this same control.redb:
+
+| Table | Actual responsibility |
+|---|---|
+| publication_state | Persisted random publication namespace, non-reset generation/current revisions, current pointer and one pending build. |
+| generation_sources | Exact captured source/preparation rows, including explicit Gaps and completed source dimensions. |
+| generation_pages | Complete immutable upload pages with actual unit text and range bindings. |
+| generation_evidence | Generation/point ID to source/input/prepared/unit/byte-line evidence. |
+| retired_generations | Exact predecessor or abandoned target with proven remote-ownership flag and cleanup obligation. |
+
+capture_corpus uses one native RO snapshot and bounded owned source metadata. Every retained source needs a matching preparation; no success-only scan. Source commits and actual settings/outcome changes advance wanted_corpus_revision in their existing transactions; identical settings/outcome no-ops do not. An old missing counter is baseline zero without capture writes. Publication's own staging writes do not advance this guard.
+
+start_build compares captured namespace/wanted revision, current value/revision, pending absence and non-reset generation sequence. It reserves a never-reused sequence under the persisted random publication namespace. Source inputs and full pages/evidence are staged in bounded transactions before remote mutations; complete_capture seals all sources. Per-dispatch operation_revision rejects late callbacks for a newer attempt. Unknown dispatch remains pending and unserved.
+
+commit_generation compares the full expected pending record, current predecessor/revision and wanted guard; it switches current, records predecessor cleanup and clears pending in one short transaction. It does not copy generation rows. Object/backend I/O occurs outside writers; uncertain pointer commit is observed read-only.
+
+validate_generation and open_published invoke [the complete graph validator](src/publication/verify.rs) in one native RO snapshot. It streams all saved source/page/evidence rows, checks counts, exact point IDs, ObjectRefs, source/Prepared bindings, ordinals and complete byte coverage, and rejects missing/orphan/malformed mappings independently of user hits. Only bounded per-source progress and one page are retained. PublishedView owns this snapshot; evidence resolves from its generation, not latest current preparation. All writer handles close before the view opens.
+
+These tables remain ordinary user data: the root format, persistent-savepoint protection and unfinished-root empty probe are unchanged. The [daemon publisher](../../bins/eliot-searchd/src/published_corpus.rs) owns actual backend readiness/canary, snapshot installation and output. The retained [publication recipe](../search-index-qdrant/search-publication/FUNCTIONS.md) owns later convergence/view-lifetime rules.
 
 ## Existing root-control operations
 

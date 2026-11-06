@@ -19,6 +19,8 @@ preformat database can be finished only by explicit initialization under the roo
 
 Only src/lib.rs and src/plain_root.rs remain in this crate's source. The legacy lifecycle modules and their
 inline fixtures are physically deleted; the direct dependencies are search-control-redb and tempfile.
-No build, tests or native Windows qualification are claimed for this change.
+Root and later connected-command qualification scopes are recorded in the
+[registry](../../../docs/audit/ANALYSIS_REGISTRY.md#evidence-status). Q1 uses this same guard through view/output;
+the [operator-storage guidance](FUNCTIONS.md#operator-qdrant-storage) records the bounded Windows observation.
 
 [FUNCTIONS.md](FUNCTIONS.md) owns the API, classification, lock, initialization, publication and discard rules.

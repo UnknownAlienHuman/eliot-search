@@ -12,24 +12,10 @@ path = "src/lib.rs"
 
 [dependencies]
 search-contracts.workspace = true
-search-domain.workspace = true
-search-ports.workspace = true
-search-config.workspace = true
-# Private vendor transport. The exact pin and default-feature policy live in
-# the workspace so an upgrade has one dependency edit and cannot drift between
-# packages. The boundary validator forbids any other package from inheriting it.
 qdrant-client.workspace = true
-# Pre-spawn executable identity measurement (SHA-256 + byte length).
-# Exact pin of the already-locked workspace version: zero new packages.
-sha2 = { version = "=0.10.9", default-features = false }
-# Async live-qualification path only (the pinned client is async-only):
-# multithreaded runtime handle plus timers. Macros stay test-only below.
-tokio = { version = "=1.53.1", features = ["rt-multi-thread", "time"] }
-
-[dev-dependencies]
-# Live-probe test harness: #[tokio::test] support. Exact pin matching the
-# normal dependency above; features unify at test build time.
-tokio = { version = "=1.53.1", features = ["macros"] }
+tonic.workspace = true
+prost.workspace = true
+tokio = { version = "=1.53.1", features = ["rt-multi-thread", "time", "net"] }
 
 [lints]
 workspace = true

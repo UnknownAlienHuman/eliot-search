@@ -1,8 +1,8 @@
 # Code entrypoints and change map
 
-Current binaries expose root operations, retain-file and retained-only prepare-source. Native binary and library
+Current binaries expose root operations, retain-file, prepare-source and actual publish-prepared. Native binary and library
 cases have distinct exact-source scopes in the [registry](../audit/ANALYSIS_REGISTRY.md#evidence-status).
-This map does not qualify the future source-to-Qdrant product.
+Q1 publisher Windows debug acceptance is at 3c33d831; retained-excerpt search remains U1.
 The [owner map](README.md#owners) defines responsibilities; a row does not require keeping a crate.
 
 ## Real binaries
@@ -24,6 +24,7 @@ routes are removed. Check the real binary; package names and retained workspace 
                               → bounded root response validation → output
       retain-file --file PATH → same owned child → bounded retained-source response validation → output
       prepare-source          → same owned child → parsed source ID/unit-bound stored-unit validation → output
+      publish-prepared        → same owned child → closed generation/point-evidence validation → output
 
     daemon entry → app::run_main → app/bootstrap::parse
       standalone help/version → local output, no config/root acquisition
@@ -33,6 +34,9 @@ routes are removed. Check the real binary; package names and retained workspace 
                               → current-source CAS in search-control-redb → factual result
       prepare-source          → open current root → preserve settings → read-only preparation capture
                               → retained input → prepare/store/read/decode artifact → outcome CAS → stored unit
+      publish-prepared        → open root → all-source/preparation capture → fixed pages/evidence
+                              → actual backend build/readback + checked canary → current CAS
+                              → complete matching RO PublishedView → optional SDK nominations/metadata
 
 | CLI subcommand | Daemon flag | Root function |
 |---|---|---|
@@ -42,6 +46,7 @@ routes are removed. Check the real binary; package names and retained workspace 
 | discard-incomplete-data-root | --discard-incomplete-data-root | discard_incomplete_plain |
 | retain-file --file PATH | --retain-file --source-file PATH | open_plain → acquire_file → store_object/read_object → commit_current_source |
 | prepare-source --source-id UUID [--unit N] | --prepare-source --source-id UUID [--unit N] | open_plain → prepared_source::run → retained read/prepare/store/decode → commit_preparation |
+| publish-prepared --qdrant-url URL [--query TEXT] [--limit N] | --publish-prepared with matching options | open_plain → published_corpus::run → fixed corpus/backend/current/view → point/evidence metadata |
 
 Root functions take (&Path, Instant, &AtomicBool). Init/open return PlainRootGuard; inspection returns
 PlainRootInspection and discard returns unit. The daemon holds guards through terminal root output.
@@ -75,20 +80,20 @@ Rows marked future identify integration owners, not installed commands or comple
 | Current source rows and stale work | [Source family](../../crates/search-source/README.md), [Source values](../../crates/search-source/search-source-registry/FUNCTIONS.md), [Control](../../crates/search-control-redb/FUNCTIONS.md) |
 | Retained-only preparation and stored-unit output | [Daemon handler](../../bins/eliot-searchd/src/prepared_source.rs), [CLI validator](../../bins/eliot-search/src/prepared_response.rs), [CONTROL rows](../../crates/search-control-redb/src/current_preparation.rs) |
 | Exact UTF-8 and complete artifact/unit ranges | [Materializer](../../crates/search-prep/search-materializer/FUNCTIONS.md), [Unitizer](../../crates/search-prep/search-unitizer/FUNCTIONS.md) |
-| Future Qdrant calls | [Bridge](../../crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md), [Lexical](../../crates/search-lexical/FUNCTIONS.md) |
-| Future publication and view lifetime | [Publication](../../crates/search-index-qdrant/search-publication/FUNCTIONS.md); connect control and query consumers |
+| Concrete Qdrant operations | [Bridge](../../crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md), [lexical policy](../../crates/search-lexical/FUNCTIONS.md) |
+| Corpus publication/current/view | [Daemon publisher](../../bins/eliot-searchd/src/published_corpus.rs), [CONTROL](../../crates/search-control-redb/src/publication.rs), [RO graph validator](../../crates/search-control-redb/src/publication/verify.rs), [policy](../../crates/search-index-qdrant/search-publication/FUNCTIONS.md) |
 | Future evidence and Exact | [Query family](../../crates/search-query/README.md), retained reader and daemon consumer |
 | Future framed connection and presentation | [Client](../../crates/search-provider-client/FUNCTIONS.md), [Protocol](../../crates/search-provider-protocol/FUNCTIONS.md), [CLI](../../bins/eliot-search/FUNCTIONS.md) |
 
 The old projection-planner/publication source, manifests and exclusive fixtures were retired in P1 with their
 VerifiedUnitSet consumers. Their FUNCTIONS.md and AGENTS.md remain canonical Q1 recipes at the existing paths;
-they are recipe-only owners until actual publication is connected.
+their concrete Q1 producer is now the daemon/CONTROL pair above. No old crate was restored.
 
 Use the [caller-search method](WORKING_GUIDE.md#find-callers-before-changing-a-boundary) within the selected owner.
 Do not restore deleted daemon implementations or unconsumed APIs because an older map or test named them.
 
 ## Keep the implementation small
 
-The next connected product path is root/settings → one retained file/current row → preparation → Qdrant → CLI.
+The next connected result is read-only query → pinned published evidence → verified retained text/citation → CLI.
 Build the actual owners and delete displaced code with its callers. Root-only command checks, helper-native
 probes and retained workspace libraries do not qualify that pipeline or an installed baseline.

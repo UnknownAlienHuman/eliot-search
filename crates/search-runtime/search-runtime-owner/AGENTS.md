@@ -15,7 +15,7 @@ Keep only real properties:
 - side-effect-free root inspection;
 - explicit manifest-last staging initialization;
 - selected path/locality/no-reparse/current-format checks;
-- one retained root handle and one exclusive lock handle;
+- one native root path and one stable exclusive root.lock handle;
 - small current root-format metadata;
 - concrete stores opened after the guard and closed before it;
 - content-free failures and one absolute bounded context.
@@ -31,10 +31,14 @@ Remove after caller cutover:
 - initialization journal/state taxonomy replaced by #360 staging;
 - fixtures preserving retired APIs.
 
-The invocation owner parses commands. Source, storage, control, publication and key owners manage their own
+The invocation owner parses commands. Source, storage, control and publication owners manage their own
 state under the held root guard. Stopped-root local-object maintenance/archive/import is a separate explicit
 operation, not a runtime-owner subsystem. Do not create `runtime-owner-v2`, forwarding wrappers or another
 durable owner record.
+
+Q1 retains the same guard through complete published-view output. Qdrant storage/startup is operator-owned;
+the measured Windows storage-depth sensitivity in FUNCTIONS.md does not authorize path/name shortening,
+profile changes, global registry edits or resetting an unresolved publication root.
 
 After code, run minimal Rust 1.98 check/Clippy for the changed owner and actual daemon/store consumers. Focused
 runtime cases are inspect, initialize, exclusive lock, restart, path replacement and shutdown; historical

@@ -157,5 +157,21 @@ The unused search-contracts, search-domain, search-ports and search-config depen
 the root crate depends directly only on search-control-redb and tempfile. Binary source removal is owned
 separately and is not implemented inside this crate.
 
-The implementation has not been built or run through native Windows scenarios in this slice. Those checks
-remain with the verifier after the root and control changes are both ready.
+Root qualification and later S1/P1/Q1 exact-source scopes live in the existing
+[registry](../../../docs/audit/ANALYSIS_REGISTRY.md#evidence-status); this recipe is not a second acceptance ledger.
+
+## Operator Qdrant storage
+
+The application data root and the operator's Qdrant storage directory are different owners/locations.
+Q1 keeps PlainRootGuard through publication/view output; Qdrant is started and stopped only by the operator,
+not this root crate or the application.
+
+Windows debug qualification observed storage-root depth sensitivity with the same server/driver/profile/
+collection/corpus: a 76-character storage root failed Gridstore index creation with OS error 3; a 49-character
+root succeeded. The final publisher run used a fresh 48-character operator storage root. These are measured
+paths, not a universal MAX_PATH threshold, exact failing syscall/leaf diagnosis or application length rule.
+No profile/index-memory/generation-name/global-registry workaround was introduced.
+
+The failed original root remains intact with no committed current and an unresolved Create obligation.
+Do not reset or adopt its target to hide the failure. Runtime cause/qualification details and remaining recovery
+work belong to the registry and publisher; incomplete-root discard does not clear current user data.

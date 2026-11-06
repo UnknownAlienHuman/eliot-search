@@ -26,7 +26,7 @@ pub struct PortMethodDescriptor {
 }
 
 /// Exact closed registry of all shared vendor-neutral ports.
-pub const PORTS: [PortDescriptor; 23] = [
+pub const PORTS: [PortDescriptor; 22] = [
     PortDescriptor {
         name: "ClockPort",
         module: "runtime",
@@ -98,11 +98,6 @@ pub const PORTS: [PortDescriptor; 23] = [
         method_count: 2,
     },
     PortDescriptor {
-        name: "LexicalEncoderPort",
-        module: "preparation",
-        method_count: 4,
-    },
-    PortDescriptor {
         name: "ModelProviderPort",
         module: "optional",
         method_count: 3,
@@ -145,7 +140,7 @@ pub const PORTS: [PortDescriptor; 23] = [
 ];
 
 /// Exact closed registry of all shared port operations.
-pub const PORT_METHODS: [PortMethodDescriptor; 80] = [
+pub const PORT_METHODS: [PortMethodDescriptor; 76] = [
     PortMethodDescriptor {
         port: "ClockPort",
         method: "utc_now",
@@ -375,26 +370,6 @@ pub const PORT_METHODS: [PortMethodDescriptor; 80] = [
         port: "CodeEnricherPort",
         method: "enrich",
         implementation_module: "facts",
-    },
-    PortMethodDescriptor {
-        port: "LexicalEncoderPort",
-        method: "profile",
-        implementation_module: "profile",
-    },
-    PortMethodDescriptor {
-        port: "LexicalEncoderPort",
-        method: "encode_document",
-        implementation_module: "sparse",
-    },
-    PortMethodDescriptor {
-        port: "LexicalEncoderPort",
-        method: "encode_query",
-        implementation_module: "sparse",
-    },
-    PortMethodDescriptor {
-        port: "LexicalEncoderPort",
-        method: "fixture_digest",
-        implementation_module: "fixture",
     },
     PortMethodDescriptor {
         port: "ModelProviderPort",
@@ -720,8 +695,8 @@ mod tests {
 
     #[test]
     fn machine_inventory_is_exact_and_unique() {
-        assert_eq!(PORTS.len(), 23);
-        assert_eq!(PORT_METHODS.len(), 80);
+        assert_eq!(PORTS.len(), 22);
+        assert_eq!(PORT_METHODS.len(), 76);
         assert_eq!(
             PORTS.iter().map(|port| port.method_count).sum::<usize>(),
             PORT_METHODS.len()

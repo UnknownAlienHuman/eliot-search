@@ -1,56 +1,20 @@
-//! Vendor-neutral exact Qdrant data-plane semantics.
-//!
-//! This package does not discover or start Qdrant. A process supervisor supplies
-//! an authenticated endpoint and exact process receipt. The in-memory model here
-//! defines capability admission, collection schema, exact point mutation,
-//! readback, count, and filtered nomination semantics for a concrete adapter.
+//! Bounded vectorless Qdrant 1.20 BM25 operations for immutable generations.
 
 #![forbid(unsafe_code)]
-#![allow(
-    clippy::large_enum_variant,
-    clippy::missing_errors_doc,
-    clippy::module_name_repetitions,
-    clippy::too_many_arguments,
-    clippy::too_many_lines
-)]
+#![deny(missing_docs)]
 
-mod admin;
-mod api;
-mod auth;
-mod capability;
-mod config;
+mod backend;
+mod codec;
 mod error;
-mod mutation;
-mod query;
-mod readback;
+mod model;
 mod schema;
 
-pub use api::QdrantBridge;
-pub use auth::{
-    QdrantApiKeyLease, QdrantApiKeyLeaseProvider, QdrantConnectionBinding, QdrantEndpointIdentity,
-    QdrantLoopbackHost,
+pub use backend::Backend;
+pub use error::BackendError;
+pub use model::{
+    BackendLimits, DEFAULT_HITS, Hit, MAX_HITS, MAX_PAGE_BYTES, MAX_PAGE_POINTS,
+    MAX_POINT_TEXT_BYTES, MAX_QUERY_BYTES, MAX_REQUEST_BYTES, MAX_RESPONSE_BYTES, PointInput,
 };
-pub use capability::{
-    AuthLeaseEvidence, BridgeEndpoint, CapabilityProbeResults, ConsistencyGates, FilterGates,
-    IndexGates, QdrantCapabilityReceipt, SupervisorReceipt, TopologyGates, probe_capabilities,
-};
-pub use config::BridgeLimits;
-pub use error::BridgeError;
-pub use mutation::{
-    BridgeMutation, MutationReceipt, PointPayload, PointRecord, QdrantPointId, StoredVector,
-};
-pub use query::{CandidateNomination, EligibilityFilter};
-pub use readback::{BoundedPointReadback, ExactCount};
-pub use schema::{CollectionRoute, CollectionSchema, StrictnessFloors, VectorSchema};
 
-/// Live T22 qualification path beside the in-memory oracle.
-pub mod live;
-/// Exact T22 artifact/client/IDF qualification gate.
-pub mod qualified;
-/// Real T24 data-plane adapter over the pinned `qdrant-client` transport.
-///
-/// The in-memory [`QdrantBridge`] stays as the behavioral test oracle only.
-/// Production data-plane work goes through [`real::RealDataPlane`], which
-/// admits only an executed [`qualified::QualifiedGate`] and never falls back
-/// to the oracle.
-pub mod real;
+#[cfg(test)]
+mod tests;

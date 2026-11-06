@@ -4,6 +4,7 @@
 
 mod app;
 mod prepared_response;
+mod published_response;
 
 fn main() {
     // Timed-out stdio readers may still be blocked on inherited pipe handles.
