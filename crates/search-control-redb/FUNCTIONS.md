@@ -82,3 +82,24 @@ key state and supplied in-memory floors with consumers. Keep direct typed transa
 After code run minimal locked check/Clippy for real consumers. Focused cases: interrupted/empty capture, fixed-input
 restart, bounded staging/final commit, minimal routing payload, physical/query separation, old-view binding,
 commit/install gap, concurrent desired-state change, whole-generation cleanup and retained-page growth.
+
+## Plain-root control marker
+
+Fresh plain roots use redb 4.5 in the same `control/control.redb` file. The only format marker is
+`plain_control_meta["format_version"] = 1`. Legacy redb 2.6 state remains under its existing owner; this
+path does not upgrade it or open an existing non-empty database for writing.
+
+Initialization runs under root exclusion after the exact init marker is present. A missing file is created
+with create-new semantics. An existing zero-length file is reopened without truncation and its opened handle
+is checked again before initialization. Existing non-zero files use redb's read-only backend; an interrupted
+initialization retry succeeds only when the bounded semantic-empty probe finds the exact current format row,
+one regular table, no multimap tables, and no additional metadata rows. Initialization commits the marker,
+explicitly closes the writer, then reads the format marker back through a read-only handle before the root
+manifest can be published.
+
+Ordinary current-root inspection reads only the fixed metadata table/key and version. It does not enumerate the
+catalogue and has no whole-file size ceiling, so populated current databases remain inspectable. The separate
+`plain_control_is_empty` probe is only for unfinished initialization or discard under root exclusion. It checks
+the actual opened file against a 64 MiB ceiling before catalogue enumeration; larger files return `ProbeLimit`.
+The fresh database's native size has not been measured in this source slice. Read-only open refuses databases
+that redb says require repair; it never repairs them.

@@ -1,16 +1,18 @@
 # Root owner
 
-The target is one current-format root and one process-lifetime exclusive guard. Inspection is read-only;
-initialization is explicit and publishes the root manifest last. A recognized empty incomplete initialization
-may be explicitly discarded and retried. There is no baseline resume, replay journal or migration-on-open.
+The plain root implementation exposes read-only inspection, explicit initialization, current-root open and
+strict discard of recognized empty interrupted initialization. All four operations receive the original
+deadline and cancellation flag. A returned PlainRootGuard retains the stable root.lock handle for its lifetime
+and exposes the root, object-directory and control-database paths.
 
-[FUNCTIONS.md](FUNCTIONS.md) owns classification, initialization, platform finalization, discard and shutdown.
-[AGENTS.md](AGENTS.md) contains local editing constraints. Read the
-[Foundation stage](../../../docs/implementation/README.md#1-foundation--invocation-settings-and-root) for scope.
+Initialization writes the exact init marker before stores and publishes the final manifest last through a
+same-parent tempfile no-clobber stage. The control database is initialized and validated by
+search-control-redb at control/control.redb; the root owner does not parse redb bytes. Current-root
+validation checks only the readonly format/version and does not enumerate tables, probe emptiness, cap database
+size, or scan retained object contents. The bounded emptiness probe is used only for unfinished initialization
+while the root lock is held.
 
-The existing lease/epoch/receipt and command-custody machinery is not the target design. Trace current callers,
-retain useful native checks/handles and remove displaced routes with consumers. Historical source inventory is in
-[the pre-R055 recipe set](https://github.com/UnknownAlienHuman/eliot-search/blob/45ddf887c9e84861b1302334a1f5ecabb263f7f3/crates/search-runtime/search-runtime-owner/README.md),
-not a current size claim or obligation to preserve packages.
+Legacy lease/epoch modules remain only for unconverted direct callers. No build, tests or native Windows
+qualification are claimed for this change.
 
-Status and executed evidence belong to the [registry](../../../docs/audit/ANALYSIS_REGISTRY.md#evidence-status).
+[FUNCTIONS.md](FUNCTIONS.md) owns the API, classification, lock, initialization, publication and discard rules.

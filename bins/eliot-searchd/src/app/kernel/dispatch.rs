@@ -4,8 +4,6 @@ use std::ffi::OsString;
 use std::process::ExitCode;
 use std::time::Instant;
 
-use search_runtime_owner::DataRootOpenMode;
-
 use crate::development::{Health, scan_text};
 use crate::sha256;
 
@@ -69,7 +67,9 @@ fn capture_arguments() -> Result<Vec<OsString>, String> {
     let mut arguments = Vec::new();
     let mut bytes = 0_usize;
     for value in std::env::args_os().skip(1) {
-        bytes = bytes.checked_add(value.len()).ok_or("ARGUMENT_LIMIT_EXCEEDED")?;
+        bytes = bytes
+            .checked_add(value.len())
+            .ok_or("ARGUMENT_LIMIT_EXCEEDED")?;
         if arguments.len() == MAX_ARGUMENTS || bytes > MAX_ARGUMENT_BYTES {
             return Err("ARGUMENT_LIMIT_EXCEEDED".to_owned());
         }
@@ -81,6 +81,12 @@ fn capture_arguments() -> Result<Vec<OsString>, String> {
 fn run() -> Result<ExitCode, String> {
     let started = Instant::now();
     let raw = capture_arguments()?;
+    if crate::config_composition::looks_like_root_command(&raw) {
+        let invocation = crate::config_composition::load_bootstrap_settings(&raw)?;
+        return Ok(crate::native_root_command::run_native_root_command(
+            invocation, started,
+        ));
+    }
     let (arguments, cli) = crate::config_composition::strip_config_args_os(&raw)?;
     let Some(first) = arguments.first() else {
         if !raw.is_empty() {
@@ -91,27 +97,26 @@ fn run() -> Result<ExitCode, String> {
     };
     let command = first.to_str().ok_or("COMMAND_NOT_UTF8")?;
     match command {
-        "--index-file" | "--index-directory" | "--retire-source" | "--repair-root" | "--gc-root" => {
-            Err("LEGACY_EFFECTS_UNAVAILABLE".to_owned())
-        }
-        "--register-source-root" | "--register-source-root-v2" | "--admit-source-v2"
-        | "--prepare-revision-dek-v1" | "--select-revision-dek-v1"
-        | "--unregister-source-root" | "--source-roots" | "--health-data-root"
-        | "--verify-root" | "--list-sources" | "--serve-data-root" | "--search-root"
-        | "--search-root-ascii-insensitive" | "--read-revision" | "--sync-source-roots" => {
-            Ok(crate::owner_composition::run_direct_registry(&raw, started))
-        }
-        "--inspect-data-root" | "--check-existing-root-owner" | "--initialize-data-root" => {
-            // These legacy root constructors do not consume config layers yet.
-            require_argument_count(&raw, arguments.len())?;
-            let mode = match command {
-                "--inspect-data-root" => DataRootOpenMode::InspectExistingReadOnly,
-                "--check-existing-root-owner" => DataRootOpenMode::OpenExistingMutating,
-                _ => DataRootOpenMode::InitializeNew,
-            };
-            Ok(crate::native_root_command::run_command(&raw, mode, started))
-        }
-        "--plan-control-migration" | "--bootstrap-control-migration" | "--stage-source-control-migration" => {
+        "--index-file" | "--index-directory" | "--retire-source" | "--repair-root"
+        | "--gc-root" => Err("LEGACY_EFFECTS_UNAVAILABLE".to_owned()),
+        "--register-source-root"
+        | "--register-source-root-v2"
+        | "--admit-source-v2"
+        | "--prepare-revision-dek-v1"
+        | "--select-revision-dek-v1"
+        | "--unregister-source-root"
+        | "--source-roots"
+        | "--health-data-root"
+        | "--verify-root"
+        | "--list-sources"
+        | "--serve-data-root"
+        | "--search-root"
+        | "--search-root-ascii-insensitive"
+        | "--read-revision"
+        | "--sync-source-roots" => Ok(crate::owner_composition::run_direct_registry(&raw, started)),
+        "--plan-control-migration"
+        | "--bootstrap-control-migration"
+        | "--stage-source-control-migration" => {
             Ok(crate::source_migration_command::run_command(&raw, started))
         }
         "--prepare-revision" | "--prepare-root" => {

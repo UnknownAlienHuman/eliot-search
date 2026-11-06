@@ -12,10 +12,11 @@ pub use kernel::{NativeRegistrationOperation, SourceDirectoryMetadata, run_sourc
 pub use kernel::ShutdownReceipt;
 pub use kernel::{LiveOwner, establish};
 
+#[cfg(test)]
 pub use kernel::InitializingDataRoot;
 #[cfg(test)]
 pub use kernel::initialize_new;
-pub use kernel::{initialize_direct, run_direct_registry};
+pub use kernel::run_direct_registry;
 pub use kernel::{NativeReadOperation, NativeReadStartup, RetainedShutdown};
 pub use kernel::{NativeRootAdmission, NativeRootLimits, NativeRootRequest, admit_existing};
 pub use kernel::{NativeSyncPreflightOperation, run_source_sync_preflight};

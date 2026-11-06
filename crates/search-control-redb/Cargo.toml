@@ -17,6 +17,7 @@ search-ports.workspace = true
 search-config.workspace = true
 redb = { version = "=2.6.3", default-features = false }
 sha2 = "=0.10.9"
+redb_plain = { package = "redb", version = "=4.5.0", default-features = false }
 
 [lints]
 workspace = true

@@ -1,109 +1,113 @@
-# Root owner — one local lock and plain format
+# Plain root owner
 
-[Local scope](../../../docs/architecture/LOCAL_SCOPE.md) selects a private per-user application directory,
-not a sandbox against malicious same-user code. This owner classifies/initializes/opens the root and retains
-one process lock. It owns no keys, source catalogue, query state or lifecycle ledger. This is target behavior.
+[Local scope](../../../docs/architecture/LOCAL_SCOPE.md) selects plain local files for one OS account.
+This owner classifies, initializes, opens and retains the process lock. It owns no keys, source catalogue,
+query state or lifecycle ledger.
 
 ## Public operations
 
-```text
-inspect(path) -> RootInspection
-initialize_plain(path, settings, ExecutionContext) -> DataRootGuard
-open_existing(path, settings, ExecutionContext) -> DataRootGuard
-explicit_discard_incomplete(path, ExecutionContext)
-```
+    inspect_plain(&Path, Instant, &AtomicBool)
+        -> Result<PlainRootInspection, PlainRootError>
+    initialize_plain(&Path, Instant, &AtomicBool)
+        -> Result<PlainRootGuard, PlainRootError>
+    open_plain(&Path, Instant, &AtomicBool)
+        -> Result<PlainRootGuard, PlainRootError>
+    discard_incomplete_plain(&Path, Instant, &AtomicBool)
+        -> Result<(), PlainRootError>
 
-Use execution-only deadline/cancellation and bounds, never a query view. Help/version have no root effects;
-inspect is read-only. Do not add a plain/encrypted selection or generic storage-profile registry.
+Each call receives the caller's original absolute deadline and cancellation flag. The private operation context
+passes those same values to every helper and to search-control-redb. There is no public context, deadline reset,
+key, profile, settings or external initialization identifier.
 
-## Classification
+PlainRootInspection exposes its path and status, with is_current() and is_incomplete().
+PlainRootGuard retains the selected path and the open lock file; it exposes path(), object_dir(),
+control_path() and is_current(). The error codes are bounded static strings. Errors distinguish
+cancellation, deadline, filesystem I/O, unavailable control storage, bounded probe limit, lock contention,
+unsupported format and corrupt committed state.
 
-| Observation | Result |
+## Layout and classification
+
+The root layout is root.lock, root.initializing, root.toml, objects/, and control/control.redb.
+The committed manifest bytes are
+format = "eliot-plain-root"\nversion = 1\n. The owned init marker is
+eliot-plain-root-initializing-v1\n.
+
+| Observation | Status |
 |---|---|
-| Absent/empty selected directory | Uninitialized; only explicit init creates application files |
-| Only the fixed lock file, or recognized unfinished empty layout with init marker; no final manifest | IncompleteInitialization; explicit init/discard only |
-| Compatible final manifest and required stores, no incomplete-import marker | Current |
-| Complete/partial archive layout | Not a runnable root |
-| Incomplete-import marker | Normal open refuses before recovery/backend effects |
-| Missing/conflicting committed files | Corrupt; no automatic repair |
-| Unknown/unsupported layout, including old encrypted roots | Unsupported; leave data/keys intact |
-| Another cooperating process holds the lock | Busy |
+| Missing or empty selected directory | Absent or Empty |
+| Only a regular root.lock, or exact marker plus recognized empty stores and no manifest | IncompleteInitialization |
+| Exact manifest, required layout, stable lock file and a control database accepted by the control owner's readonly validator | Current |
+| Missing committed files, damaged recognized metadata, or nonempty stores before manifest publication | Corrupt |
+| Unknown entries, invalid marker, symlinks or unsupported/legacy/encrypted format | Unsupported |
+| Another process holds the root or control lock | Busy |
+| Reserved archive.complete entry | Archive |
+| Reserved root.importing entry | IncompleteImport |
 
-Check the actual selected directory and reject unsupported links/reparse entries in application state. Use
-ordinary OS permissions; a root under a shared writable location is not the selected deployment. No arbitrary
-parent-chain/anti-administrator security promise is made. Sources cannot supply application output paths.
+Unknown or unsupported roots are classified before initialization creates a lock or other file. Existing roots
+are never repaired by inspect or open. Current validates the manifest and calls inspect_plain_control; it does
+not infer a valid database from file presence and does not require an active control database to be
+semantically empty.
 
-## One lock
+Root enumeration is capped at 32 entries and control-directory enumeration at 16. Current-root validation
+checks that objects/ is a directory but does not enumerate its retained contents. During incomplete-state
+validation, it reads at most one object-directory entry to establish emptiness. There is no second-level
+corpus or symlink scan.
 
-Use one stable lock file and [std::fs::File::try_lock](https://doc.rust-lang.org/std/fs/struct.File.html#method.try_lock),
-opened read/write without truncation. Existing-root open uses its existing lock; explicit initialization creates
-it. Keep the handle in DataRootGuard until all stores/tasks close. WouldBlock means Busy; other errors are errors.
-Do not reacquire through cloned handles, infer ownership from file existence/PID or steal a stale marker.
-Never unlink/replace the lock file on shutdown: otherwise another opener can lock a different file at the same path.
-All application writers and stopped-root maintenance cooperate with this lock. It is not a barrier to hostile OS users.
-A crash before the init marker may leave only this lock file. Explicit init may continue from that recognized
-otherwise-empty state after acquiring the same file; reclassify under the lock before any store writes.
+The root owner uses search-control-redb for control initialization and readonly validation. Fresh control
+metadata uses its redb 4.5.0 dependency at the same control/control.redb path that the control owner later
+opens. inspect_plain_control checks only format metadata and version; Current does not enumerate tables, probe
+emptiness or impose a database-size ceiling. For unfinished initialization, the root first holds root.lock
+and then calls plain_control_is_empty. That bounded probe uses the same opened file for its 64 MiB byte ceiling
+and metadata check. Extra user tables or metadata report nonempty, while hitting the ceiling returns the
+distinct ProbeLimit error. Zero-length staging is accepted as empty. This module never parses or copies
+database bytes. The legacy redb 2.6.3 dependency remains with legacy consumers only.
 
-## Final-manifest-last initialization
+## Stable lock and initialization
 
-Validate the selected empty/recognized layout; take exclusion; write the owned init marker; create and verify
-empty stores; publish the final manifest last through the helper below. Admit no user content before that manifest.
-A failure before publication allows only strict recognized-empty discard/retry. No init journal or resume phases.
-An uncertain publication is resolved from the exact final manifest/layout, never by overwriting it.
+Use one stable root.lock, opened read/write without truncation and locked through std::fs::File::try_lock.
+Keep the file handle in PlainRootGuard until all stores and tasks close. The lock file is never replaced or
+unlinked. File existence, PID and lock-file contents do not establish ownership. This is cooperating-process
+exclusion in the selected private application directory, not a sandbox against malicious code running as the
+same account.
 
-<a id="windows-finalization"></a>
-<a id="windows-finalization--corrected-r054-boundary"></a>
-<a id="unix-finalization"></a>
-## Shared no-clobber publication
+Explicit initialization accepts only an absent/empty directory or a recognized empty incomplete layout. It
+creates/acquires the stable lock, reclassifies while holding it, publishes the exact init marker, creates the
+empty object directory, and calls initialize_plain_control with the original deadline and cancellation flag.
+The control owner closes and reads back its format metadata. Before the manifest, the root rechecks unfinished
+state under root.lock and uses the bounded emptiness probe. Only then does it publish root.toml last.
 
-Use the maintained [tempfile NamedTempFile API](https://docs.rs/tempfile/3.27.0/tempfile/struct.NamedTempFile.html#method.persist_noclobber)
-in the private final parent, on the same filesystem:
-
-```text
-NamedTempFile::new_in(final_parent)
-→ bounded write of exact bytes; verify length/hash; as_file().sync_all()
-→ persist_noclobber(final_path)
-→ verify the final through the ordinary reader
-→ remove owned temporary debris when safe
-```
-
-Pin the dependency with its real consumer at the code cut; the 3.27.0 API was inspected, not compiled here.
-Keep one small private helper shared by manifest/object writers, not a new filesystem service. Existing final
-means verify exact expected content; never fall back to overwriting persist/rename. A failed/uncertain outcome
-retains enough owned debris for exact inspection and later stopped-root cleanup.
-
-This supersedes the custom FileRenameInfo/RootDirectory/ancestor-handle design for the selected local threat model.
-The library documents no-overwrite behavior, not universal atomic cleanup or power-loss durability; a leftover
-stage link can remain. Do not use a public temp directory. Flush file data, sync directories where supported,
-and report actual platform/filesystem durability. Success/readback is not proof against sudden power loss.
-Do not add private NT calls or a second platform algorithm solely to recreate the retired hostile-writer model.
+The shared no-clobber helper uses tempfile 3.27.0 in the destination's parent, bounds and reads back staged
+bytes, syncs the file, and calls persist_noclobber. Existing destinations are accepted only after exact
+readback. The init marker remains after manifest publication so the manifest stays the final published file;
+a valid manifest plus the exact marker classifies as Current. Directory sync is attempted on Unix. Windows
+does not open a directory handle for this step. These operations do not establish universal power-loss
+durability or atomic cleanup on every filesystem.
 
 ## Explicit discard
 
-Require the exclusive guard, no final manifest, exact owned init marker, only recognized empty stores/stages and
-no source/prepared/published/pending/import references. Unknown entries or uncertain identity/deletion refuse.
-A committed or populated root is never eligible. Keep the stable lock file through discard/retry; do not unlink
-it while another opener may hold it. No cleanup of originals or user keys.
+Discard requires an exact init marker, no final manifest, a recognized layout and no stored user data. It
+checks object-directory emptiness without walking a corpus and accepts a control database only when absent,
+zero length, or recognized as semantically empty by plain_control_is_empty while holding root.lock. ProbeLimit
+and every other probe error abort without deletion. Unknown files, populated objects, unknown control tables,
+corrupt control state and unsupported formats are preserved.
 
-<a id="archive-and-import-boundary"></a>
+Discard removes only the recognized control file, empty store directories and init marker. It removes the
+marker last and never removes root.lock. A lock-only crash remnant may be retried by explicit initialization,
+but lock-only state does not authorize discard. No recursive deletion, automatic recovery or import cleanup is
+performed.
+
 ## Archive and import boundary
 
-[Maintenance](../search-retention/FUNCTIONS.md#backup-is-a-completed-archive-not-a-runnable-clone) owns the separate
-non-runnable archive layout. Ordinary open refuses archives and incomplete imports before backend recovery.
-When Stage 5 import arrives, persist one destination-bound incomplete marker before data/RPCs; explicit import
-retry acquires the same lock and validates that marker. Remove it durably only after verified complete destination
-current/evidence state. Uncertain removal is resolved by exact readback. This is not an init-resume platform or
-a Foundation prerequisite; add the marker/checks with the importing consumer.
+Archive creation and import remain owned by stopped-root maintenance
+([recipe](../search-retention/FUNCTIONS.md#backup-is-a-completed-archive-not-a-runnable-clone)). This root
+owner only refuses the reserved archive/import marker names; it does not open, repair, resume or clear them.
+The import owner must validate destination-bound marker bytes before importing.
 
 ## Open and shutdown
 
-Validate existing root, acquire its lock, reread/classify metadata, then open stores. Unsupported roots are not
-mutated to create missing files. Shutdown stops admission, cancels/drains work, drops windows/views, stops backend
-users, closes stores and finally drops the guard. No DRAINING/RELEASED record or per-request root mutex.
+Open accepts only Current, acquires the existing lock without creating a file, and reclassifies under that lock
+before returning the guard. Stores open afterward and must close before the guard drops. There is no
+root-directory file handle, custom NT path, ancestor lock graph or silent legacy fallback.
 
-## Removal and checks
-
-Replace owner slots/epochs, leases, argv custody, key selection, migration wrappers and custom publication with
-actual callers. Preserve data and unpublished work. After code run minimal locked check/Clippy for root/daemon/
-store consumers. Later cases cover init interruption, same-file exclusion, no-clobber conflict, corrupt/unknown
-roots, safe discard, archive/import refusal and restart. Record exact OS/filesystem and limits; no run is claimed.
+The implementation has not been built or run through native Windows scenarios in this slice. Those checks
+remain with the verifier after the root and control changes are both ready.

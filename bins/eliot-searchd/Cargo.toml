@@ -119,6 +119,8 @@ search-control-redb.workspace = true
 search-provider-protocol.workspace = true
 search-lexical.workspace = true
 zeroize = "=1.9.0"
+serde.workspace = true
+toml.workspace = true
 # Real canonical content hashing, never SHA-256 relabelled as BLAKE3.
 # `pure` excludes C/assembly hashing implementations; see SOURCE_MAPPING.md.
 blake3 = { version = "=1.8.2", default-features = false, features = ["std", "pure", "zeroize"] }

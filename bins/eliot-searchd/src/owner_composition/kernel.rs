@@ -57,12 +57,15 @@ pub use native_admission::{NativeSyncPreflightOperation, run_source_sync_preflig
 pub use native_request::{NativeRootLimits, NativeRootRequest};
 
 #[path = "kernel/initialization.rs"]
+#[cfg(test)]
 mod initialization;
 #[path = "kernel/initialization_journal.rs"]
 mod initialization_journal;
+#[cfg(test)]
 pub use initialization::InitializingDataRoot;
 #[cfg(test)]
 pub use initialization::initialize_new;
+#[cfg(test)]
 pub use initialization::initialize_direct;
 pub use native_admission::direct_registry::run_command as run_direct_registry;
 

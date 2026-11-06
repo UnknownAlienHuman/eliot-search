@@ -1,8 +1,9 @@
-//! Fail-closed runtime-owner policy and state machine.
-//!
-//! This crate owns only pure, explicit ownership decisions. Filesystem locks,
-//! durable owner records, process observation, clocks, termination, and other
-//! effects are executed by qualified adapters from the returned effect plans.
+//! Plain local root owner plus legacy pure policy retained for unconverted
+//! direct callers. The plain implementation lives in plain_root and owns
+//! one retained lock, one final manifest, the current object directory and
+//! one control database validated by search-control-redb. Legacy lease/epoch/receipt modules are
+//! not used by the plain root and remain only until their last direct
+//! caller is converted.
 
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
@@ -18,9 +19,17 @@ pub mod admission;
 pub mod error;
 pub mod identity;
 pub mod lease;
+pub mod plain_root;
 pub mod state;
 pub mod supervisor;
 pub mod transition;
+
+pub use plain_root::{
+    CONTROL_DB_FILE, CONTROL_DIR, INIT_MARKER, INCOMPLETE_IMPORT_MARKER, LOCK_FILE,
+    MANIFEST_FILE, OBJECT_DIR, PlainRootError, PlainRootGuard, PlainRootInspection,
+    PlainRootResult, PlainRootStatus, discard_incomplete_plain, initialize_plain, inspect_plain,
+    open_plain,
+};
 
 pub use admission::{DataRootOpenMode, RootOpenDecision, RootOpenState, classify_root_open};
 pub use error::OwnerError;
