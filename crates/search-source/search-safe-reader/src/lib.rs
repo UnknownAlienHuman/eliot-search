@@ -172,7 +172,7 @@ fn read_error(error: &io::Error) -> SourceReadError {
 }
 
 #[cfg(any(unix, windows))]
-fn source_open_error(error: io::Error) -> SourceReadError {
+fn source_open_error(error: &io::Error) -> SourceReadError {
     #[cfg(windows)]
     if error
         .raw_os_error()
@@ -188,7 +188,7 @@ fn source_open_error(error: io::Error) -> SourceReadError {
     if error.kind() == io::ErrorKind::NotFound {
         SourceReadError::OpenFailed
     } else {
-        read_error(&error)
+        read_error(error)
     }
 }
 
@@ -206,7 +206,7 @@ fn open_source_file(path: &Path) -> Result<File, SourceReadError> {
             .share_mode(FILE_SHARE_READ)
             .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT)
             .open(path)
-            .map_err(source_open_error)
+            .map_err(|error| source_open_error(&error))
     }
     #[cfg(unix)]
     {
@@ -216,7 +216,7 @@ fn open_source_file(path: &Path) -> Result<File, SourceReadError> {
             .read(true)
             .custom_flags(libc::O_NOFOLLOW)
             .open(path)
-            .map_err(source_open_error)
+            .map_err(|error| source_open_error(&error))
     }
     #[cfg(not(any(unix, windows)))]
     {
