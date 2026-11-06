@@ -96,7 +96,7 @@ enum NativeVersion {
 }
 
 fn observe(file: &File) -> Result<NativeObservation, SourceReadError> {
-    let metadata = file.metadata().map_err(read_error)?;
+    let metadata = file.metadata().map_err(|error| read_error(&error))?;
     if !metadata.is_file() {
         return Err(SourceReadError::NotRegularFile);
     }
@@ -244,9 +244,10 @@ fn same_handle_read_core(
     bytes.resize(capacity, 0);
 
     check(deadline, cancellation)?;
-    file.read_exact(&mut bytes).map_err(read_error)?;
+    file.read_exact(&mut bytes)
+        .map_err(|error| read_error(&error))?;
     let mut extra = [0_u8; 1];
-    if file.read(&mut extra).map_err(read_error)? != 0 {
+    if file.read(&mut extra).map_err(|error| read_error(&error))? != 0 {
         return Err(SourceReadError::ChangedDuringRead);
     }
     check(deadline, cancellation)?;
