@@ -7,7 +7,9 @@ use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 
-use redb_plain::{Database, ReadableDatabase, TableDefinition};
+use redb_plain::{
+    Database, ReadTransaction, ReadableDatabase, ReadableTable, TableDefinition, TableHandle,
+};
 use search_contracts::{Blake3Digest32, SourceId, SourceNamespaceId};
 use search_source_registry::{
     CurrentSourceRecord, MAX_SOURCE_OBJECT_BYTES, NativeFileKey, ObjectKind, ObjectRef,
