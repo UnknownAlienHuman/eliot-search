@@ -12,6 +12,9 @@ path = "src/lib.rs"
 
 [dependencies]
 redb_plain = { package = "redb", version = "=4.5.0", path = "../../vendor/redb", default-features = false }
+getrandom = "=0.2.17"
+search-contracts.workspace = true
+search-source-registry.workspace = true
 
 [lints]
 workspace = true

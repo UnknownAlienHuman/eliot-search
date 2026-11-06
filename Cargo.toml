@@ -9,14 +9,7 @@ members = [
     "crates/search-runtime/search-runtime-owner",
     "crates/search-runtime/search-os-secrets",
     "crates/search-control-redb",
-    "crates/search-source/search-source-admission",
-    "crates/search-source/search-source-admission-receipt",
-    "crates/search-source/search-source-provenance",
-    "crates/search-source/search-source-records",
-    "crates/search-source/search-source-history",
     "crates/search-source/search-source-registry",
-    "crates/search-source/search-source-identity",
-    "crates/search-source/search-source-reconcile",
     "crates/search-source/search-safe-reader",
     "crates/search-source/search-revision-store",
     "crates/search-prep/search-materializer",
@@ -66,14 +59,7 @@ search-config = { path = "crates/search-config" }
 search-runtime-owner = { path = "crates/search-runtime/search-runtime-owner" }
 search-os-secrets = { path = "crates/search-runtime/search-os-secrets" }
 search-control-redb = { path = "crates/search-control-redb" }
-search-source-admission = { path = "crates/search-source/search-source-admission" }
-search-source-admission-receipt = { path = "crates/search-source/search-source-admission-receipt" }
-search-source-provenance = { path = "crates/search-source/search-source-provenance" }
-search-source-records = { path = "crates/search-source/search-source-records" }
-search-source-history = { path = "crates/search-source/search-source-history" }
 search-source-registry = { path = "crates/search-source/search-source-registry" }
-search-source-identity = { path = "crates/search-source/search-source-identity" }
-search-source-reconcile = { path = "crates/search-source/search-source-reconcile" }
 search-safe-reader = { path = "crates/search-source/search-safe-reader" }
 search-revision-store = { path = "crates/search-source/search-revision-store" }
 search-materializer = { path = "crates/search-prep/search-materializer" }

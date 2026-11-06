@@ -1,39 +1,5 @@
-# Working on search-revision-store
+# Working on immutable source objects
 
-Read [FUNCTIONS.md](FUNCTIONS.md) and the affected source/preparation/query consumers. It owns object I/O;
-the linked root recipe owns platform finalization. Do not derive a competing algorithm from README or old code.
-Plain storage proceeds without #598 encryption; preserve its actual unpublished overlap and consume only an
-accepted encrypted-profile handoff. This is not a separate lifecycle or transaction platform.
+This owner writes and reads exact plain source bytes beneath PlainRootGuard.object_dir. Use the root owner's existing same-parent no-clobber publication method. The acquired buffer moves directly to this writer; compute maintained BLAKE3 over those exact bytes and verify the final object's actual length and digest by readback before the caller commits current source state.
 
-## Change the real path
-
-- Trace acquired bytes through the daemon writer, revision reference and source-head transaction.
-  Change the owner and its real consumers together.
-- Start with [immutable object I/O](src/immutable_object.rs). Keep one byte writer/reader; consolidate
-  the duplicate materializer artifact mechanics instead of adding another crate, port or forwarding layer.
-- Keep source identity/head semantics in the existing source/control owner. Do not install the
-  [in-memory kernel](src/kernel/store.rs) as a second catalogue or permanent operation ledger.
-- Verify real content length/digest at the storage boundary and preserve that verified buffer through
-  the handoff. Expected metadata returned beside arbitrary bytes is not a verified read.
-- Keep immutable publication, durability and conflict handling. A successful known rollback is a
-  failure/cancellation; an actual possible write needs readback or pending recovery.
-- Clean up staging owned by this writer when its outcome is known. The old contextual APIs' permanent
-  deferred-cleanup disposition is current inventory, not a rule for the new writer.
-
-## Remove obsolete obligations
-
-New local storage does not require six residency domains, encryption, copy/re-encrypt receipts,
-retention-lease graphs or another completed-operation archive. Remove obsolete fields and exclusive
-callers together; do not fabricate values to appease them.
-
-Old names, layouts, error strings and fixture bytes are not compatibility commitments. Reject an
-unsupported old root before writes and leave it intact. Do not delete user originals or sole retained
-copies to simplify the implementation.
-
-## Check the changed behavior
-
-Exercise actual write/reopen, existing-object conflict, crash before/after the reference transaction
-and cleanup of owned staging where changed. Check that the same retained bytes reach preparation and
-evidence reads. Compile the affected production owner and consumers; documentation edits need only
-documentation checks. No source-line quota, slice exception, migration issue or qualification receipt
-is a prerequisite.
+Do not open the mutable source pathname, start a writer transaction across object I/O, overwrite a conflicting object, create keys/ciphers/receipts, or delete prior immutable references. The connected daemon is the actual caller.

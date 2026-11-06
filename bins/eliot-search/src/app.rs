@@ -14,6 +14,7 @@ const MAX_ARGUMENT_BYTES: usize = 256 * 1024;
 const MAX_PATH_BYTES: usize = 32 * 1024;
 const MAX_CAPTURE_BYTES: usize = 64 * 1024;
 const MAX_ERROR_CODE_BYTES: usize = 128;
+const MAX_SOURCE_RESULT_BYTES: u64 = 8 * 1024 * 1024;
 const COMMAND_TIMEOUT: Duration = Duration::from_secs(120);
 
 #[derive(Clone, Copy)]
@@ -22,6 +23,7 @@ enum RootCommand {
     Initialize,
     CheckExistingOwner,
     DiscardIncomplete,
+    RetainFile,
 }
 
 impl RootCommand {
@@ -31,6 +33,7 @@ impl RootCommand {
             Self::Initialize => "initialize-data-root",
             Self::CheckExistingOwner => "check-existing-root-owner",
             Self::DiscardIncomplete => "discard-incomplete-data-root",
+            Self::RetainFile => "retain-file",
         }
     }
 
@@ -40,6 +43,7 @@ impl RootCommand {
             Self::Initialize => "--initialize-data-root",
             Self::CheckExistingOwner => "--check-existing-root-owner",
             Self::DiscardIncomplete => "--discard-incomplete-data-root",
+            Self::RetainFile => "--retain-file",
         }
     }
 }
@@ -105,6 +109,7 @@ impl ChildFailure {
 
 enum DaemonResponse<'a> {
     Snapshot(&'a str),
+    Retained(&'a str),
     Error(&'a str),
 }
 
@@ -153,6 +158,7 @@ fn command(value: &OsStr) -> Option<RootCommand> {
         "initialize-data-root" => Some(RootCommand::Initialize),
         "check-existing-root-owner" => Some(RootCommand::CheckExistingOwner),
         "discard-incomplete-data-root" => Some(RootCommand::DiscardIncomplete),
+        "retain-file" => Some(RootCommand::RetainFile),
         _ => None,
     }
 }
@@ -165,6 +171,7 @@ fn is_daemon_root_flag(value: &OsStr) -> bool {
                 | "--initialize-data-root"
                 | "--check-existing-root-owner"
                 | "--discard-incomplete-data-root"
+                | "--retain-file"
         )
     )
 }
@@ -196,6 +203,7 @@ fn parse(arguments: &[OsString]) -> Result<Parsed, &'static str> {
     let mut data_root_seen = false;
     let mut positional_root_seen = false;
     let mut config_seen = false;
+    let mut source_file_seen = false;
     let mut index = 1;
     while index < arguments.len() {
         let argument = &arguments[index];
@@ -242,6 +250,16 @@ fn parse(arguments: &[OsString]) -> Result<Parsed, &'static str> {
             settings.push(argument.clone());
             settings.push(value.clone());
             index += 2;
+        } else if argument == OsStr::new("--file") {
+            if source_file_seen || !matches!(root_command, RootCommand::RetainFile) {
+                return Err("USAGE_ERROR");
+            }
+            let value = arguments.get(index + 1).ok_or("USAGE_ERROR")?;
+            validate_path(value)?;
+            settings.push(OsString::from("--source-file"));
+            settings.push(value.clone());
+            source_file_seen = true;
+            index += 2;
         } else if argument
             .to_str()
             .is_some_and(|value| value.starts_with("--"))
@@ -256,6 +274,9 @@ fn parse(arguments: &[OsString]) -> Result<Parsed, &'static str> {
             settings.push(argument.clone());
             index += 1;
         }
+    }
+    if matches!(root_command, RootCommand::RetainFile) != source_file_seen {
+        return Err("USAGE_ERROR");
     }
     Ok(Parsed::Root {
         command: root_command,
@@ -464,6 +485,7 @@ fn validated_snapshot(bytes: &[u8], command: RootCommand) -> Option<&str> {
     }
     let states: &[&str] = match command {
         RootCommand::Initialize | RootCommand::CheckExistingOwner => &["current"],
+        RootCommand::RetainFile => return None,
         RootCommand::Inspect | RootCommand::DiscardIncomplete => &[
             "absent",
             "empty",
@@ -477,6 +499,74 @@ fn validated_snapshot(bytes: &[u8], command: RootCommand) -> Option<&str> {
         ],
     };
     states.contains(&state).then_some(line)
+}
+
+fn lower_hex(value: &str, length: usize) -> bool {
+    value.len() == length
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+}
+
+fn uuid_text(value: &str) -> bool {
+    if value.len() != 36 {
+        return false;
+    }
+    value.bytes().enumerate().all(|(index, byte)| match index {
+        8 | 13 | 18 | 23 => byte == b'-',
+        _ => byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte),
+    })
+}
+
+fn canonical_decimal(value: &str, allow_zero: bool) -> Option<u64> {
+    let parsed = value.parse::<u64>().ok()?;
+    if (!allow_zero && parsed == 0) || parsed.to_string() != value {
+        None
+    } else {
+        Some(parsed)
+    }
+}
+
+fn validated_retained(bytes: &[u8], command: RootCommand) -> Option<&str> {
+    if !matches!(command, RootCommand::RetainFile) {
+        return None;
+    }
+    let line = validated_line(bytes)?;
+    let rest = line.strip_prefix("{\"operation\":\"retain-file\",\"source_namespace_id\":\"")?;
+    let (namespace_id, rest) = rest.split_once("\",\"source_id\":\"")?;
+    if !uuid_text(namespace_id) {
+        return None;
+    }
+    let (source_id, rest) = rest.split_once("\",\"source_row_revision\":")?;
+    if !uuid_text(source_id) {
+        return None;
+    }
+    let (row_revision, rest) = rest.split_once(",\"registration_revision\":")?;
+    canonical_decimal(row_revision, false)?;
+    let (registration_revision, rest) = rest.split_once(",\"object_version\":")?;
+    canonical_decimal(registration_revision, false)?;
+    let (object_version, rest) =
+        rest.split_once(",\"object_kind\":\"source\",\"object_digest\":\"")?;
+    if object_version != "1" {
+        return None;
+    }
+    let (digest, rest) = rest.split_once("\",\"object_bytes\":")?;
+    if !lower_hex(digest, 64) {
+        return None;
+    }
+    let (object_bytes, rest) = rest.split_once(",\"native_file_key\":\"")?;
+    let object_bytes = canonical_decimal(object_bytes, true)?;
+    if object_bytes > MAX_SOURCE_RESULT_BYTES {
+        return None;
+    }
+    let (native_file_key, rest) = rest.split_once("\",\"readback\":\"verified\"}")?;
+    if !lower_hex(native_file_key, 34)
+        || !matches!(&native_file_key[..2], "01" | "02")
+        || !rest.is_empty()
+    {
+        return None;
+    }
+    Some(line)
 }
 
 fn validated_daemon_error(bytes: &[u8]) -> Option<&str> {
@@ -495,7 +585,11 @@ fn validated_daemon_error(bytes: &[u8]) -> Option<&str> {
 
 fn validated_response(output: &ChildOutput, command: RootCommand) -> Option<DaemonResponse<'_>> {
     if output.stderr.bytes.is_empty() {
-        validated_snapshot(&output.stdout.bytes, command).map(DaemonResponse::Snapshot)
+        if matches!(command, RootCommand::RetainFile) {
+            validated_retained(&output.stdout.bytes, command).map(DaemonResponse::Retained)
+        } else {
+            validated_snapshot(&output.stdout.bytes, command).map(DaemonResponse::Snapshot)
+        }
     } else if output.stdout.bytes.is_empty() {
         validated_daemon_error(&output.stderr.bytes).map(DaemonResponse::Error)
     } else {
@@ -521,6 +615,7 @@ fn print_help() {
         "  eliot-search initialize-data-root [ROOT] [--data-root ROOT] [--config-file PATH] [--daemon PATH]\n",
         "  eliot-search check-existing-root-owner [ROOT] [--data-root ROOT] [--config-file PATH] [--daemon PATH]\n",
         "  eliot-search discard-incomplete-data-root [ROOT] [--data-root ROOT] [--config-file PATH] [--daemon PATH]\n",
+        "  eliot-search retain-file --file PATH [ROOT] [--data-root ROOT] [--config-file PATH] [--daemon PATH]\n",
     ));
 }
 
@@ -572,6 +667,9 @@ pub fn run_main() -> i32 {
     let (written, exit_code) = match (output.status.success(), response) {
         (true, DaemonResponse::Snapshot(snapshot)) => {
             (write_line(&mut std::io::stdout().lock(), snapshot), 0)
+        }
+        (true, DaemonResponse::Retained(result)) => {
+            (write_line(&mut std::io::stdout().lock(), result), 0)
         }
         (false, DaemonResponse::Error(error)) => (
             write_line(&mut std::io::stderr().lock(), error),

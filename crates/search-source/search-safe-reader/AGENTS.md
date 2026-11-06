@@ -1,22 +1,5 @@
-# search-safe-reader — agent instructions
+# Working on source acquisition
 
-Read the [architecture](../../../docs/architecture/README.md) and
-[implementation](../../../docs/implementation/README.md). This package obtains exact bytes;
-[FUNCTIONS.md](FUNCTIONS.md) names the actual kernels, callers and Git gap.
+Keep the reader limited to explicit local-file selection, one bounded no-execute same-handle read, exact native identity/stability observations, and transfer of the original byte allocation. Windows requires volume serial plus file index; Unix requires device plus inode. Unsupported identity is a refusal, never a path/hash fallback.
 
-- Keep bounded same-handle file reads, useful before/after observations and cancellation. The final
-  opened source must correspond to the selected root and locator; a walker is not that check.
-- Return the bytes and necessary identity/length observations to the existing revision writer.
-  Do not reread a pathname to replace an already verified body or introduce another byte owner.
-- Use controlled system Git plumbing for the first actual local object backend. Launch the selected
-  builtin with direct arguments; do not execute repository hooks, textconv/filter drivers, builds or
-  implicit fetches. A Git subprocess is permitted; the old blanket no-process rule is retired.
-- Keep raw Git objects distinct from working-tree content. Missing objects, unsupported input and
-  incomplete reads have ordinary explicit outcomes. Do not fake expected identity or return truncated
-  bytes as a successful source revision.
-- Change old V1/V2 receipt-bearing requests and their real consumers together. Keep hashes for actual
-  content identity/integrity, not generic local grants, read receipts or release proofs.
-
-Admission policy, source/head persistence, preparation and publication have existing owners. Reuse their
-path; no new backend framework, dependency-approval process, source-line quota or qualification wave is
-required. Verify changed read behavior and its real consumer rather than preserving old receipt goldens.
+The current daemon is the consumer. Do not restore receipts, admission barriers, ancestor-root authorization, retries, Git execution, reconciliation, or a parallel byte store. Keep real empty files distinct from missing, corrupt, changed, or refused input.

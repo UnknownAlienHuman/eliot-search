@@ -25,6 +25,7 @@ pub(super) struct RootCli {
     command: RootCommand,
     data_root: Option<PathBuf>,
     config_file: Option<PathBuf>,
+    source_file: Option<PathBuf>,
 }
 
 #[derive(Default)]
@@ -64,6 +65,7 @@ fn is_command(value: &OsStr) -> Option<RootCommand> {
         "--initialize-data-root" => Some(RootCommand::Initialize),
         "--check-existing-root-owner" => Some(RootCommand::CheckExistingOwner),
         "--discard-incomplete-data-root" => Some(RootCommand::DiscardIncomplete),
+        "--retain-file" => Some(RootCommand::RetainFile),
         _ => None,
     }
 }
@@ -108,6 +110,7 @@ pub(super) fn parse(arguments: &[OsString]) -> Result<Parsed, String> {
     let mut command = None;
     let mut data_root = None;
     let mut config_file = None;
+    let mut source_file = None;
     let mut positional_root = None;
     let mut index = 0;
     while index < arguments.len() {
@@ -134,6 +137,13 @@ pub(super) fn parse(arguments: &[OsString]) -> Result<Parsed, String> {
             let value = option_value(arguments, index, "config_file_value")?;
             config_file = Some(bounded_path(value, "config_file")?);
             index += 2;
+        } else if argument == OsStr::new("--source-file") {
+            if source_file.is_some() {
+                return Err(invalid("source_file_duplicate"));
+            }
+            let value = option_value(arguments, index, "source_file_value")?;
+            source_file = Some(bounded_path(value, "source_file")?);
+            index += 2;
         } else if argument
             .to_str()
             .is_some_and(|value| value.starts_with("--"))
@@ -149,6 +159,9 @@ pub(super) fn parse(arguments: &[OsString]) -> Result<Parsed, String> {
     }
 
     let command = command.ok_or_else(|| "UNKNOWN_ARGUMENT".to_owned())?;
+    if (command == RootCommand::RetainFile) != source_file.is_some() {
+        return Err(invalid("source_file_required"));
+    }
     if data_root.is_some() && positional_root.is_some() {
         return Err(invalid("data_root_duplicate"));
     }
@@ -156,6 +169,7 @@ pub(super) fn parse(arguments: &[OsString]) -> Result<Parsed, String> {
         command,
         data_root: data_root.or(positional_root),
         config_file,
+        source_file,
     }))
 }
 
@@ -236,5 +250,8 @@ pub(super) fn resolve(cli: RootCli, startup_cwd: &Path) -> Result<RootInvocation
     Ok(RootInvocation {
         command: cli.command,
         data_root,
+        source_file: cli
+            .source_file
+            .map(|path| resolve_layer_path(&path, startup_cwd)),
     })
 }

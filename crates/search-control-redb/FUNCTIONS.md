@@ -1,53 +1,21 @@
-# Plain-root control metadata
+# Plain control metadata and current source rows
 
-The retained CONTROL implementation is `src/plain_control.rs`, exported by the minimal `src/lib.rs`.
-Its sole dependency is the directly path-pinned [vendored redb 4.5.0](../../vendor/redb/ELIOT_VENDOR.md), privately
-named `redb_plain`. The former journal, migration, authority, DEK, reference implementations and their exclusive
-tests are physically removed.
+The retained CONTROL implementation owns control/control.redb through vendored redb 4.5.0. The existing plain_control_meta format marker and all root initialization, read-only inspection, empty-probe, savepoint, and incomplete-discard rules remain unchanged.
 
-The root owns `control/control.redb`. The current application format is the regular table
-`plain_control_meta`, with the single row `"format_version" -> 1` using string keys and u64 values.
-CONTROL stores no source bodies or retrieval index.
+## Source operation
 
-## Initialize under root exclusion
+current_source adds three ordinary current tables on the first successful retained-source commit:
 
-The caller holds root exclusion and the exact unfinished-init marker. Missing files use create-new semantics.
-Existing zero-length files are opened without truncation and checked through their actual opened handle before
-redb creation. Non-zero files are first opened read-only and classified within the empty-probe bound:
+- source_state stores the source-row schema version and one persisted root-local SourceNamespaceId.
+- current_source_rows stores typed CurrentSourceRecord values by independently generated SourceId.
+- current_source_locators maps exact OS-native path bytes to a stored SourceId.
 
-The native read-only savepoint predicate must first establish that the same stable system snapshot has no
-persistent savepoints. Any savepoint makes the database nonempty even if earlier user tables have been deleted
-from the current catalogue. Errors propagate and preserve the file.
+A read transaction captures the namespace, locator binding, row revision, and registration revision before file I/O. No table is written during capture. Unknown or partial table layouts are refused before source acquisition.
 
-- No regular or multimap tables: clean preformat empty, eligible to finish initialization.
-- Exactly the expected format table and row: formatted empty, accepted without rewriting it.
-- Additional tables or metadata rows: nonempty, preserved and rejected for initialization.
+After the immutable object has been published and read back, commit_current_source opens one short write transaction in this same control.redb. It atomically compares the captured namespace and registration/source row revisions with the current locator mapping, then advances row_revision and writes the new ObjectRef and NativeFileKey. A stale or corrupt row is an error; the old object remains untouched and the new object may remain unreferenced.
 
-A preformat retry opens the candidate file without truncation and repeats the read-only proof on that exact
-OS file object. A retained handle survives the proof; the read-only database and transaction are explicitly
-closed before the retained handle enters the writer. Its regular-file type and length are checked again.
-There are no concurrent database handles sharing the duplicated handle's locks. The writer aborts any redb
-repair request and checks that its transaction still has no persistent savepoints, regular tables or multimap
-tables before adding the format row. It commits, explicitly closes, then reopens read-only to read back the real
-format marker before the root publishes its manifest.
+Current source tables are ordinary Current-root user data. They do not change the initialization format marker. The existing unfinished-root emptiness probe still recognizes only its original empty states; any additional table or persistent savepoint remains nonempty and ineligible for discard. Regular source operations do not call the empty probe.
 
-Cancellation or deadline expiry after vendor database creation or before the format transaction commits still
-closes the database. A clean zero-table database remains eligible for an owned retry or discard. Unverifiable,
-unsupported and repair-requiring databases are preserved; no legacy upgrade or generic recovery runs here.
+## Existing root-control operations
 
-## Read-only operations
-
-`inspect_plain_control` opens the actual file through redb's maintained read-only backend and looks up the fixed
-format table/key/version. It neither enumerates the catalogue nor imposes a whole-file size limit. Populated
-current databases remain inspectable. This is format verification, not proof of every page's integrity.
-
-`plain_control_is_empty` is only for unfinished initialization or discard under root exclusion. It accepts both
-clean preformat empty and formatted empty states only after the system retention check. Before that check and
-catalogue enumeration it checks the same opened file used by redb against a 64 MiB ceiling; larger files return
-`ProbeLimit`. Persistent savepoints, additional tables or metadata rows return false. Required format metadata,
-when present as the sole table, must validate. CONTROL uses redb's default `ExclusiveWriter` mode: the vendor
-accessor rejects concurrent-writer modes rather than mixing system and user snapshots.
-
-All operations retain the caller's original absolute deadline and cancellation flag and check them around I/O.
-Typed redb errors map to bounded static codes; I/O failures are not classified as corruption. Native fresh-file
-size, cancellation/retry cases and handle/lock behavior still require the designated runtime verifier's probes.
+initialize_plain creates only the existing format metadata. inspect_plain_control reads the marker without enumerating the populated table catalogue. open_plain retains root.lock and verifies the current root before source work. No new root registration, key, credential, or lifecycle service is added.

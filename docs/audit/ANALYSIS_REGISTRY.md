@@ -7,13 +7,9 @@ ad8cc9e8fa498d43b644246af3b7f4900890317a. Source acquisition through verified Qd
 <a id="resume-after-interruption"></a>
 ## Next task
 
-**S1: connect the first real bounded file read to retained bytes and a guarded current source row.**
-Use the actual daemon entry/app path and source owners: no-execute acquisition → plain ObjectRef →
-guarded CurrentSourceRecord in the same search-control-redb 4.5.0 database. Preserve the acquired bytes through
-retention instead of rereading them. Retained Source/materializer/Qdrant crates still need actual caller cutovers.
-The [code map](../implementation/CODE_MAP.md#existing-dispatch-to-replace) names current entrypoints;
-do not restore deleted root constructors or legacy fixtures.
+**S1: verify the connected retained-file operation before advancing to P1.** The branch now connects the current CLI and daemon path to one bounded native-handle read, a plain ObjectRef, verified retained readback, and an atomic current-source row in the same control/control.redb database. The source patch is not yet runtime-qualified and S1 remains unfinished.
 
+The designated verifier should run the smallest locked check and strict Clippy for the changed source/control/root/binary owners, then exercise the real CLI for capture, retained-byte readback, source mutation, stale CAS, and missing/unsupported/corrupt/refused cases. Record exact command outcomes and the final source SHA here. Keep P1 waiting until those results are accepted; source rows do not imply materialization, publication, or search.
 <a id="work-register"></a>
 <a id="delivery-remaining"></a>
 ## Remaining work
@@ -26,7 +22,7 @@ DONE below is the named delivered scope, not completion of the product.
 | C0 / DONE | None | Removed controller tooling and unused packages | Keep displaced producers/fixtures physically removed. |
 | F1 / DONE, Windows debug root scope | None | CLI/daemon entry/app; [settings](../../crates/search-config/FUNCTIONS.md) | Consumed native file/environment/CLI root settings and effect-free help/version. |
 | F2 / DONE, Windows debug root scope | F1 | daemon native_root_command; [root](../../crates/search-runtime/search-runtime-owner/FUNCTIONS.md), [control](../../crates/search-control-redb/FUNCTIONS.md) | Four plain root operations, stable exclusion, actual control format and bounded factual output. |
-| S1 / READY | F2 | daemon app + [source owners](../../crates/search-source/README.md#ownership), safe reader/object store/control | One actual bounded file read → ObjectRef → guarded CurrentSourceRecord. |
+| S1 / READY, verification pending | F2 | current daemon/CLI + [source owners](../../crates/search-source/README.md#ownership), root, object store, control | One bounded file read → verified ObjectRef → guarded CurrentSourceRecord in the same control database. |
 | P1 / WAIT | S1 | Materializer/unitizer and a real daemon consumer | One retained representation/ranges and explicit empty/gap outcomes. |
 | Q1 / WAIT | P1 | Control, Qdrant bridge and publisher | Actual build/readback → matching current/evidence state → installed PublishedView. |
 | U1 / WAIT | Q1 | CLI app and provider client/protocol owners | Owned-child framed search returning a verified retained excerpt. |
@@ -60,6 +56,8 @@ through the native read-only API. [Vendor provenance](../../vendor/redb/ELIOT_VE
 <a id="evidence-status"></a>
 <a id="execution-evidence"></a>
 ## Verification and known blockers
+
+- S1 source-file capture, same-handle read, immutable object publication/readback, source-row CAS, and real CLI cases: NOT_RUN at this checkpoint. The current worktree contains the implementation only; it is not a completion or runtime qualification claim.
 
 Evidence is for the following exact SOURCE revisions on Windows debug / Rust 1.98.0, not a later docs head:
 

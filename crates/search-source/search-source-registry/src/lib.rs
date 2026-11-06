@@ -1,93 +1,158 @@
-//! Atomic revisioned source registry for the W2 direct-source spine.
-//!
-//! The registry owns admitted roots, sources, memberships, reference
-//! portfolios, coherent source/workspace views and source-namespace owner
-//! transitions. It persists accepted identity/admission decisions through the
-//! vendor-neutral [`error::RegistryControlPort`] and never reimplements those
-//! semantics. Canonical product operations enter through [`api`]. The bounded
-//! legacy DIRECT journal, source-root catalog and root-currentness compatibility
-//! surfaces are re-exported at the crate root; the daemon remains the bounded
-//! filesystem integration owner.
+//! Typed current source rows shared by the source reader, control store and CLI.
 
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
-#![allow(
-    clippy::doc_markdown,
-    clippy::large_enum_variant,
-    clippy::manual_let_else,
-    clippy::match_same_arms,
-    clippy::missing_const_for_fn,
-    clippy::missing_errors_doc,
-    clippy::module_name_repetitions,
-    clippy::must_use_candidate,
-    clippy::needless_pass_by_value,
-    clippy::option_if_let_else,
-    clippy::similar_names,
-    clippy::struct_excessive_bools,
-    clippy::too_many_arguments,
-    clippy::too_many_lines,
-    clippy::trivially_copy_pass_by_ref
-)]
 
-pub mod api;
-pub mod cutover;
-pub mod error;
-pub use search_source_records::legacy_root_catalog;
-pub mod membership;
-pub mod portfolio;
-pub use search_source_records::portfolio_history;
-pub mod recovery;
-pub use search_source_history::revision;
-pub mod root;
-pub use search_source_records::root_currentness;
-pub use search_source_records::snapshot;
-pub mod source;
-pub mod source_ids;
-pub mod view;
+use search_contracts::{Blake3Digest32, SourceId, SourceNamespaceId};
 
-use search_source_records::legacy_direct as source_legacy_direct;
+/// Current plain object format used by the first retained source path.
+pub const SOURCE_OBJECT_FORMAT_VERSION: u16 = 1;
 
-pub use api::{
-    DEFAULT_REGISTRY_LIMITS, InMemoryRegistryJournal, JournalEntryKind, RegistryControlPort,
-    RegistryError, RegistryJournalEntry, RegistryLimits, RegistryPortError,
-};
-pub use legacy_root_catalog::{
-    LEGACY_SOURCE_ROOT_CATALOG_HEADER, LEGACY_SOURCE_ROOT_CATALOG_MAX_BYTES,
-    LEGACY_SOURCE_ROOT_CATALOG_MAX_ROOTS, LegacySourceRootCatalogError,
-    decode_legacy_source_root_catalog, encode_legacy_source_root_catalog,
-};
-pub use membership::{MembershipKey, MembershipLifecycle, MembershipRecord, NewMembership};
-pub use portfolio::PortfolioItem;
-pub use portfolio_history::{
-    ImmutablePortfolioRevision, PortfolioCurrentPointer, PortfolioHistory, PortfolioRevisionKey,
-    PortfolioRevisionRecord,
-};
-pub use recovery::{
-    MAX_REGISTRY_RESTORE_BYTES, NamespaceCutover, ObservedRegistryRestore, RegistryBatch,
-    RegistryChange, RegistryOperation, RegistryReceipt, RegistryRestoreOperation,
-    RegistryRestoreState, SourceRegistry, preflight_registry_restore_inputs,
-    restore_registry_state,
-};
-pub use revision::{
-    SourceRevisionControlPort, SourceRevisionCurrentness, SourceRevisionHead, SourceRevisionIdPort,
-    SourceRevisionMutation, SourceRevisionMutationReadback, SourceRevisionRegistrationReceipt,
-    SourceRevisionRegistrationRequest, SourceRevisionSourceState,
-    decode_source_revision_mutation_readback, decode_source_revision_record,
-    encode_source_revision_mutation_readback, encode_source_revision_record,
-    register_source_revision,
-};
-pub use root_currentness::{
-    CurrentWorkspaceTruth, MAX_SOURCE_ROOT_OBSERVATION_GAPS, MAX_SOURCE_ROOT_WATCHER_HINTS,
-    ObservationGap, ObservationGapReason, ReconciliationCursor, SourceRootCurrentness,
-    SourceRootCurrentnessError, SourceRootState, WatcherHint, WatcherHintKind,
-};
-pub use source::{AdmissionBindingProof, RegisteredSource, SourceLifecycle};
-pub use source_legacy_direct::{
-    LEGACY_DIRECT_LOG_HEADER, LEGACY_DIRECT_ZERO_DIGEST, LegacyDirectAppendPlan,
-    LegacyDirectDigest, LegacyDirectIdentityStrength, LegacyDirectJournalError,
-    LegacyDirectRecordDraft, LegacyDirectRegistryState, LegacyDirectSourceRecord,
-    LegacyDirectSourceState, verify_legacy_direct_revision_identity,
-};
+/// Bounded byte length accepted by the first source object format.
+pub const MAX_SOURCE_OBJECT_BYTES: u64 = 8 * 1024 * 1024;
 
-#[cfg(test)]
-mod tests;
+/// Content kind stored in an [`ObjectRef`].
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ObjectKind {
+    /// Exact acquired source-file bytes.
+    Source,
+}
+
+impl ObjectKind {
+    /// Stable byte used in the current source-row encoding.
+    pub const fn tag(self) -> u8 {
+        match self {
+            Self::Source => 1,
+        }
+    }
+
+    /// Decodes a stable object-kind byte.
+    pub const fn from_tag(tag: u8) -> Option<Self> {
+        match tag {
+            1 => Some(Self::Source),
+            _ => None,
+        }
+    }
+}
+
+/// Immutable plain-object address, including the integrity data needed to read it.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ObjectRef {
+    /// On-disk object format version.
+    pub format_version: u16,
+    /// Stored content kind.
+    pub kind: ObjectKind,
+    /// BLAKE3 digest of the exact retained bytes.
+    pub digest: Blake3Digest32,
+    /// Exact byte length of the retained object.
+    pub byte_length: u64,
+}
+
+impl ObjectRef {
+    /// Creates a reference to exact source bytes.
+    pub const fn source(digest: Blake3Digest32, byte_length: u64) -> Self {
+        Self {
+            format_version: SOURCE_OBJECT_FORMAT_VERSION,
+            kind: ObjectKind::Source,
+            digest,
+            byte_length,
+        }
+    }
+}
+
+/// Verified native identity of an opened regular file.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum NativeFileKey {
+    /// Unix device and inode observed through the opened handle.
+    Unix {
+        /// Filesystem device number.
+        device: u64,
+        /// Native inode number.
+        inode: u64,
+    },
+    /// Windows volume serial and file index observed through the opened handle.
+    Windows {
+        /// Native volume serial number.
+        volume_serial: u32,
+        /// Native file index.
+        file_index: u64,
+    },
+}
+
+impl NativeFileKey {
+    /// Encodes the exact platform key into its fixed current-row representation.
+    pub const fn to_bytes(self) -> [u8; 17] {
+        let mut bytes = [0_u8; 17];
+        match self {
+            Self::Unix { device, inode } => {
+                bytes[0] = 1;
+                let device = device.to_le_bytes();
+                let inode = inode.to_le_bytes();
+                let mut index = 0;
+                while index < 8 {
+                    bytes[index + 1] = device[index];
+                    bytes[index + 9] = inode[index];
+                    index += 1;
+                }
+            }
+            Self::Windows {
+                volume_serial,
+                file_index,
+            } => {
+                bytes[0] = 2;
+                let volume_serial = volume_serial.to_le_bytes();
+                let file_index = file_index.to_le_bytes();
+                let mut index = 0;
+                while index < 4 {
+                    bytes[index + 1] = volume_serial[index];
+                    index += 1;
+                }
+                index = 0;
+                while index < 8 {
+                    bytes[index + 9] = file_index[index];
+                    index += 1;
+                }
+            }
+        }
+        bytes
+    }
+
+    /// Decodes a fixed native-key representation, rejecting unknown tags or padding.
+    pub fn from_bytes(bytes: [u8; 17]) -> Option<Self> {
+        match bytes[0] {
+            1 => {
+                let device = u64::from_le_bytes(bytes[1..9].try_into().ok()?);
+                let inode = u64::from_le_bytes(bytes[9..17].try_into().ok()?);
+                Some(Self::Unix { device, inode })
+            }
+            2 if bytes[5..9] == [0; 4] => {
+                let volume_serial = u32::from_le_bytes(bytes[1..5].try_into().ok()?);
+                let file_index = u64::from_le_bytes(bytes[9..17].try_into().ok()?);
+                Some(Self::Windows {
+                    volume_serial,
+                    file_index,
+                })
+            }
+            _ => None,
+        }
+    }
+}
+
+/// Persisted current source state; it owns identity and a reference, never source bytes.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CurrentSourceRecord {
+    /// Persisted root-local source namespace.
+    pub source_namespace_id: SourceNamespaceId,
+    /// Random persisted identity of this logical selected source.
+    pub source_id: SourceId,
+    /// Non-reset revision of the source row.
+    pub row_revision: u64,
+    /// Non-reset registration revision guarding removal and re-registration.
+    pub registration_revision: u64,
+    /// Exact platform-encoded current locator bytes.
+    pub locator: Vec<u8>,
+    /// Native identity observed before and after source acquisition.
+    pub file_key: NativeFileKey,
+    /// Immutable bytes retained before this row was committed.
+    pub object_ref: ObjectRef,
+}

@@ -68,7 +68,7 @@ inspect, initialize, check-existing-owner or explicit incomplete-init discard. T
 subcommands; the daemon uses matching --operation flags. See the
 [actual dispatch map](CODE_MAP.md#existing-dispatch-to-replace) and exact syntax in the
 [CLI](../../bins/eliot-search/FUNCTIONS.md#capture-and-dispatch) and
-[daemon](../../bins/eliot-searchd/FUNCTIONS.md#current-entrypoints-and-removal-seams) recipes.
+[daemon](../../bins/eliot-searchd/FUNCTIONS.md) recipes.
 
 Only data_root is consumed from bounded file/environment/CLI settings. Diagnostics use fixed output bounds;
 there is no accepted diagnostic_limit setting, storage-mode selector or external initialization ID.
@@ -91,21 +91,11 @@ registry; this delivery sequence is not a second status ledger.
 <a id="2-walking-skeleton--one-file-to-one-cli-result"></a>
 ### 2. One file to one CLI result
 
-Coordinator #264. One explicit local file → stable read → plain ObjectRef/current row → materialize/unitize →
-fresh vectorless Qdrant collection → explicit scoring text index → InsertOnly/readback/canary → matching current
-and evidence commit → PublishedView → TextQuery → retained excerpt → CLI.
+Coordinator #264. The first S1 slice is connected in the current source branch: one explicit local file → one stable native-handle read → plain ObjectRef publication and verified readback → guarded CurrentSourceRecord in the same control/control.redb → factual CLI result. The implementation is present; locked checks and native runtime cases remain NOT_RUN until the designated verifier completes them.
 
-Upgrade exact Qdrant client/server/schema and their real consumers together. The selected scoring-text path
-requires its documented APIs; pin and qualify the exact adopted patches at that future code cut.
-Use lexical/bridge owner settings, not copied tables. Keep final owners' persistent references, not a throwaway demo.
-Connect to the operator-started local server; no supervisor construction or key lease. A fresh root without a
-published generation is buildable, not a corrupt root or a successful empty search; the bridge owns those cases.
-This stage must connect an actual owned-child framed path for one search request; the current root child is
-not a framed search session. Live paging/windows arrive in Stage 4. Do not add a temporary line protocol or
-require full interactive behavior to deliver the first retained excerpt.
-No broad inventory, watcher, paging, encryption, permission system, point mutation or cleanup platform first.
-Complete when default binaries return real retained evidence through Qdrant; missing/corrupt evidence is not a card.
+The rest of Stage 2 continues from that source row through materialization/unitization, a fresh vectorless Qdrant collection, the scoring-text index, InsertOnly/readback/canary, matching current/evidence commit, PublishedView, TextQuery, and a retained excerpt. Upgrade exact Qdrant client/server/schema and real consumers together at that code cut. Use lexical/bridge owner settings and the operator-started local server. A fresh root without a published generation is buildable, not a corrupt root or a successful empty search.
 
+The first source command uses the existing root-owned one-shot child. It does not add a temporary line protocol. Live paging/windows arrive in Stage 4. Broad inventory, watchers, encryption, permission systems, point mutation, and cleanup remain later scope. Missing or corrupt retained evidence is not a card. S1 implementation alone does not complete Stage 2 or the product.
 <a id="3a-fresh-generation-convergence"></a>
 ### 3A. Fresh-generation convergence
 
