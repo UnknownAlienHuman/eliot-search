@@ -15,7 +15,7 @@ Choose one route; do not load the whole documentation tree.
 | Change configuration | [Typed settings](../crates/search-config/FUNCTIONS.md) |
 | Change root or file publication | [Root](../crates/search-runtime/search-runtime-owner/FUNCTIONS.md) |
 | Change retained objects | [Object store](../crates/search-source/search-revision-store/FUNCTIONS.md) |
-| Change file selection / read refusal | [Admission](../crates/search-source/search-source-admission/FUNCTIONS.md) |
+| Change file selection / read refusal | [Source acquisition](../crates/search-source/README.md) |
 | Change source discovery/current state | [Source family](../crates/search-source/README.md) |
 | Change preparation | [Materializer](../crates/search-prep/search-materializer/FUNCTIONS.md), [unitizer](../crates/search-prep/search-unitizer/FUNCTIONS.md) |
 | Change retrieval/index | [Lexical profile](../crates/search-lexical/FUNCTIONS.md), [Qdrant bridge](../crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md) |
