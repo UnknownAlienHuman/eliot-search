@@ -1,19 +1,17 @@
-//! Plain native root commands.
+//! Executes one plain-root operation and emits its observed final state.
 
 use std::process::ExitCode;
 use std::sync::atomic::AtomicBool;
 use std::time::{Duration, Instant};
 
-use crate::config_composition::BootstrapInvocation;
 use search_runtime_owner::{
-    PlainRootError, PlainRootStatus, discard_incomplete_plain, initialize_plain, inspect_plain,
-    open_plain,
+    PlainRootError, PlainRootGuard, PlainRootStatus, discard_incomplete_plain, initialize_plain,
+    inspect_plain, open_plain,
 };
 
-fn emit(error: &PlainRootError) -> ExitCode {
-    eprintln!("{{\"error\":\"{}\"}}", error.code());
-    ExitCode::from(2)
-}
+use crate::app::{RootCommand, RootInvocation};
+
+static CANCELLED: AtomicBool = AtomicBool::new(false);
 
 fn status_name(status: PlainRootStatus) -> &'static str {
     match status {
@@ -29,35 +27,60 @@ fn status_name(status: PlainRootStatus) -> &'static str {
     }
 }
 
-pub fn run_native_root_command(invocation: BootstrapInvocation, started: Instant) -> ExitCode {
-    let root = invocation.settings.data_root;
+fn emit_snapshot(command: RootCommand, status: PlainRootStatus) {
+    println!(
+        "{{\"operation\":\"{}\",\"root_state\":\"{}\"}}",
+        command.operation(),
+        status_name(status)
+    );
+}
+
+fn emit_error(error: PlainRootError) -> ExitCode {
+    eprintln!("{{\"error\":\"{}\"}}", error.code());
+    ExitCode::from(2)
+}
+
+fn emit_guarded(command: RootCommand, guard: PlainRootGuard) -> ExitCode {
+    if !guard.is_current() {
+        drop(guard);
+        return emit_error(PlainRootError::Corrupt);
+    }
+    emit_snapshot(command, PlainRootStatus::Current);
+    drop(guard);
+    ExitCode::SUCCESS
+}
+
+pub(crate) fn run(invocation: RootInvocation, started: Instant) -> ExitCode {
     let Some(deadline) = started.checked_add(Duration::from_secs(120)) else {
-        return emit(&PlainRootError::Cancelled);
+        return emit_error(PlainRootError::Deadline);
     };
-    static CANCELLED: AtomicBool = AtomicBool::new(false);
-    let result = match invocation.command.as_str() {
-        "--inspect-data-root" => inspect_plain(&root, deadline, &CANCELLED).map(|value| {
-            println!(
-                "{{\"owner_state\":\"{}\",\"owner_capability\":false}}",
-                status_name(value.status)
-            );
-        }),
-        "--check-existing-root-owner" => open_plain(&root, deadline, &CANCELLED).map(|guard| {
-            println!("{{\"owner_state\":\"current\",\"owner_capability\":true}}");
-            drop(guard);
-        }),
-        "--initialize-data-root" => initialize_plain(&root, deadline, &CANCELLED).map(|guard| {
-            println!("{{\"owner_state\":\"initialized\",\"owner_capability\":true}}");
-            drop(guard);
-        }),
-        "--discard-incomplete-data-root" => discard_incomplete_plain(&root, deadline, &CANCELLED)
-            .map(|_| {
-                println!("{{\"owner_state\":\"discarded\",\"owner_capability\":false}}");
-            }),
-        _ => return emit(&PlainRootError::InvalidPath),
-    };
-    match result {
-        Ok(()) => ExitCode::SUCCESS,
-        Err(error) => emit(&error),
+    let RootInvocation { command, data_root } = invocation;
+    match command {
+        RootCommand::Inspect => match inspect_plain(&data_root, deadline, &CANCELLED) {
+            Ok(inspection) => {
+                emit_snapshot(command, inspection.status);
+                ExitCode::SUCCESS
+            }
+            Err(error) => emit_error(error),
+        },
+        RootCommand::CheckExistingOwner => match open_plain(&data_root, deadline, &CANCELLED) {
+            Ok(guard) => emit_guarded(command, guard),
+            Err(error) => emit_error(error),
+        },
+        RootCommand::Initialize => match initialize_plain(&data_root, deadline, &CANCELLED) {
+            Ok(guard) => emit_guarded(command, guard),
+            Err(error) => emit_error(error),
+        },
+        RootCommand::DiscardIncomplete => {
+            match discard_incomplete_plain(&data_root, deadline, &CANCELLED)
+                .and_then(|()| inspect_plain(&data_root, deadline, &CANCELLED))
+            {
+                Ok(inspection) => {
+                    emit_snapshot(command, inspection.status);
+                    ExitCode::SUCCESS
+                }
+                Err(error) => emit_error(error),
+            }
+        }
     }
 }

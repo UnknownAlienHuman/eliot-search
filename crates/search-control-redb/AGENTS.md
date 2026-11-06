@@ -1,34 +1,15 @@
-# Local control storage
+# Plain root control storage
 
-Use the [control recipe](FUNCTIONS.md) and [shared lifetime rules](../../docs/implementation/README.md#lifetime-and-lock-order).
-This package is the concrete redb owner for current source/settings/publication metadata.
+Use [FUNCTIONS.md](FUNCTIONS.md). This crate currently owns only the plain-root format marker and the three
+operations in `plain_control`; keep the public module path and bounded error semantics stable with consumers.
 
-## Write the useful state
+Initialization and semantic-empty probing require the caller's root exclusion and owned unfinished-init marker.
+Ordinary format inspection must stay read-only, without catalogue enumeration or a whole-file size ceiling.
+Read-only empty proofs are bounded before enumeration. A preformat retry may write only the exact proven empty
+file after its reader closes, must abort redb repair, and must not overwrite an existing application format.
 
-Use typed methods and short redb transactions. Read conditions inside the write transaction and commit
-the changed tables. Keep read snapshots coherent. Do not hold a write transaction over Qdrant RPCs.
+Keep the original deadline/cancellation inputs and distinguish unavailable I/O from corrupt or unsupported data.
+Preserve unsupported original files. Do not restore legacy journals, migration/authority/DEK frameworks, test-only
+compatibility producers, source bodies, another search store, or dependencies for removed APIs.
 
-Remove the generic per-update plan/fingerprint/receipt/readback platform and permanent `OPERATIONS`
-archive. Its 65,536-operation baseline cap must not become a lifetime limit on a working root.
-Only real pending external work and a bounded retry window where needed belong in recovery state.
-
-A successful abort before commit means the local writes were rolled back. A failed commit or possible
-external Qdrant effect is a different case. Do not demand recovery receipts for every cancelled read.
-
-The shared publication owner uses actual persistent pending/visible transactions here.
-`publication_codec::cas` is a pure floor check, not durable commit; retire its duplicate FileJournal
-and daemon publication path after transferring useful behavior.
-
-## Storage boundary
-
-Source bodies, prepared text/maps, vectors, postings and query/ranking history do not belong in control
-tables. Immutable objects live with the revision/preparation owner; Qdrant owns indexed retrieval.
-
-The new application may reject an unsupported old root before writing and leave it intact. General
-migration staging/cutover/rollback, old-format codecs and a new export framework are not prerequisites.
-Legacy source schemas explain existing code; the current recipe does not preserve their retired requirements.
-
-Keep actual format/transaction/source-reference/publication consistency and actionable scoped errors.
-Test committed-state reopen, abort, genuine unknown outcomes and bounded retry-state retirement.
-Delete old ledger/migration fixtures with their obsolete mechanism; no byte-stable receipt output or
-prescribed static gate is required.
+Source-only checks do not establish native handle behavior, cancellation recovery or runtime qualification.

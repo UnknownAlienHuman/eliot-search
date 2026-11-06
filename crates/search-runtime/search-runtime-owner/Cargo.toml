@@ -11,10 +11,6 @@ readme = "README.md"
 path = "src/lib.rs"
 
 [dependencies]
-search-contracts.workspace = true
-search-domain.workspace = true
-search-ports.workspace = true
-search-config.workspace = true
 search-control-redb.workspace = true
 tempfile = { version = "=3.27.0", default-features = false }
 

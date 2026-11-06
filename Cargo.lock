@@ -300,66 +300,14 @@ checksum = "252afb9ae5eaa683babdc6a068b3f5726eb19e05070c731f9b2a23a7c3e8ed34"
 [[package]]
 name = "eliot-search"
 version = "0.0.0"
-dependencies = [
- "blake3",
- "search-config",
- "search-contracts",
- "search-os-secrets-windows",
- "search-ports",
- "search-provider-client",
- "search-provider-protocol",
- "search-provider-transport-windows",
-]
 
 [[package]]
 name = "eliot-searchd"
 version = "0.0.0"
 dependencies = [
- "blake3",
- "search-access",
- "search-candidate-validator",
- "search-code-enricher",
- "search-comparator",
- "search-config",
- "search-continuation",
- "search-contracts",
- "search-control-redb",
- "search-domain",
- "search-epoch-pins",
- "search-eval",
- "search-exact",
- "search-handles",
- "search-index-reclaimer",
- "search-lexical",
- "search-materializer",
- "search-os-secrets",
- "search-os-secrets-windows",
- "search-overlay",
- "search-point-identity",
- "search-ports",
- "search-projection-planner",
- "search-provider-protocol",
- "search-publication",
- "search-qdrant-bridge",
- "search-qdrant-supervisor",
- "search-query-planner",
- "search-result-projector",
- "search-retention",
- "search-retrieval-executor",
- "search-revision-store",
  "search-runtime-owner",
- "search-safe-reader",
- "search-source-admission",
- "search-source-identity",
- "search-source-provenance",
- "search-source-reconcile",
- "search-source-registry",
- "search-subject-resolver",
- "search-unitizer",
  "serde",
- "tokio",
  "toml",
- "zeroize",
 ]
 
 [[package]]
@@ -908,15 +856,6 @@ dependencies = [
 
 [[package]]
 name = "redb"
-version = "2.6.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8eca1e9d98d5a7e9002d0013e18d5a9b000aee942eb134883a82f06ebffb6c01"
-dependencies = [
- "libc",
-]
-
-[[package]]
-name = "redb"
 version = "4.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8b317ef681e18f6091efbfab532eaf924a135c492d9d0299d0fbfae07e92a39b"
@@ -1109,13 +1048,7 @@ dependencies = [
 name = "search-control-redb"
 version = "0.0.0"
 dependencies = [
- "redb 2.6.3",
- "redb 4.5.0",
- "search-config",
- "search-contracts",
- "search-domain",
- "search-ports",
- "sha2",
+ "redb",
 ]
 
 [[package]]
@@ -1387,11 +1320,7 @@ dependencies = [
 name = "search-runtime-owner"
 version = "0.0.0"
 dependencies = [
- "search-config",
- "search-contracts",
  "search-control-redb",
- "search-domain",
- "search-ports",
  "tempfile",
 ]
 

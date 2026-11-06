@@ -14,35 +14,5 @@ readme = "README.md"
 name = "eliot-search"
 path = "src/entry.rs"
 
-# Legacy implementations are harness-only. Their CLI main is never run.
-[[test]]
-name = "eliot-search-snapshot"
-path = "src/main.rs"
-harness = true
-test = true
-
-[features]
-default = []
-# Retains the obsolete address/token-file CLI only for existing process fixtures.
-# Final product startup must never enable or fall back to this feature.
-legacy-loopback-harness = ["search-provider-client/legacy-loopback-compatibility"]
-
-[dependencies]
-search-provider-client.workspace = true
-search-contracts.workspace = true
-search-ports.workspace = true
-search-config.workspace = true
-search-provider-protocol.workspace = true
-# Pairing/envelope proofs for the canonical provider client (T19). Exact pin
-# matches the daemon (`bins/eliot-searchd`); keyed BLAKE3 only, no storage.
-blake3 = { version = "=1.8.2", default-features = false, features = ["std", "pure"] }
-
-[target.'cfg(windows)'.dependencies]
-# Concrete canonical pipe owner; framing/pairing remain in the typed engine.
-search-provider-transport-windows.workspace = true
-# Concrete current-user Credential Manager effect owner. The client supplies
-# only the canonical locator digest; no token file or caller-selected target.
-search-os-secrets-windows = { path = "../../crates/search-runtime/search-os-secrets-windows" }
-
 [lints]
 workspace = true

@@ -17,7 +17,7 @@ use std::time::Instant;
 use search_control_redb::plain_control::{
     initialize_plain_control, inspect_plain_control, plain_control_is_empty, PlainControlError,
 };
-use tempfile::NamedTempFile;
+use tempfile::Builder;
 
 const MANIFEST_BYTES: &[u8] = b"format = \"eliot-plain-root\"\nversion = 1\n";
 const INIT_MARKER_BYTES: &[u8] = b"eliot-plain-root-initializing-v1\n";
@@ -26,6 +26,8 @@ const MAX_CONTROL_ENTRIES: usize = 16;
 const MAX_MANIFEST_BYTES: u64 = 4096;
 const MAX_MARKER_BYTES: u64 = 256;
 const ARCHIVE_COMPLETE_MARKER: &str = "archive.complete";
+const INIT_MARKER_STAGE: &str = "root.initializing.stage";
+const MANIFEST_STAGE: &str = "root.toml.stage";
 
 /// Stable lock filename inside the selected root.
 pub const LOCK_FILE: &str = "root.lock";
@@ -241,7 +243,7 @@ fn check_absolute(path: &Path) -> PlainRootResult<()> {
     Ok(())
 }
 
-fn io_error(error: std::io::Error) -> PlainRootError {
+fn io_error(error: &std::io::Error) -> PlainRootError {
     match error.kind() {
         std::io::ErrorKind::AlreadyExists => PlainRootError::AlreadyExists,
         std::io::ErrorKind::WouldBlock => PlainRootError::Busy,
@@ -251,10 +253,10 @@ fn io_error(error: std::io::Error) -> PlainRootError {
 
 fn after_io<T>(result: std::io::Result<T>, operation: OperationContext<'_>) -> PlainRootResult<T> {
     operation.check()?;
-    result.map_err(io_error)
+    result.map_err(|error| io_error(&error))
 }
 
-fn control_error(error: PlainControlError) -> PlainRootError {
+const fn control_error(error: PlainControlError) -> PlainRootError {
     match error {
         PlainControlError::Cancelled => PlainRootError::Cancelled,
         PlainControlError::Deadline => PlainRootError::Deadline,
@@ -276,7 +278,7 @@ fn path_kind(path: &Path, operation: OperationContext<'_>) -> PlainRootResult<Op
         }
         Err(error) => {
             operation.check()?;
-            return Err(io_error(error));
+            return Err(io_error(&error));
         }
     };
     operation.check()?;
@@ -310,7 +312,7 @@ fn read_directory_names(
         let Some(entry) = next else {
             break;
         };
-        let entry = entry.map_err(io_error)?;
+        let entry = entry.map_err(|error| io_error(&error))?;
         if names.len() == maximum {
             return Err(PlainRootError::TooLarge);
         }
@@ -329,7 +331,7 @@ fn directory_is_empty(path: &Path, operation: OperationContext<'_>) -> PlainRoot
     match next {
         None => Ok(true),
         Some(Ok(_)) => Ok(false),
-        Some(Err(error)) => Err(io_error(error)),
+        Some(Err(error)) => Err(io_error(&error)),
     }
 }
 
@@ -383,6 +385,29 @@ fn contains_name(names: &[OsString], name: &str) -> bool {
     names.iter().any(|candidate| candidate == OsStr::new(name))
 }
 
+fn metadata_stage_matches(
+    path: &Path,
+    expected: &[u8],
+    allow_partial: bool,
+    operation: OperationContext<'_>,
+) -> PlainRootResult<bool> {
+    match path_kind(path, operation)? {
+        None => return Ok(true),
+        Some(EntryKind::File) => {}
+        Some(EntryKind::Directory | EntryKind::Other) => return Ok(false),
+    }
+    let maximum = u64::try_from(expected.len()).map_err(|_| PlainRootError::TooLarge)?;
+    Ok(
+        read_optional_bounded(path, maximum, operation)?.is_none_or(|contents| {
+            if allow_partial {
+                expected.starts_with(&contents)
+            } else {
+                contents == expected
+            }
+        }),
+    )
+}
+
 fn root_entries_are_supported(
     root: &Path,
     names: &[OsString],
@@ -419,7 +444,7 @@ fn control_is_empty(path: &Path, operation: OperationContext<'_>) -> PlainRootRe
     result.map_err(control_error)
 }
 
-fn classify_control_failure(error: PlainRootError) -> Option<PlainRootStatus> {
+const fn classify_control_failure(error: PlainRootError) -> Option<PlainRootStatus> {
     match error {
         PlainRootError::Busy => Some(PlainRootStatus::Busy),
         PlainRootError::Corrupt => Some(PlainRootStatus::Corrupt),
@@ -483,12 +508,14 @@ fn classify_committed_root(
     names: &[OsString],
     operation: OperationContext<'_>,
 ) -> PlainRootResult<PlainRootStatus> {
-    const ALLOWED: [&str; 5] = [
+    const ALLOWED: [&str; 7] = [
         LOCK_FILE,
         MANIFEST_FILE,
         INIT_MARKER,
         OBJECT_DIR,
         CONTROL_DIR,
+        INIT_MARKER_STAGE,
+        MANIFEST_STAGE,
     ];
     if names
         .iter()
@@ -519,6 +546,20 @@ fn classify_committed_root(
         if marker != INIT_MARKER_BYTES {
             return Ok(PlainRootStatus::Unsupported);
         }
+    }
+    if (contains_name(names, INIT_MARKER_STAGE) || contains_name(names, MANIFEST_STAGE))
+        && !contains_name(names, INIT_MARKER)
+    {
+        return Ok(PlainRootStatus::Unsupported);
+    }
+    if !metadata_stage_matches(
+        &root.join(INIT_MARKER_STAGE),
+        INIT_MARKER_BYTES,
+        false,
+        operation,
+    )? || !metadata_stage_matches(&root.join(MANIFEST_STAGE), MANIFEST_BYTES, false, operation)?
+    {
+        return Ok(PlainRootStatus::Unsupported);
     }
 
     if !contains_name(names, LOCK_FILE) {
@@ -566,10 +607,7 @@ fn classify_committed_root(
     }
     match inspect_control_format(&control_path, operation) {
         Ok(()) => Ok(PlainRootStatus::Current),
-        Err(error) => match classify_control_failure(error) {
-            Some(status) => Ok(status),
-            None => Err(error),
-        },
+        Err(error) => classify_control_failure(error).map_or(Err(error), Ok),
     }
 }
 
@@ -579,6 +617,15 @@ fn classify_incomplete_root(
     operation: OperationContext<'_>,
     probe_incomplete: bool,
 ) -> PlainRootResult<PlainRootStatus> {
+    const ALLOWED: [&str; 6] = [
+        LOCK_FILE,
+        INIT_MARKER,
+        OBJECT_DIR,
+        CONTROL_DIR,
+        INIT_MARKER_STAGE,
+        MANIFEST_STAGE,
+    ];
+
     if names.len() == 1 && contains_name(names, LOCK_FILE) {
         return if required_kind(&root.join(LOCK_FILE), EntryKind::File, operation)? {
             Ok(PlainRootStatus::IncompleteInitialization)
@@ -587,10 +634,25 @@ fn classify_incomplete_root(
         };
     }
     if !contains_name(names, INIT_MARKER) {
-        return Ok(PlainRootStatus::Unsupported);
+        // Before marker publication, only the stable lock and the fixed
+        // marker stage may exist. Its bytes must be an exact prefix of the
+        // real marker, including the zero-byte create-before-write case.
+        return if names.len() == 2
+            && contains_name(names, LOCK_FILE)
+            && contains_name(names, INIT_MARKER_STAGE)
+            && required_kind(&root.join(LOCK_FILE), EntryKind::File, operation)?
+            && metadata_stage_matches(
+                &root.join(INIT_MARKER_STAGE),
+                INIT_MARKER_BYTES,
+                true,
+                operation,
+            )? {
+            Ok(PlainRootStatus::IncompleteInitialization)
+        } else {
+            Ok(PlainRootStatus::Unsupported)
+        };
     }
 
-    const ALLOWED: [&str; 4] = [LOCK_FILE, INIT_MARKER, OBJECT_DIR, CONTROL_DIR];
     if names
         .iter()
         .any(|name| !ALLOWED.iter().any(|allowed| name == OsStr::new(allowed)))
@@ -600,11 +662,19 @@ fn classify_incomplete_root(
 
     let marker = match read_optional_bounded(&root.join(INIT_MARKER), MAX_MARKER_BYTES, operation) {
         Ok(Some(bytes)) => bytes,
-        Ok(None) => return Ok(PlainRootStatus::Unsupported),
-        Err(PlainRootError::Unsupported) => return Ok(PlainRootStatus::Unsupported),
+        Ok(None) | Err(PlainRootError::Unsupported) => return Ok(PlainRootStatus::Unsupported),
         Err(error) => return Err(error),
     };
     if marker != INIT_MARKER_BYTES {
+        return Ok(PlainRootStatus::Unsupported);
+    }
+    if !metadata_stage_matches(
+        &root.join(INIT_MARKER_STAGE),
+        INIT_MARKER_BYTES,
+        false,
+        operation,
+    )? || !metadata_stage_matches(&root.join(MANIFEST_STAGE), MANIFEST_BYTES, true, operation)?
+    {
         return Ok(PlainRootStatus::Unsupported);
     }
     if !contains_name(names, LOCK_FILE) {
@@ -645,23 +715,14 @@ fn classify_incomplete_root(
                 return Ok(PlainRootStatus::Unsupported);
             }
             let control_path = control_dir.join(CONTROL_DB_FILE);
-            if file_length(&control_path, operation)?.unwrap_or_default() != 0 {
-                match inspect_control_format(&control_path, operation) {
-                    Ok(()) => {}
+            if probe_incomplete && file_length(&control_path, operation)?.unwrap_or_default() != 0 {
+                match control_is_empty(&control_path, operation) {
+                    Ok(true) => {}
+                    Ok(false) => return Ok(PlainRootStatus::Corrupt),
                     Err(error) => match classify_control_failure(error) {
                         Some(status) => return Ok(status),
                         None => return Err(error),
                     },
-                }
-                if probe_incomplete {
-                    match control_is_empty(&control_path, operation) {
-                        Ok(true) => {}
-                        Ok(false) => return Ok(PlainRootStatus::Corrupt),
-                        Err(error) => match classify_control_failure(error) {
-                            Some(status) => return Ok(status),
-                            None => return Err(error),
-                        },
-                    }
                 }
             }
         }
@@ -670,7 +731,7 @@ fn classify_incomplete_root(
     Ok(PlainRootStatus::IncompleteInitialization)
 }
 
-fn status_error(status: PlainRootStatus) -> PlainRootError {
+const fn status_error(status: PlainRootStatus) -> PlainRootError {
     match status {
         PlainRootStatus::Absent => PlainRootError::Absent,
         PlainRootStatus::Empty | PlainRootStatus::IncompleteInitialization => {
@@ -725,7 +786,7 @@ fn open_lock_file(
                         .open(&lock_path);
                     after_io(opened, operation)?
                 }
-                Err(error) => return Err(io_error(error)),
+                Err(error) => return Err(io_error(&error)),
             };
             operation.check()?;
             Ok(file)
@@ -745,7 +806,7 @@ fn acquire_lock(
     match result {
         Ok(()) => Ok(file),
         Err(TryLockError::WouldBlock) => Err(PlainRootError::Busy),
-        Err(TryLockError::Error(error)) => Err(io_error(error)),
+        Err(TryLockError::Error(error)) => Err(io_error(&error)),
     }
 }
 
@@ -796,8 +857,57 @@ pub fn inspect_plain(
     })
 }
 
+// Callers hold root.lock and have reclassified the exact initialization
+// layout. A fixed basename alone never authorizes removing a stage.
+fn remove_metadata_stage(
+    path: &Path,
+    expected: &[u8],
+    allow_partial: bool,
+    operation: OperationContext<'_>,
+) -> PlainRootResult<()> {
+    if !metadata_stage_matches(path, expected, allow_partial, operation)? {
+        return Err(PlainRootError::Unsupported);
+    }
+    remove_known_file(path, operation)
+}
+
+fn metadata_stages_present(root: &Path, operation: OperationContext<'_>) -> PlainRootResult<bool> {
+    Ok(
+        path_kind(&root.join(INIT_MARKER_STAGE), operation)?.is_some()
+            || path_kind(&root.join(MANIFEST_STAGE), operation)?.is_some(),
+    )
+}
+
+fn cleanup_complete_metadata_stages(
+    root: &Path,
+    operation: OperationContext<'_>,
+) -> PlainRootResult<()> {
+    if !metadata_stages_present(root, operation)? {
+        return Ok(());
+    }
+    let marker = read_optional_bounded(&root.join(INIT_MARKER), MAX_MARKER_BYTES, operation)?;
+    let manifest = read_optional_bounded(&root.join(MANIFEST_FILE), MAX_MANIFEST_BYTES, operation)?;
+    if marker.as_deref() != Some(INIT_MARKER_BYTES)
+        || manifest.as_deref() != Some(MANIFEST_BYTES)
+        || !metadata_stage_matches(
+            &root.join(INIT_MARKER_STAGE),
+            INIT_MARKER_BYTES,
+            false,
+            operation,
+        )?
+        || !metadata_stage_matches(&root.join(MANIFEST_STAGE), MANIFEST_BYTES, false, operation)?
+    {
+        return Err(PlainRootError::Unsupported);
+    }
+    // Validate both stages before deleting either one.
+    remove_known_file(&root.join(INIT_MARKER_STAGE), operation)?;
+    remove_known_file(&root.join(MANIFEST_STAGE), operation)?;
+    sync_parent_directory(&root.join(MANIFEST_FILE), operation)
+}
+
 fn publish_noclobber(
     destination: &Path,
+    stage_name: &str,
     bytes: &[u8],
     maximum: u64,
     operation: OperationContext<'_>,
@@ -805,17 +915,26 @@ fn publish_noclobber(
     if u64::try_from(bytes.len()).map_err(|_| PlainRootError::TooLarge)? > maximum {
         return Err(PlainRootError::TooLarge);
     }
+    let parent = destination.parent().ok_or(PlainRootError::InvalidPath)?;
+    let stage_path = parent.join(stage_name);
     if let Some(existing) = read_optional_bounded(destination, maximum, operation)? {
-        return if existing == bytes {
-            Ok(())
-        } else {
-            Err(PlainRootError::AlreadyExists)
-        };
+        if existing != bytes {
+            return Err(PlainRootError::AlreadyExists);
+        }
+        remove_metadata_stage(&stage_path, bytes, false, operation)?;
+        return sync_parent_directory(destination, operation);
     }
 
-    let parent = destination.parent().ok_or(PlainRootError::InvalidPath)?;
+    remove_metadata_stage(&stage_path, bytes, true, operation)?;
     operation.check()?;
-    let mut staged = after_io(NamedTempFile::new_in(parent), operation)?;
+    let mut staged = after_io(
+        Builder::new()
+            .prefix(stage_name)
+            .suffix("")
+            .rand_bytes(0)
+            .tempfile_in(parent),
+        operation,
+    )?;
     operation.check()?;
     after_io(staged.write_all(bytes), operation)?;
     operation.check()?;
@@ -833,17 +952,18 @@ fn publish_noclobber(
     let seek_result = staged.as_file_mut().seek(SeekFrom::Start(0));
     after_io(seek_result, operation)?;
     let mut staged_readback = Vec::with_capacity(bytes.len());
-    let mut reader = staged.as_file_mut().take(
-        u64::try_from(bytes.len())
-            .map_err(|_| PlainRootError::TooLarge)?
-            .checked_add(1)
-            .ok_or(PlainRootError::TooLarge)?,
-    );
-    operation.check()?;
-    let read_result = reader.read_to_end(&mut staged_readback);
-    operation.check()?;
-    read_result.map_err(io_error)?;
-    drop(reader);
+    {
+        let mut reader = staged.as_file_mut().take(
+            u64::try_from(bytes.len())
+                .map_err(|_| PlainRootError::TooLarge)?
+                .checked_add(1)
+                .ok_or(PlainRootError::TooLarge)?,
+        );
+        operation.check()?;
+        let read_result = reader.read_to_end(&mut staged_readback);
+        operation.check()?;
+        read_result.map_err(|error| io_error(&error))?;
+    }
     if staged_readback != bytes {
         return Err(PlainRootError::Corrupt);
     }
@@ -860,7 +980,7 @@ fn publish_noclobber(
             match read_optional_bounded(destination, maximum, operation)? {
                 Some(existing) if existing == bytes => {}
                 Some(_) => return Err(PlainRootError::AlreadyExists),
-                None => return Err(io_error(persistence_error)),
+                None => return Err(io_error(&persistence_error)),
             }
         }
     }
@@ -871,6 +991,9 @@ fn publish_noclobber(
         Some(_) => return Err(PlainRootError::Corrupt),
         None => return Err(PlainRootError::Io),
     }
+    // persist_noclobber may succeed while leaving the original hard link.
+    // Its fixed name and exact completed metadata make that link removable.
+    remove_metadata_stage(&stage_path, bytes, false, operation)?;
     sync_parent_directory(destination, operation)
 }
 
@@ -914,11 +1037,13 @@ fn ensure_initialization_marker(
     operation: OperationContext<'_>,
 ) -> PlainRootResult<()> {
     let marker_path = root.join(INIT_MARKER);
-    match read_optional_bounded(&marker_path, MAX_MARKER_BYTES, operation)? {
-        Some(bytes) if bytes == INIT_MARKER_BYTES => Ok(()),
-        Some(_) => Err(PlainRootError::Unsupported),
-        None => publish_noclobber(&marker_path, INIT_MARKER_BYTES, MAX_MARKER_BYTES, operation),
-    }
+    publish_noclobber(
+        &marker_path,
+        INIT_MARKER_STAGE,
+        INIT_MARKER_BYTES,
+        MAX_MARKER_BYTES,
+        operation,
+    )
 }
 
 fn initialize_control(path: &Path, operation: OperationContext<'_>) -> PlainRootResult<()> {
@@ -949,6 +1074,18 @@ pub fn initialize_plain(
     }
     match status {
         PlainRootStatus::Empty | PlainRootStatus::IncompleteInitialization => {}
+        PlainRootStatus::Current => {
+            if metadata_stages_present(path, operation)? {
+                let _lock = acquire_lock(path, false, operation)?;
+                match classify_root(path, operation, false)? {
+                    PlainRootStatus::Current => {
+                        cleanup_complete_metadata_stages(path, operation)?;
+                    }
+                    other => return Err(status_error(other)),
+                }
+            }
+            return Err(PlainRootError::AlreadyExists);
+        }
         other => return Err(status_error(other)),
     }
 
@@ -976,6 +1113,7 @@ pub fn initialize_plain(
 
     publish_noclobber(
         &path.join(MANIFEST_FILE),
+        MANIFEST_STAGE,
         MANIFEST_BYTES,
         MAX_MANIFEST_BYTES,
         operation,
@@ -1030,7 +1168,7 @@ fn remove_known_file(path: &Path, operation: OperationContext<'_>) -> PlainRootR
             match result {
                 Ok(()) => {}
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-                Err(error) => return Err(io_error(error)),
+                Err(error) => return Err(io_error(&error)),
             }
             Ok(())
         }
@@ -1054,7 +1192,7 @@ fn remove_known_empty_directory(
             match result {
                 Ok(()) => {}
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-                Err(error) => return Err(io_error(error)),
+                Err(error) => return Err(io_error(&error)),
             }
             Ok(())
         }
@@ -1098,6 +1236,13 @@ pub fn discard_incomplete_plain(
         return Err(PlainRootError::WrongState);
     }
 
+    remove_metadata_stage(
+        &path.join(INIT_MARKER_STAGE),
+        INIT_MARKER_BYTES,
+        false,
+        operation,
+    )?;
+    remove_metadata_stage(&path.join(MANIFEST_STAGE), MANIFEST_BYTES, true, operation)?;
     let control_dir = path.join(CONTROL_DIR);
     if path_kind(&control_dir, operation)? == Some(EntryKind::Directory) {
         remove_known_file(&control_dir.join(CONTROL_DB_FILE), operation)?;
