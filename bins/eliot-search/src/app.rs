@@ -392,14 +392,21 @@ fn capture_child(
     settings: &[OsString],
     deadline: Instant,
 ) -> Result<ChildOutput, ChildFailure> {
-    let mut child = Command::new(daemon)
+    let mut process = Command::new(daemon);
+    process
         .arg(command.daemon_flag())
         .args(settings)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|_| ChildFailure::Start)?;
+        .stderr(Stdio::piped());
+    if Instant::now() >= deadline {
+        return Err(ChildFailure::Timeout);
+    }
+    let mut child = process.spawn().map_err(|_| ChildFailure::Start)?;
+    if Instant::now() >= deadline {
+        stop_and_reap(&mut child);
+        return Err(ChildFailure::Timeout);
+    }
 
     let Some(stdout) = child.stdout.take() else {
         stop_and_reap(&mut child);
