@@ -3,7 +3,7 @@
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 
-use std::fs::{self, File, Metadata};
+use std::fs::File;
 use std::io::{self, Read};
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -93,7 +93,8 @@ enum NativeVersion {
     },
 }
 
-fn observe(metadata: &Metadata) -> Result<NativeObservation, SourceReadError> {
+fn observe(file: &File) -> Result<NativeObservation, SourceReadError> {
+    let metadata = file.metadata().map_err(read_error)?;
     if !metadata.is_file() {
         return Err(SourceReadError::NotRegularFile);
     }
@@ -119,12 +120,11 @@ fn observe(metadata: &Metadata) -> Result<NativeObservation, SourceReadError> {
     #[cfg(windows)]
     {
         use std::os::windows::fs::MetadataExt;
-        let volume_serial = metadata
-            .volume_serial_number()
-            .ok_or(SourceReadError::IdentityUnavailable)?;
-        let file_index = metadata
-            .file_index()
-            .ok_or(SourceReadError::IdentityUnavailable)?;
+        let information = winapi_util::file::information(file)
+            .map_err(|_| SourceReadError::IdentityUnavailable)?;
+        let volume_serial = u32::try_from(information.volume_serial_number())
+            .map_err(|_| SourceReadError::IdentityUnavailable)?;
+        let file_index = information.file_index();
         Ok(NativeObservation {
             file_key: NativeFileKey::Windows {
                 volume_serial,
@@ -171,7 +171,7 @@ fn same_handle_read_core(
     cancellation: &AtomicBool,
 ) -> Result<AcquiredFile, SourceReadError> {
     check(deadline, cancellation)?;
-    let before = observe(&file.metadata().map_err(read_error)?)?;
+    let before = observe(file)?;
     if before.byte_length > maximum_bytes {
         return Err(SourceReadError::TooLarge);
     }
@@ -190,7 +190,7 @@ fn same_handle_read_core(
     }
     check(deadline, cancellation)?;
 
-    let after = observe(&file.metadata().map_err(read_error)?)?;
+    let after = observe(file)?;
     if before != after {
         return Err(SourceReadError::ChangedDuringRead);
     }

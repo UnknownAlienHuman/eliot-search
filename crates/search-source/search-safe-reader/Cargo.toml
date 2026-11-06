@@ -13,5 +13,8 @@ path = "src/lib.rs"
 [dependencies]
 search-source-registry.workspace = true
 
+[target."cfg(windows)".dependencies]
+winapi-util = "=0.1.11"
+
 [lints]
 workspace = true
