@@ -55,7 +55,7 @@ Preserve user originals/keys and unpublished branches.
 
 The selected root/control/both-binary closures physically removed 705 obsolete files from base 6a7dfc1c to source ad8cc9e8, approximately 163,000 lines.
 Legacy initializers/producers and exclusive fixtures are deleted, not retained behind cfg(test).
-S1 separately removes 138 net legacy files against merged root base e4632d66; this is independent of the root's 705-file count.
+S1 separately records 138 deleted files against merged root base e4632d66; this is independent of the root's 705-file count.
 Current root operations use the same control/control.redb format through the control owner and redb 4.5.0;
 the old 2.6 implementation is removed. The vendor data-safety patch exposes persistent-savepoint information
 through the native read-only API. [Vendor provenance](../../vendor/redb/ELIOT_VENDOR.md) records that patch.
