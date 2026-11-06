@@ -1,84 +1,53 @@
-# Control state and evidence lookup
+# Plain-root control metadata
 
-Redb stores compact current/published metadata and supplies real read snapshots. Immutable objects hold bodies;
-Qdrant holds derived retrieval projections. This owner creates no generic journal, receipt history or second corpus.
+The retained CONTROL implementation is `src/plain_control.rs`, exported by the minimal `src/lib.rs`.
+Its sole dependency is the directly path-pinned [vendored redb 4.5.0](../../vendor/redb/ELIOT_VENDOR.md), privately
+named `redb_plain`. The former journal, migration, authority, DEK, reference implementations and their exclusive
+tests are physically removed.
 
-## Typed state
+The root owns `control/control.redb`. The current application format is the regular table
+`plain_control_meta`, with the single row `"format_version" -> 1` using string keys and u64 values.
+CONTROL stores no source bodies or retrieval index.
 
-```text
-root/settings/current sources
-current preparation outcomes
-PendingGenerationBuild
-published_sources[g]: source_id -> exact source/prepared refs + selected outcome/gap
-published_evidence[g]: (source_id, point_id) -> complete identity + ObjectRef/representation/range
-CurrentPublishedGeneration
-RetiredCleanup
-```
+## Initialize under root exclusion
 
-Rows are metadata, not source bodies, retrieval text or vectors. Qdrant routing payload nominates the key; the
-pinned evidence row and actual retained reader establish evidence. Source-prefix diff reads are conditional Stage 3B.
+The caller holds root exclusion and the exact unfinished-init marker. Missing files use create-new semantics.
+Existing zero-length files are opened without truncation and checked through their actual opened handle before
+redb creation. Non-zero files are first opened read-only and classified within the empty-probe bound:
 
-## Durable binding versus process view
+The native read-only savepoint predicate must first establish that the same stable system snapshot has no
+persistent savepoints. Any savepoint makes the database nonempty even if earlier user tables have been deleted
+from the current catalogue. Errors propagate and preserve the file.
 
-Durable current stores physical collection/profile and the completed generation's metadata binding. An owned redb
-ReadTransaction is process-local; it is opened/verified after commit and retained by PublishedView, not serialized
-as durable current. Old queries use that same transaction, never fresh latest metadata under an old view label.
+- No regular or multimap tables: clean preformat empty, eligible to finish initialization.
+- Exactly the expected format table and row: formatted empty, accepted without rewriting it.
+- Additional tables or metadata rows: nonempty, preserved and rejected for initialization.
 
-Physical profile excludes request-time k/b. Query captures its separate scoring profile; changing only k/b does
-not mutate current or rebuild. Stage 2/3A has no sequence or arbitrary historical-view lookup service.
+A preformat retry opens the candidate file without truncation and repeats the read-only proof on that exact
+OS file object. A retained handle survives the proof; the read-only database and transaction are explicitly
+closed before the retained handle enters the writer. Its regular-file type and length are checked again.
+There are no concurrent database handles sharing the duplicated handle's locks. The writer aborts any redb
+repair request and checks that its transaction still has no persistent savepoints, regular tables or multimap
+tables before adding the format row. It commits, explicitly closes, then reopens read-only to read back the real
+format marker before the root publishes its manifest.
 
-Long read transactions retain pages. Bound request/window lifetime and publication backlog and measure actual
-retained pages/collections; Arc count is not a byte bound. Last guard drop only wakes cleanup.
+Cancellation or deadline expiry after vendor database creation or before the format transaction commits still
+closes the database. A clean zero-table database remains eligible for an owned retry or discard. Unverifiable,
+unsupported and repair-requiring databases are preserved; no legacy upgrade or generic recovery runs here.
 
-<a id="restartable-generation-input-capture"></a>
-## Complete generation capture
+## Read-only operations
 
-1. Open one consistent read of selected source/preparation outcomes and physical profile.
-2. Copy compact fixed refs/outcomes into target-generation source rows in bounded transactions.
-3. Mark capture complete only after enumeration and validation; interruption beforehand discards that unserved
-   metadata-only target and restarts capture without backend effects.
-4. Derive all later pages and evidence from the complete captured input. Missing/corrupt refs fail, not substitute
-   newer live state. Large uploadable pages use immutable objects, not oversized metadata rows.
-5. Populate unserved target evidence rows in bounded transactions. Do not collect/copy the corpus in the final writer.
+`inspect_plain_control` opens the actual file through redb's maintained read-only backend and looks up the fixed
+format table/key/version. It neither enumerates the catalogue nor imposes a whole-file size limit. Populated
+current databases remain inspectable. This is format verification, not proof of every page's integrity.
 
-An in-memory read transaction alone cannot recover desired input after process death. Stage 2/3A pages use actual
-retrieval_text and deterministic generation-bound IDs; no occurrence matching or validity interval.
+`plain_control_is_empty` is only for unfinished initialization or discard under root exclusion. It accepts both
+clean preformat empty and formatted empty states only after the system retention check. Before that check and
+catalogue enumeration it checks the same opened file used by redb against a 64 MiB ceiling; larger files return
+`ProbeLimit`. Persistent savepoints, additional tables or metadata rows return false. Required format metadata,
+when present as the sole table, must validate. CONTROL uses redb's default `ExclusiveWriter` mode: the vendor
+accessor rejects concurrent-writer modes rather than mixing system and user snapshots.
 
-## Publication commit
-
-After complete backend readiness, including exact schema/point/count and TextQuery canary, and completed staging
-metadata, one bounded transaction compares pending/current guards, switches CurrentPublishedGeneration, adds the
-predecessor cleanup row and clears pending. It does not rewrite every evidence row.
-
-Then open/verify the matching read snapshot and install PublishedView under a short manager lock. Another
-publication waits until installation or recovery completes. No object/backend I/O occurs inside a redb writer.
-[Publication](../search-index-qdrant/search-publication/FUNCTIONS.md) owns effect uncertainty and recovery.
-
-## Query lookup
-
-Resolve returned source_id/point_id in the pinned evidence table; validate identity/profile and read the exact
-object/range. Missing, foreign or conflicting evidence fails closed. Resolve source scope against the same
-published_sources snapshot.
-
-Base source/access population controls candidates and IDF; request-only narrowing is candidate-only. Entire-base
-selection omits redundant base/IDF clauses but preserves request-only filters. Stage 2 needs no filter indexes;
-Stage 3A creates only fields used by real scope clauses. Scope semantics live with the query owner.
-
-## Conditional Stage 3B and cleanup
-
-Only failed Stage 3A budgets justify bounded source-prefix old/new merging and complete-source pending deltas.
-The publisher owns fixed births/closures and exact effect/scoring convergence. Do not add another history store or
-manifest cache. Oversize delta uses a fresh generation or explicit gap.
-
-RetiredCleanup names a whole collection, not point pages/cursors. Remove cleanup/obsolete metadata only after the
-publisher establishes eligibility and exact logical absence with no targetable unresolved attempt. Local immutable
-objects remain stopped-root maintenance's responsibility.
-
-## Removal and verification
-
-Remove generic operation journals, copied ControlSnapshot, input replay, receipt scans, obsolete migration/grant/
-key state and supplied in-memory floors with consumers. Keep direct typed transactions, exact reads and snapshots.
-
-After code run minimal locked check/Clippy for real consumers. Focused cases: interrupted/empty capture, fixed-input
-restart, bounded staging/final commit, minimal routing payload, physical/query separation, old-view binding,
-commit/install gap, concurrent desired-state change, whole-generation cleanup and retained-page growth.
+All operations retain the caller's original absolute deadline and cancellation flag and check them around I/O.
+Typed redb errors map to bounded static codes; I/O failures are not classified as corruption. Native fresh-file
+size, cancellation/retry cases and handle/lock behavior still require the designated runtime verifier's probes.

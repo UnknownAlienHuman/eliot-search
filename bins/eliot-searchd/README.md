@@ -1,14 +1,17 @@
 # eliot-searchd
 
-The intended composition root for one standalone local Search application. The installed binary now captures native
-arguments once and routes directly to the retained handlers. Legacy effect/configuration code and disconnected
-subsystems remain; this is not a default end-to-end product.
+The binary currently provides four plain-root operations: --inspect-data-root, --initialize-data-root,
+--check-existing-root-owner and --discard-incomplete-data-root. Native arguments resolve to typed root state
+before the selected search-runtime-owner operation. Control-format operations use search-control-redb.
 
-[FUNCTIONS.md](FUNCTIONS.md) maps the entrypoints, owners and removal boundary. [AGENTS.md](AGENTS.md) gives local
-editing constraints. Use the [delivery sequence](../../docs/implementation/README.md#delivery-sequence) to select
-one connected change instead of enabling every old feature.
+Source ingestion, preparation, Qdrant publication and framed search are not connected to this binary.
+The removed DIRECT, migration, sealed, scan and loopback routes have no active replacement command here.
+The package defines the installed binary only; there is no feature or library target to enable those routes.
 
-The detailed pre-R055 route/feature audit remains in
-[Git history](https://github.com/UnknownAlienHuman/eliot-search/blob/45ddf887c9e84861b1302334a1f5ecabb263f7f3/bins/eliot-searchd/README.md).
-Recheck current callers at the actual code cut. Current execution/build evidence belongs to the
-[registry](../../docs/audit/ANALYSIS_REGISTRY.md#evidence-status), not copied status assertions here.
+[FUNCTIONS.md](FUNCTIONS.md) describes the actual command path and later composition;
+[AGENTS.md](AGENTS.md) gives editing constraints. Follow the
+[delivery sequence](../../docs/implementation/README.md#delivery-sequence) for the next connected change.
+
+Final root/control integrity and child-pipe fixes require checks at the final source revision.
+The [registry](../../docs/audit/ANALYSIS_REGISTRY.md#evidence-status) records executed scope;
+earlier checks and helper probes are not final-head or installed-baseline qualification.

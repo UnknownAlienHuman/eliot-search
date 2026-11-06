@@ -2,22 +2,23 @@
 
 ## Package register
 
-All **47 remaining explicit workspace members** are listed once below. Inspected base: `f3d71013`;
-Cargo metadata was read on Windows/Linux from that exact revision, then the five removed members were excluded.
-The reverse count includes direct normal/dev/target/optional **manifest edges**, not proof of a running caller.
-Cargo manifests remain the dependency authority; recheck actual dispatch/features before each deletion.
+The 47-member listing and reverse manifest-edge counts originated at f3d71013 after the first package cleanup;
+the counts are historical navigation, not a refreshed dependency census or evidence of runtime consumers.
+Root/control/binary dispositions below now reflect the qualified Windows debug root source ad8cc9e8.
+Other retained Source/materializer/Qdrant packages still require real caller cutovers.
+Cargo manifests remain the dependency authority; inspect actual consumers before deletion.
 [Work register](ANALYSIS_REGISTRY.md#work-register) owns order/status; [code map](../implementation/CODE_MAP.md)
 locates entrypoints. A row is a concrete disposition, not a demand to keep one crate per responsibility.
 
-| Package / actual path | Remaining direct reverse manifest edges | Cut | Required disposition |
+| Package / actual path | Recorded reverse manifest edges | Cut | Required disposition |
 |---|---:|---|---|
 | [search-contracts](../../crates/search-contracts/Cargo.toml) | 44 | S1/U1 | Reduce shared consumed values; delete plan/grant/receipt families with consumers. |
 | [search-domain](../../crates/search-domain/Cargo.toml) | 36 | F1→X1 | Move actual rules to state/effect owners; delete the global algebra. |
 | [search-ports](../../crates/search-ports/Cargo.toml) | 34 | F1→X1 | Replace each real call directly; remove catalogue and crate after last edge. |
 | [search-config](../../crates/search-config/Cargo.toml) | 21 | F1 | Keep typed settings actually read by constructors; remove registry/digests. |
-| [search-runtime-owner](../../crates/search-runtime/search-runtime-owner/Cargo.toml) | 1 | F2 | Keep plain root, one lock and shared file publication; remove owner epochs/keys. |
+| [search-runtime-owner](../../crates/search-runtime/search-runtime-owner/Cargo.toml) | 1 | F2 | Four plain root operations, stable lock and manifest-last publication retained; old owner/key/epoch implementation removed. Windows debug root scope qualified at ad8cc9e8; see registry, not an installed-baseline claim. |
 | [search-os-secrets](../../crates/search-runtime/search-os-secrets/Cargo.toml) | 2 | F2/U1 | Remove public legacy key/pairing callers, then package; preserve user keys. |
-| [search-control-redb](../../crates/search-control-redb/Cargo.toml) | 1 | S1/Q1 | Keep typed current rows/read snapshots; delete journal/replay/receipt platform. |
+| [search-control-redb](../../crates/search-control-redb/Cargo.toml) | 1 | F2; S1/Q1 next | Actual plain-root metadata at control/control.redb uses redb 4.5.0 with the read-only persistent-savepoint safety patch. Old 2.6 journal/migration/receipt implementation removed. Guarded current source rows and publication still need real consumers. |
 | [search-source-admission](../../crates/search-source/search-source-admission/Cargo.toml) | 7 | S1 | Keep bounded selection/exclusions around one read; inline small evaluator. |
 | [search-source-admission-receipt](../../crates/search-source/search-source-admission-receipt/Cargo.toml) | 1 | S1 | Delete with provenance and original-input consumers; no substitute receipt. |
 | [search-source-provenance](../../crates/search-source/search-source-provenance/Cargo.toml) | 4 | S1 | Move real source facts; delete admission archives and this forwarding layer. |
@@ -54,8 +55,8 @@ locates entrypoints. A row is a concrete disposition, not a demand to keep one c
 | [search-eval](../../crates/search-eval/Cargo.toml) | 1 | V1 | Keep real product measurements only; no acceptance receipts or runtime authority. |
 | [search-provider-protocol](../../crates/search-provider-protocol/Cargo.toml) | 4 | U1/X1 | Keep one bounded typed frame; remove pairing/MAC/grant/replay protocol. |
 | [search-provider-client](../../crates/search-provider-client/Cargo.toml) | 1 | U1/X1 | Keep owned-child serviced I/O; remove duplicate clients, discovery and old credentials. |
-| [eliot-searchd](../../bins/eliot-searchd/Cargo.toml) | 0 | F1→M1 | R069 connects one argv capture/direct routing and removes two shadowed dispatch families. Finish consumed settings/root and prune the now-exposed unused support with actual callers. |
-| [eliot-search](../../bins/eliot-search/Cargo.toml) | 0 | F1/U1/X1 | R068 connects one argv capture/direct dispatch and removes five orphan copies. Finish typed settings and the actual serviced client; old handlers still remain. |
+| [eliot-searchd](../../bins/eliot-searchd/Cargo.toml) | 0 | F1/F2; S1 next | Native bootstrap settings and four direct plain-root commands retained. Legacy binary closure, feature routes and exclusive fixtures removed. Windows debug root scope qualified; source/preparation/Qdrant/query handlers remain unconnected. |
+| [eliot-search](../../bins/eliot-search/Cargo.toml) | 0 | F1/F2; U1/X1 next | Four one-shot root subcommands use an owned daemon child with bounded validated output. Old clients/handlers/fixtures removed. ad8cc9e8 CLI deadline delta verified; framed search and live query sessions are future consumers. |
 | [search-os-secrets-windows](../../crates/search-runtime/search-os-secrets-windows/Cargo.toml) | 2 | F2/U1 | Move needed file/OS operations first; remove credential/DPAPI wiring, not user data. |
 | [search-provider-transport-windows](../../crates/search-runtime/search-provider-transport-windows/Cargo.toml) | 2 | U1 | Remove unused listening-pipe route with client imports; stdio uses no second transport. |
 

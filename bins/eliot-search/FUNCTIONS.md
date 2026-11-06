@@ -1,100 +1,96 @@
 # CLI — invocation and bounded presentation
 
-The CLI captures invocation/settings, uses one owned client session and renders typed results. It owns no source
-scope, stores, planning or second process manager. This is a target recipe, not a working-product claim.
+The current CLI is a one-shot root operator. It captures native arguments, selects an owned daemon child and
+validates the child's root response before output. It owns no source scope, stores or query state.
+The framed-query requirements below are future work, not current operator interfaces or qualification claims.
 
 ## Ownership and source seams
 
-Read an adjacent recipe only when its boundary changes:
-
-| Boundary | Owner |
+| Boundary | Current owner or future recipe |
 |---|---|
-| Frames, deadlines and terminal races | [Protocol](../../crates/search-provider-protocol/FUNCTIONS.md) |
-| Child/streams, serviced I/O, cancellation, cleanup | [Client](../../crates/search-provider-client/FUNCTIONS.md) |
-| Pinned paging and emitted-item lifetime | [Query window](../../crates/search-query/search-continuation/FUNCTIONS.md) |
-| Actual receiving handlers | [Daemon](../eliot-searchd/FUNCTIONS.md) |
+| CLI parse, child selection/capture and root response | [src/app.rs](src/app.rs), entered through [src/entry.rs](src/entry.rs) |
+| Receiving root commands and consumed settings | [Daemon](../eliot-searchd/FUNCTIONS.md) |
+| Root lifetime and control format | [Root](../../crates/search-runtime/search-runtime-owner/FUNCTIONS.md), [Control](../../crates/search-control-redb/FUNCTIONS.md) |
+| Future frames and terminal races | [Protocol](../../crates/search-provider-protocol/FUNCTIONS.md) |
+| Future serviced query session and cleanup | [Client](../../crates/search-provider-client/FUNCTIONS.md) |
+| Future query windows and emitted-item lifetime | [Query window](../../crates/search-query/search-continuation/FUNCTIONS.md) |
 
-R068 connects `entry.rs → app::run_main`: one native argv capture and direct command selection, shared local
-help/version, borrowed forwarding arguments and no `maybe_run` interception in the CLI. Its five unlinked command
-copies are deleted from main, not merely from #610. See the [current dispatch map](../../docs/implementation/CODE_MAP.md#existing-dispatch-to-replace).
-
-This is only the invocation increment. Existing effect/line-protocol clients, output handling and daemon routing
-still require their named cutovers. The rest of this file describes that target, not delivered transport behavior.
-The [immutable earlier source audit](https://github.com/UnknownAlienHuman/eliot-search/blob/45ddf887c9e84861b1302334a1f5ecabb263f7f3/bins/eliot-search/FUNCTIONS.md)
-is historical investigation, not a list of additional APIs to restore.
+See the [current dispatch map](../../docs/implementation/CODE_MAP.md#existing-dispatch-to-replace).
+Deleted DIRECT, line-protocol, endpoint and harness implementations are not APIs to restore.
 
 ## Capture and dispatch
 
-Capture args_os/settings once, preserve native paths, and validate help/version/request shape before spawning.
-Create current typed requests directly, not old recipes, grants, endpoint discovery or tab/hex conversions.
-The client immediately owns its child/streams/cleanup guard. A busy root fails without a second installation or
-transport fallback. Never kill an independent daemon.
+Current syntax:
 
-The original deadline covers setup and encoding. Input/control/output remain serviced during work; a synchronous
-public call may wrap that session but cannot replace it with blocking per-command subprocess loops.
+    eliot-search --help
+    eliot-search --version
+    eliot-search inspect-data-root [ROOT] [--data-root ROOT] [--config-file PATH] [--daemon PATH]
+    eliot-search initialize-data-root [ROOT] [--data-root ROOT] [--config-file PATH] [--daemon PATH]
+    eliot-search check-existing-root-owner [ROOT] [--data-root ROOT] [--config-file PATH] [--daemon PATH]
+    eliot-search discard-incomplete-data-root [ROOT] [--data-root ROOT] [--config-file PATH] [--daemon PATH]
+
+The CLI operation comes first. A positional ROOT and --data-root are alternatives, not two overrides.
+Initialization has no external initialization ID. Missing CLI roots may inherit the daemon's consumed
+file/environment layer; see the [daemon settings rules](../eliot-searchd/FUNCTIONS.md#current-entrypoints-and-removal-seams).
+No-argument invocation and standalone help/version return locally without selecting or spawning a daemon.
+
+Daemon selection is --daemon PATH, then ELIOT_SEARCHD_BIN, then a sibling eliot-searchd executable when present,
+otherwise the executable name resolved through PATH. Native path values remain OsString/PathBuf.
+The CLI translates the selected operation to the daemon's matching --operation flag and forwards settings
+without reading configuration or opening the root itself. It never kills an independently started daemon.
 
 ## Modes
 
-One-shot emits a complete bounded terminal response without reusable window/item locators, then cleans its child.
-A live session keeps the same child/streams; Continue/Expand use that session. A new invocation cannot reuse old
-locators. One active data request plus bounded control state is enough; no completed-request archive.
+Current root commands use one child per invocation and return one root snapshot or failure.
+There is no persistent service or reusable query/item locator in this surface.
+
+Future one-shot search must use the final owned-child framed client. A future live session keeps the same
+child/streams for Continue/Expand; another invocation cannot reuse its locators. Add those modes with their
+real producer/consumer, not a temporary transport or compatibility route.
 
 ## Output
 
-Decode and validate the entire terminal frame before displaying cards or locators. Use typed human/JSON/NDJSON
-rendering with proper serialization. Preserve final order, source/revision/representation/location and truthful
-gaps. Optional progress contains no uncommitted result cards.
+The root operator accepts a response matching the requested operation and a closed root-state vocabulary,
+or a bounded daemon error code. It checks child status and output bounds before emitting the response.
+Its response is factual root state, not source readiness, Qdrant connectivity or search availability.
 
-Service captured stderr alongside stdout with a finite diagnostic bound. Exhaustion must not stop draining a
-live child's pipe: discard further diagnostic bytes with a bounded truncation indication, or terminate and reap
-the owned child. Do not wait for exit/stdout with unread piped stderr or use Command::output followed by a late
-size check. Normal interactive mode captures and safely renders diagnostics or discards them; raw inherited
-child stderr is not safe presentation. Output failure ends owned work instead of leaving a child alive.
+Future query output must validate the complete terminal frame before displaying cards or locators.
+Human/JSON/NDJSON rendering must preserve final order, provenance, exact coordinates and truthful gaps.
+Progress must not expose uncommitted result cards. Service stderr alongside stdout with finite capture;
+capture exhaustion must not leave a live pipe undrained. Output failure ends owned work.
 
 ## Untrusted display text
 
-Verified provenance does not make excerpts, paths, labels or child diagnostics safe terminal instructions.
-Treat them as data at the final output boundary, including error paths and progress:
+Current root responses contain closed operation/state/error values, not arbitrary source excerpts.
+Future source, path, label and diagnostic rendering must treat content as data:
 
-- Human output visibly escapes ESC, C0/C1 controls, DEL and Unicode bidi controls. Only the renderer emits
-  layout newlines/tabs or fixed styling; multiline excerpts receive trusted line boundaries/prefixes. Source
-  text cannot inject cursor movement, terminal commands, hyperlinks or a forged diagnostic line.
-- JSON/NDJSON uses a real serializer and preserves decoded field values. Escape terminal-control/bidi characters
-  through its string-escaping/formatter seam, not quote replacement or a second JSON encoder. Embedded source
-  newlines remain inside the serialized string; NDJSON adds exactly its own record delimiter. Never mix raw
-  child stdout/stderr or debug text into the structured result stream.
-- Display escaping is not normalization of stored evidence. Keep retained bytes, source ranges, identity and
-  expansion locators unchanged; never use an escaped/lossy display label as a filesystem path or locator.
-- Bound the rendered/serialized bytes, including escape expansion and diagnostic prefixes, before displaying
-  cards. Do not allocate an unbounded escaped copy or silently shorten a verified excerpt to fit. Rendering
-  failure closes the owned session; it cannot roll back a daemon cursor already committed after wire output.
+- Human output visibly escapes ESC, C0/C1 controls, DEL and Unicode bidi controls. Only the renderer supplies
+  layout and styling; source text cannot inject cursor movement, hyperlinks or forged diagnostic lines.
+- JSON/NDJSON uses a real serializer and preserves decoded field values. Embedded newlines remain inside
+  strings; NDJSON adds its own record delimiter. Never mix raw child diagnostics into structured results.
+- Display escaping must not change retained bytes, coordinates or filesystem locators.
+- Bound serialized bytes including escape expansion. Do not silently shorten a verified excerpt to fit.
 
-Use a small renderer in the existing CLI, not a sanitizer service or a blanket non-ASCII ban. The
-[Microsoft terminal reference](https://learn.microsoft.com/en-us/windows/console/console-virtual-terminal-sequences)
-documents that output control sequences act on the console; checked 2026-10-29. Source-boundary inspection found
-raw line forwarding in `src/public_client.rs::drain_until_terminal` at `46258450`; that is a removal seam,
-not a reproduced source-to-terminal exploit or a claim that the replacement renderer exists.
+Use a small renderer with the consuming query path. The
+[terminal reference](https://learn.microsoft.com/en-us/windows/console/console-virtual-terminal-sequences)
+explains why terminal controls need treatment; it does not establish an exploit in the current root operator.
 
 ## Cleanup and expansion
 
-All exit paths use the client cleanup owner: stop work, bounded best-effort control, close stdin, finite graceful
-allowance, terminate when needed, observe/reap exit. Kill is not reap or rollback. No indefinite input-thread join,
-detached timeout workers or unproven hard OS timing promise. A healthy typed failure is distinct from broken
-framing; the protocol determines session usability.
+Current child completion, output-pipe lifetime, timeout and cleanup behavior require final native verification.
+Do not infer a strict OS timing bound or installed baseline from a helper probe or source-level timeout constant.
 
-Expand names an emitted window item and bounded relative context in its representation. It cannot select arbitrary
-revision offsets, revive expiry or switch revisions. A lost session repeats Search.
+For future framed sessions, all exits close or terminate and reap the owned child. Kill is not reap or rollback.
+Avoid indefinite joins, detached timeout workers and unread piped stderr. A typed terminal failure is distinct
+from broken framing. Expand must name an emitted item and bounded relative context, preserve its revision,
+and reject expiry or independent-invocation reuse.
 
 ## Cutover and verification
 
-Change CLI/client/protocol/daemon consumers together. Remove duplicate parser/launch/endpoint/session routes and
-exclusive fixtures; preserve native-path handling, bounded diagnostics and actual cleanup behavior. Follow the
-[local removal boundary](../../docs/architecture/LOCAL_SCOPE.md#remove-legacy-security-wiring): public key/credential
-wrappers may leave with their last consumers. Preserve user bytes/keys, unpublished work and real OS/file helpers,
-not an unused secret layer or a planned encrypted-storage integration.
+Keep the root operator route direct while adding the next connected source/query path. Follow
+[local scope](../../docs/architecture/LOCAL_SCOPE.md#remove-legacy-security-wiring); preserve user data and
+unpublished work, not obsolete command implementations.
 
-After production changes run minimal locked Rust 1.98 check/Clippy selecting actual binaries, not libraries only.
-Later execution covers terminal-before-display, live cancellation/EOF, two-request paging/expansion, backpressure,
-output failure, cleanup, busy root and independent-invocation locator rejection. Include control/bidi characters
-in excerpts/paths/stderr, newline-bearing fields, escape-expansion limits, stderr after its capture limit and
-unchanged evidence coordinates. Record unrun cases explicitly.
+Run minimal locked Rust 1.98 check/Clippy for the actual binaries after production changes. Record final native
+root/child cases separately. Root operations do not qualify ingestion, publication, queries, live windows or
+installation. Source-backed query and presentation cases belong to their later consuming stage.
