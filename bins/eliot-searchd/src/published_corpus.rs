@@ -75,25 +75,35 @@ fn unit_text<'a>(view: &'a PreparedUtf8<'_>, e: &PointEvidence) -> Result<&'a st
         .ok_or("PUBLICATION_CORRUPT")
 }
 
-fn hydrate_page(
+// One pass retains one verified object and its borrowing decoder view until the
+// source changes. Only one page of transient upload text is accumulated.
+fn visit_pages(
     root: &PlainRootGuard,
     generation: &Generation,
-    page: UploadPage,
+    pages: std::ops::Range<u64>,
     deadline: Instant,
     cancel: &AtomicBool,
-) -> Result<Vec<HydratedPoint>, &'static str> {
+    mut visit: impl FnMut(u64, &[HydratedPoint]) -> Result<(), &'static str>,
+) -> Result<(), &'static str> {
+    let mut number = pages.start;
+    if number >= pages.end {
+        return Ok(());
+    }
+    let path = root.control_path();
+    let page = control::read_upload_page(&path, generation, number, deadline, cancel)
+        .map_err(PublicationError::code)?;
+    let mut request_bytes = page.request_bytes;
+    let mut points = page.points.into_iter().peekable();
     let mut hydrated = Vec::new();
     hydrated
-        .try_reserve_exact(page.points.len())
+        .try_reserve_exact(points.len())
         .map_err(|_| "PUBLICATION_ALLOCATION_FAILED")?;
-    let mut points = page.points.into_iter().peekable();
     while let Some(first) = points.peek() {
         check(deadline, cancel)?;
-        let e = &first.evidence;
         let captured = control::read_generation_source(
-            &root.control_path(),
+            &path,
             generation,
-            e.source_id,
+            first.evidence.source_id,
             deadline,
             cancel,
         )
@@ -114,41 +124,57 @@ fn hydrate_page(
             cancel,
         )
         .map_err(PreparationError::code)?;
-        while points
-            .peek()
-            .is_some_and(|p| p.evidence.source_id == captured.source.source_id)
-        {
-            check(deadline, cancel)?;
-            let point = points.next().ok_or("PUBLICATION_CORRUPT")?;
-            if point.evidence.source_namespace_id != captured.source.source_namespace_id
-                || point.evidence.input != captured.source.object_ref
-                || point.evidence.prepared != artifact
+        loop {
+            while points
+                .peek()
+                .is_some_and(|p| p.evidence.source_id == captured.source.source_id)
             {
+                check(deadline, cancel)?;
+                let point = points.next().ok_or("PUBLICATION_CORRUPT")?;
+                if point.evidence.source_namespace_id != captured.source.source_namespace_id
+                    || point.evidence.input != captured.source.object_ref
+                    || point.evidence.prepared != artifact
+                {
+                    return Err("PUBLICATION_CORRUPT");
+                }
+                let text = unit_text(&view, &point.evidence)?;
+                let mut owned = String::new();
+                owned
+                    .try_reserve_exact(text.len())
+                    .map_err(|_| "PUBLICATION_ALLOCATION_FAILED")?;
+                owned.push_str(text);
+                hydrated.push(HydratedPoint { point, text: owned });
+            }
+            if points.peek().is_some() {
+                break;
+            }
+            let wire = Backend::batch_request_bytes(
+                &generation.collection(),
+                &inputs(&hydrated),
+                deadline,
+                cancel,
+            )
+            .map_err(BackendError::code)?;
+            if request_bytes.is_some_and(|saved| u64::try_from(wire).ok() != Some(saved)) {
                 return Err("PUBLICATION_CORRUPT");
             }
-            let text = unit_text(&view, &point.evidence)?;
-            let mut owned = String::new();
-            owned
-                .try_reserve_exact(text.len())
+            visit(number, &hydrated)?;
+            hydrated.clear();
+            number = number.checked_add(1).ok_or("PUBLICATION_LIMIT")?;
+            if number == pages.end {
+                return Ok(());
+            }
+            check(deadline, cancel)?;
+            let page = control::read_upload_page(&path, generation, number, deadline, cancel)
+                .map_err(PublicationError::code)?;
+            request_bytes = page.request_bytes;
+            points = page.points.into_iter().peekable();
+            hydrated
+                .try_reserve_exact(points.len())
                 .map_err(|_| "PUBLICATION_ALLOCATION_FAILED")?;
-            owned.push_str(text);
-            hydrated.push(HydratedPoint { point, text: owned });
         }
     }
-    let wire = Backend::batch_request_bytes(
-        &generation.collection(),
-        &inputs(&hydrated),
-        deadline,
-        cancel,
-    )
-    .map_err(BackendError::code)?;
-    if page
-        .request_bytes
-        .is_some_and(|saved| u64::try_from(wire).ok() != Some(saved))
-    {
-        return Err("PUBLICATION_CORRUPT");
-    }
-    Ok(hydrated)
+    Err("PUBLICATION_CORRUPT")
 }
 
 fn stage_complete_page(
@@ -361,31 +387,37 @@ fn upload(
     backend
         .verify_schema(&collection, deadline, cancel)
         .map_err(BackendError::code)?;
-    for number in pending.uploaded_pages..pending.generation.page_count {
-        let page = control::read_upload_page(path, &pending.generation, number, deadline, cancel)
+    let generation = pending.generation.clone();
+    visit_pages(
+        root,
+        &generation,
+        pending.uploaded_pages..generation.page_count,
+        deadline,
+        cancel,
+        |number, page| {
+            let revision = control::record_dispatch(
+                path,
+                &pending,
+                PendingOperation::Insert(number),
+                deadline,
+                cancel,
+            )
             .map_err(PublicationError::code)?;
-        let page = hydrate_page(root, &pending.generation, page, deadline, cancel)?;
-        let revision = control::record_dispatch(
-            path,
-            &pending,
-            PendingOperation::Insert(number),
-            deadline,
-            cancel,
-        )
-        .map_err(PublicationError::code)?;
-        settle(
-            path,
-            &pending,
-            PendingOperation::Insert(number),
-            revision,
-            backend.insert_only(&collection, &inputs(&page), deadline, cancel),
-            deadline,
-            cancel,
-        )?;
-        pending = control::load_pending(path, deadline, cancel)
-            .map_err(PublicationError::code)?
-            .ok_or("PUBLICATION_STALE")?;
-    }
+            settle(
+                path,
+                &pending,
+                PendingOperation::Insert(number),
+                revision,
+                backend.insert_only(&collection, &inputs(page), deadline, cancel),
+                deadline,
+                cancel,
+            )?;
+            pending = control::load_pending(path, deadline, cancel)
+                .map_err(PublicationError::code)?
+                .ok_or("PUBLICATION_STALE")?;
+            Ok(())
+        },
+    )?;
     control::load_pending(path, deadline, cancel)
         .map_err(PublicationError::code)?
         .ok_or("PUBLICATION_STALE")
@@ -407,39 +439,44 @@ fn verify_generation(
     let mut canary = None;
     let mut tokenless = true;
     let mut point_count = 0_u64;
-    for number in 0..generation.page_count {
-        check(deadline, cancel)?;
-        let page = control::read_upload_page(path, generation, number, deadline, cancel)
-            .map_err(PublicationError::code)?;
-        let page = hydrate_page(root, generation, page, deadline, cancel)?;
-        backend
-            .verify_points(&collection, &inputs(&page), deadline, cancel)
-            .map_err(BackendError::code)?;
-        for point in &page {
-            tokenless &= !point.text.chars().any(char::is_alphanumeric);
-            if canary.is_none()
-                && let Some(query) = canary_query(&point.text)
-            {
-                backend
-                    .verify_canary(
-                        &collection,
-                        PointInput {
-                            id: point.point.id,
-                            source_id: point.point.evidence.source_id,
-                            retrieval_text: &point.text,
-                        },
-                        query,
-                        deadline,
-                        cancel,
-                    )
-                    .map_err(BackendError::code)?;
-                canary = Some(());
+    visit_pages(
+        root,
+        generation,
+        0..generation.page_count,
+        deadline,
+        cancel,
+        |_, page| {
+            check(deadline, cancel)?;
+            backend
+                .verify_points(&collection, &inputs(page), deadline, cancel)
+                .map_err(BackendError::code)?;
+            for point in page {
+                tokenless &= !point.text.chars().any(char::is_alphanumeric);
+                if canary.is_none()
+                    && let Some(query) = canary_query(&point.text)
+                {
+                    backend
+                        .verify_canary(
+                            &collection,
+                            PointInput {
+                                id: point.point.id,
+                                source_id: point.point.evidence.source_id,
+                                retrieval_text: &point.text,
+                            },
+                            query,
+                            deadline,
+                            cancel,
+                        )
+                        .map_err(BackendError::code)?;
+                    canary = Some(());
+                }
             }
-        }
-        point_count = point_count
-            .checked_add(u64::try_from(page.len()).map_err(|_| "PUBLICATION_LIMIT")?)
-            .ok_or("PUBLICATION_LIMIT")?;
-    }
+            point_count = point_count
+                .checked_add(u64::try_from(page.len()).map_err(|_| "PUBLICATION_LIMIT")?)
+                .ok_or("PUBLICATION_LIMIT")?;
+            Ok(())
+        },
+    )?;
     let remote_count = backend
         .count_exact(&collection, deadline, cancel)
         .map_err(BackendError::code)?;
