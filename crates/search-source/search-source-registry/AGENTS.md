@@ -1,5 +1,5 @@
 # Working on current source values
 
-Keep this package limited to values with actual source/control consumers. Source bytes belong to search-revision-store. Durable current rows and compare-and-set operations belong to search-control-redb. Do not restore receipts, admission provenance, history, replay, batch codecs, migrations, or forwarding exports.
+Keep values limited to actual source/control/unitizer/binary consumers: CurrentSourceRecord, ObjectRef kinds, output-affecting PreparationSettings and shared bounds. Bytes belong to search-revision-store, artifact encoding to unitizer, durable revisions and CAS to CONTROL. Fail-only limits are separate from settings identity. Do not restore receipts, provenance, history, replay, batch codecs, migrations or forwarding exports.
 
 SourceId and SourceNamespaceId are random persisted values. Paths are locators; BLAKE3 digests identify content; NativeFileKey identifies the opened filesystem object. Keep these identities distinct.

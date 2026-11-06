@@ -2,19 +2,23 @@
 
 Current checkpoint, 2026-11-06: Windows debug root operator qualified at source
 ad8cc9e8fa498d43b644246af3b7f4900890317a. S1 source 06bb6877487d7e3caac9d955be855c86dec1a1b5 connects one retained
-file/current row and is qualified for the Windows debug S1 scope. Exact native revisions are recorded below. Preparation
-through verified Qdrant search remains unconnected.
+file/current row and is qualified for the Windows debug S1 scope. P1 candidate d2ccb59638d9802d00933ee578a85f4f657a1980
+connects complete stored preparation/current outcome and actual unit text. SOURCE review, source gate coverage
+and bounded native cases passed; merge is pending. Exact binary scopes are below. Qdrant publication and
+verified search remain unconnected.
 
 <a id="resume"></a>
 <a id="resume-after-interruption"></a>
 ## Next task
 
-**P1: connect the complete stored preparation artifact and its guarded current outcome.** S1 now supplies the
-verified retained ObjectRef and guarded CurrentSourceRecord in the same control/control.redb. Consume verified
-retained UTF-8, produce one preparation product with bounded unit ranges, persist the complete artifact through
-the shared object writer, and install a guarded current preparation outcome. Deliver artifact and outcome
-together; source rows alone do not imply preparation. Q1 then connects actual Qdrant publication; the full
-verified-search product remains unfinished.
+**Q1: connect actual vectorless Qdrant publication after P1 merge.** Consume P1's stored representation,
+bounded unit ranges and captured current outcomes. Follow the retained
+[projection](../../crates/search-index-qdrant/search-projection-planner/FUNCTIONS.md) and
+[publication](../../crates/search-index-qdrant/search-publication/FUNCTIONS.md) recipes: bounded uploadable text/pages,
+actual collection/schema/readback, matching current/evidence commit and installed PublishedView.
+The [lexical](../../crates/search-lexical/FUNCTIONS.md) and
+[bridge](../../crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md) owners select server-side BM25 text
+retrieval without a model/embedding provider. P1 Ready is preparation, not publication; U1 search remains later.
 
 <a id="work-register"></a>
 <a id="delivery-remaining"></a>
@@ -29,8 +33,8 @@ DONE below is the named delivered scope, not completion of the product.
 | F1 / DONE, Windows debug root scope | None | CLI/daemon entry/app; [settings](../../crates/search-config/FUNCTIONS.md) | Consumed native file/environment/CLI root settings and effect-free help/version. |
 | F2 / DONE, Windows debug root scope | F1 | daemon native_root_command; [root](../../crates/search-runtime/search-runtime-owner/FUNCTIONS.md), [control](../../crates/search-control-redb/FUNCTIONS.md) | Four plain root operations, stable exclusion, actual control format and bounded factual output. |
 | S1 / DONE, Windows debug scope | F2 | current daemon/CLI + [source owners](../../crates/search-source/README.md#ownership), root, object store, control | One bounded file read → verified ObjectRef → guarded CurrentSourceRecord; final source 06bb6877 and distinct native scopes below. |
-| P1 / READY | S1 | Materializer/unitizer, shared object writer, control and a real daemon consumer | Complete stored preparation artifact, bounded unit ranges and guarded current outcome, including truthful empty/gap behavior. |
-| Q1 / WAIT | P1 | Control, Qdrant bridge and publisher | Actual build/readback → matching current/evidence state → installed PublishedView. |
+| P1 / VERIFIED, Windows debug scope; merge pending | S1 | Materializer/unitizer, shared object writer, CONTROL and actual prepare-source child consumer | Complete artifact/current outcome with actual stored text/ranges, empty/Gap and guarded CAS; source d2ccb596, distinct binary scopes below. |
+| Q1 / NEXT after P1 merge | P1 | Control, Qdrant bridge and publisher recipes | Actual build/readback → matching current/evidence state → installed PublishedView. |
 | U1 / WAIT | Q1 | CLI app and provider client/protocol owners | Owned-child framed search returning a verified retained excerpt. |
 | R1 / WAIT | U1 | Source reconciliation, control and publication | Restart/inventory convergence and whole-generation lifetime/cleanup. |
 | X1 / WAIT | R1 | Exact/query window and client owners | Retained exact denominator, same-session paging/expansion and expiry. |
@@ -56,6 +60,10 @@ Preserve user originals/keys and unpublished branches.
 The selected root/control/both-binary closures physically removed 705 obsolete files from base 6a7dfc1c to source ad8cc9e8, approximately 163,000 lines.
 Legacy initializers/producers and exclusive fixtures are deleted, not retained behind cfg(test).
 S1 separately records 138 deleted files against merged root base e4632d66; this is independent of the root's 705-file count.
+P1 records 155 deleted files against merged S1 base 278a6b49, counted with --no-renames through d2ccb596, not net
+file loss. Old preparation receipt/V3 APIs and their projection/publication admission, machine/restore callers,
+exclusive fixtures and manifest edges were physically retired. Projection/publication FUNCTIONS.md and AGENTS.md
+remain at their canonical paths as Q1 recipes; no old source/manifests were restored.
 Current root operations use the same control/control.redb format through the control owner and redb 4.5.0;
 the old 2.6 implementation is removed. The vendor data-safety patch exposes persistent-savepoint information
 through the native read-only API. [Vendor provenance](../../vendor/redb/ELIOT_VENDOR.md) records that patch.
@@ -63,6 +71,48 @@ through the native read-only API. [Vendor provenance](../../vendor/redb/ELIOT_VE
 <a id="evidence-status"></a>
 <a id="execution-evidence"></a>
 ## Verification and known blockers
+
+P1 evidence scopes, Windows debug / Rust 1.98.0:
+
+- Sol SOURCE review PASS at exact d2ccb59638d9802d00933ee578a85f4f657a1980, with no unresolved P1/P2.
+  The only source delta from 88e00ef14fcabdfbc9dedc58cc5b47a33859c92a is CLI app request binding:
+  response validation uses the already-parsed SourceId/unit, preserving legal native paths named like flags.
+- Core runtime at 88e00ef, pinned B92E CLI/A74A daemon: original source deleted before first preparation;
+  exact 153600-byte Unicode/CRLF/tab representation reconstructed from all ten complete CLI units and actual
+  stored artifact. Empty produced a real zero-unit artifact; binary returned binary_content with no artifact/unit;
+  a 169-byte script returned one unit without an execution marker. A 64512-byte quote/backslash line returned
+  one complete unit in 129841 stdout bytes, within the derived 397312-byte bound. A separate changed-path case
+  preserved original retained bytes; invalid UTF-8 returned its distinct invalid_utf8 Gap.
+- Independent raw-artifact and native public CONTROL/storage/codec reads verified actual bodies, bindings,
+  ranges and line flags. Missing/corrupt Prepared objects returned exit 2 OBJECT_MISSING/OBJECT_INTEGRITY_FAILURE
+  without rebuilding, live-source fallback or CONTROL changes.
+- The external CONTROL probe exited 0: pure read-only capture left bytes unchanged; actual settings/outcome
+  A-B-A, expected absence-to-present and source-row CAS rejected stale captures. Identical settings/Ready
+  preserved logical revisions; late Gap could not replace Ready. Prepared tags were rejected as Source.
+  Constructed expected-value/registration mismatches were checked separately. Full historical
+  None-to-present-to-None and re-registration transitions are NOT_RUN: no public clear/re-registration mutator
+  exists. Writable rejection/no-op may change physical redb bytes; logical preservation is not byte identity.
+- Patched d2ccb596 CLI C3D5 / unchanged A74A daemon: both relative roots literally --source-id and --unit
+  changed from old exit 2 DAEMON_RESULT_UNKNOWN after durable Ready to exit 0, returning exact 40/35-byte
+  stored units. Normal --unit 1 returned exact 16371 bytes [16371,32742), lines [153,306), matching stored
+  descriptor/body and original slice. Core five fixtures were not rerun with the patched CLI.
+- Focused prep tests passed 4 materializer + 8 unitizer tests. Actual final2 CONTROL/revision strict Clippy
+  completed successfully. All six final4/post-P2 commands exited 0 with zero warnings:
+  candidate-P1-binaries-final4-clippy.log, candidate-P1-daemon-final4-build.log,
+  candidate-P1-cli-final4-build.log, candidate-P2-cli-check.log, candidate-P2-cli-clippy.log and
+  candidate-P2-cli-build.log. The separate
+  cargo +1.98.0 clippy --locked -p search-source-registry --lib --no-deps -- -D warnings at d2ccb596 exited 0;
+  its log is candidate-P1-registry-final-registry-clippy.log. Source gate coverage is complete.
+- Native handoff found all 53 recorded processes ended, no owned process/marker, and five golden fixtures
+  unchanged. Full commands, hashes, PID/exit/output, byte/range comparisons and NOT_RUN boundaries are in
+  C:\Development\Rust\targets\task-p1-native-fixtures\run-20261106-v1\NATIVE-RESULT.md and .json.
+  Build/check logs are in C:\Development\Rust\targets\eliot-search-product-runtime.
+
+Pinned P1 artifact SHA-256 values:
+
+    core 88e CLI  B92EBCC9330177AF199DFE642F402416082226FB3B67A805E12BBB75EFEAD194
+    d2 CLI        C3D50A4CE8379ACE04C03627F37FD189098139B2E06B3F7F3A8AD81DC602099A
+    daemon        A74AAD50C5D8C0F6D2C31612A9828AE5EC289F8EA8EE6414B3C0BEA0159955D6
 
 S1 evidence scopes, Windows debug / Rust 1.98.0:
 
@@ -127,9 +177,9 @@ The ad8 recovery/config artifact SHA-256 values are:
     CLI     473868F3DD18A6D30CE58B6AC19AFEC16E88405891E17603E124134EDA860D3D
     daemon  F71ABD97C1A051709D8F7E8871139EED2F153900A044FF850932C024D60E03D0
 
-Actual process-kill/power-loss recovery, other platforms and installed baseline remain NOT_RUN. Preparation,
-Qdrant publication and verified search remain unconnected. [Quickstart](../../QUICKSTART.md) names the root and
-retained-file commands; S1 is complete only for the bounded Windows debug scope above. The overall project goal remains open.
+Actual process-kill/power-loss recovery, other platforms and installed baseline remain NOT_RUN. Qdrant publication
+and verified search remain unconnected. [Quickstart](../../QUICKSTART.md) names root, retained-file and retained-only
+preparation commands. S1/P1 evidence is limited to the scopes above; the full product goal remains open.
 
 ## Update and finish a task
 

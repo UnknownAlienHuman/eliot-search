@@ -3,7 +3,9 @@
 The four root operator commands are qualified for Windows debug artifacts with Rust 1.98.0 at source
 ad8cc9e8fa498d43b644246af3b7f4900890317a. S1 final Windows debug checks, strict Clippy, builds and basic retained-file
 execution passed at 06bb6877487d7e3caac9d955be855c86dec1a1b5. This is not an installed baseline or a connected Search product.
-See the [exact source and verification scope](docs/audit/ANALYSIS_REGISTRY.md#evidence-status).
+P1 adds retained-only preparation: core native cases ran with 88e00ef binaries; the d2ccb596 CLI passed the
+focused request-binding regressions and a nonzero unit selection using the unchanged daemon/libraries.
+See the [exact source, artifacts and verification scope](docs/audit/ANALYSIS_REGISTRY.md#evidence-status).
 
 ## Root operator commands
 
@@ -48,6 +50,26 @@ the current source row commits. It does not return a prepared artifact, index, q
 [Source ownership](crates/search-source/README.md) defines the retained-reader and stale-CAS boundaries;
 the [registry](docs/audit/ANALYSIS_REGISTRY.md#evidence-status) separates the final 06bb gate/basic run from earlier native scopes.
 
+## Prepare a retained source
+
+Use the source_id returned by retain-file and the same current root:
+
+    eliot-search prepare-source --source-id UUID --data-root "C:\example\root"
+    eliot-search prepare-source --source-id UUID --unit 1 --data-root "C:\example\root"
+    eliot-searchd --prepare-source --source-id UUID --data-root "C:\example\root"
+
+Replace UUID with that actual source_id. Unit ordinals start at zero; omission selects unit 0. The command
+returns the stored artifact/input/settings/revisions and a complete selected unit with text, byte ranges and
+logical-line bounds. An empty artifact has zero units. Binary/invalid UTF-8 returns an explicit bound Gap
+with no artifact/unit. An unavailable ordinal, missing/corrupt retained object or stale completion is an error.
+
+Preparation uses retained objects even after the original path changes or disappears and preserves already
+selected settings. Native proof changed/deleted only private scratch inputs; deleting user originals is not
+a setup step. The 64 KiB complete-unit ceiling is preserved, with 397312 bytes allowed for escaped JSON and
+metadata. This returns stored text, not Qdrant search results or citations.
+[Daemon](bins/eliot-searchd/FUNCTIONS.md#prepare-source-path) and
+[unitizer](crates/search-prep/search-unitizer/FUNCTIONS.md) describe the actual path.
+
 ## File, environment and CLI settings
 
 An explicit UTF-8 TOML file at C:\example\settings\operator.toml may contain:
@@ -86,9 +108,8 @@ the ad8 recovery/config batch and records the exact checked revisions.
 
 ## First persistent path
 
-One explicit file is connected through no-execute acquisition, verified plain ObjectRef storage and a guarded
-CurrentSourceRecord in the same control database. Scoped S1 is complete. Next P1 must produce
-and store the complete preparation artifact and install its guarded current outcome; preparation, Qdrant publication
-and verified search remain unconnected. The later [one-file path](docs/implementation/README.md#2-walking-skeleton--one-file-to-one-cli-result)
-must connect preparation, Qdrant and a retained excerpt through real callers. Retained-file operation evidence
-does not complete that goal or qualify an installed baseline.
+One explicit file connects through no-execute acquisition, verified plain ObjectRef storage and a guarded
+CurrentSourceRecord. prepare-source consumes that retained object, stores the complete representation/ranges and
+installs a guarded current preparation outcome in the same CONTROL file. Next Q1 must connect actual Qdrant
+publication before U1 returns a verified search excerpt. The [one-file path](docs/implementation/README.md#2-walking-skeleton--one-file-to-one-cli-result)
+and installed-baseline qualification remain unfinished.

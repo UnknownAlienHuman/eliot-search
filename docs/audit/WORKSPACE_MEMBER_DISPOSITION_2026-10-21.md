@@ -5,7 +5,8 @@
 The 47-member listing and reverse manifest-edge counts originated at f3d71013 after the first package cleanup;
 the counts are historical navigation, not a refreshed dependency census or evidence of runtime consumers.
 Root/control/binary dispositions below now reflect the qualified Windows debug root source ad8cc9e8.
-The S1 source path is now connected in code and awaits native verification; P1 materialization and later Qdrant owners still require caller cutovers.
+S1 is qualified in its recorded Windows debug scope. P1 connects retained-only preparation/current outcome;
+source gates/native checks passed with exact scopes in the registry; merge is pending and Q1 is next.
 Cargo manifests remain the dependency authority; inspect actual consumers before deletion.
 [Work register](ANALYSIS_REGISTRY.md#work-register) owns order/status; [code map](../implementation/CODE_MAP.md)
 locates entrypoints. A row is a concrete disposition, not a demand to keep one crate per responsibility.
@@ -18,26 +19,26 @@ locates entrypoints. A row is a concrete disposition, not a demand to keep one c
 | [search-config](../../crates/search-config/Cargo.toml) | 21 | F1 | Keep typed settings actually read by constructors; remove registry/digests. |
 | [search-runtime-owner](../../crates/search-runtime/search-runtime-owner/Cargo.toml) | 1 | F2 | Four plain root operations, stable lock and manifest-last publication retained; old owner/key/epoch implementation removed. Windows debug root scope qualified at ad8cc9e8; see registry, not an installed-baseline claim. |
 | [search-os-secrets](../../crates/search-runtime/search-os-secrets/Cargo.toml) | 2 | F2/U1 | Remove public legacy key/pairing callers, then package; preserve user keys. |
-| [search-control-redb](../../crates/search-control-redb/Cargo.toml) | 1 | F2/S1 | Plain-root metadata and new guarded current-source tables share control/control.redb on redb 4.5.0. Existing read-only persistent-savepoint and empty-probe safety remain. S1 runtime verification is pending. |
+| [search-control-redb](../../crates/search-control-redb/Cargo.toml) | historical | F2/S1/P1 | Plain-root metadata, guarded current-source rows and current preparation/settings/outcome CAS share control/control.redb on redb 4.5.0. Native read-only capture and persistent-savepoint/empty-probe safety remain. |
 | search-source-admission | removed in S1 cut | Disconnected pre-release selection and exclusion framework removed with its callers. |
 | search-source-admission-receipt | removed in S1 cut | Receipt-only owner and exclusive fixtures removed. |
 | search-source-provenance | removed in S1 cut | Disconnected provenance and admission-archive owners removed. |
 | search-source-records | removed in S1 cut | Legacy schema, replay codecs, restore formats, and exclusive fixtures removed. |
 | search-source-history | removed in S1 cut | Disconnected revision and registry replay owner removed. |
-| [search-source-registry](../../crates/search-source/search-source-registry/Cargo.toml) | historical | CurrentSourceRecord, ObjectRef, and NativeFileKey values only; control owns durable rows and CAS. |
+| [search-source-registry](../../crates/search-source/search-source-registry/Cargo.toml) | historical | S1/P1 | CurrentSourceRecord, Source/Prepared ObjectRef, NativeFileKey and shared PreparationSettings/bounds; CONTROL owns durable revisions/CAS. |
 | search-source-identity | removed in S1 cut | Disconnected legacy identity/receipt owner removed; current native identity comes from the opened file handle. |
 | search-source-reconcile | removed before R1 | No S1 prerequisite. Future reconciliation remains an R1 work-register obligation after the connected query path. |
 | [search-safe-reader](../../crates/search-source/search-safe-reader/Cargo.toml) | current | One bounded explicit-path read with actual Unix/Windows handle identity and before/after stability checks. |
-| [search-revision-store](../../crates/search-source/search-revision-store/Cargo.toml) | current | One plain immutable source object writer and verified readback; no encrypted/profile API. |
-| [search-materializer](../../crates/search-prep/search-materializer/Cargo.toml) | 4 | P1 | Keep one retained transform and current outcome; no second artifact writer. |
-| [search-unitizer](../../crates/search-prep/search-unitizer/Cargo.toml) | 4 | P1 | Keep one representation plus bounded ranges; no repeated parsing/manifests. |
+| [search-revision-store](../../crates/search-source/search-revision-store/Cargo.toml) | current | S1/P1 | One plain immutable Source/Prepared writer and verified readback with explicit bounds; no encrypted/profile API. |
+| [search-materializer](../../crates/search-prep/search-materializer/Cargo.toml) | historical | P1 | Exact retained UTF-8 and attached line inventory; legacy product/receipt routes retired. |
+| [search-unitizer](../../crates/search-prep/search-unitizer/Cargo.toml) | historical | P1 | Complete stored representation/ranges with borrowed decoder and actual prepare-source consumer; old V3/VerifiedUnitSet APIs retired. |
 | [search-code-enricher](../../crates/search-prep/search-code-enricher/Cargo.toml) | 1 | O1 | Deferred; check actual feature/callers, remove dormant framework, not a promised parser. |
 | [search-lexical](../../crates/search-lexical/Cargo.toml) | 3 | Q1 | Keep consumed text/profile meaning; remove local postings/scoring/alias inflation. |
-| [search-projection-planner](../../crates/search-index-qdrant/search-projection-planner/Cargo.toml) | 2 | Q1 | Move bounded page assembler beside publisher; no public whole-plan/proof model. |
+| [search-projection-planner recipe](../../crates/search-index-qdrant/search-projection-planner/FUNCTIONS.md) | no current package | Q1 | Legacy src/Cargo/fixtures retired in P1. Canonical FUNCTIONS/AGENTS retained; implement bounded real text/page assembly with publication. |
 | [search-point-identity](../../crates/search-index-qdrant/search-point-identity/Cargo.toml) | 3 | Q1 | Keep stateless collision-checked generation IDs; no baseline occurrence registry. |
 | [search-qdrant-supervisor](../../crates/search-index-qdrant/search-qdrant-supervisor/Cargo.toml) | 1 | Q1 | Remove constructor/binding coupling, then crate; server is operator-owned. |
 | [search-qdrant-bridge](../../crates/search-index-qdrant/search-qdrant-bridge/Cargo.toml) | 2 | Q1 | Keep one private SDK client and real I/O; remove qualification/lease/fallback wrappers. |
-| [search-publication](../../crates/search-index-qdrant/search-publication/Cargo.toml) | 1 | Q1/R1 | Keep fixed pending input/current view/cleanup; remove duplicate effect journals. |
+| [search-publication recipe](../../crates/search-index-qdrant/search-publication/FUNCTIONS.md) | no current package | Q1/R1 | Legacy admission/machine/restore src/Cargo/fixtures retired in P1. Canonical FUNCTIONS/AGENTS retained for actual fixed input/current/evidence/view/cleanup implementation. |
 | [search-epoch-pins](../../crates/search-index-qdrant/search-epoch-pins/Cargo.toml) | 5 | R1 | Move minimal view guard/manager to publisher/query; remove generic pin platform. |
 | [search-index-reclaimer](../../crates/search-index-qdrant/search-index-reclaimer/Cargo.toml) | 2 | R1 | Move whole-collection deletion to publisher/bridge; remove point-deletion framework. |
 | [search-access](../../crates/search-query/search-access/Cargo.toml) | 7 | U1/X1 | Inline local source selection; remove grants/security barriers. |
@@ -55,8 +56,8 @@ locates entrypoints. A row is a concrete disposition, not a demand to keep one c
 | [search-eval](../../crates/search-eval/Cargo.toml) | 1 | V1 | Keep real product measurements only; no acceptance receipts or runtime authority. |
 | [search-provider-protocol](../../crates/search-provider-protocol/Cargo.toml) | 4 | U1/X1 | Keep one bounded typed frame; remove pairing/MAC/grant/replay protocol. |
 | [search-provider-client](../../crates/search-provider-client/Cargo.toml) | 1 | U1/X1 | Keep owned-child serviced I/O; remove duplicate clients, discovery and old credentials. |
-| [eliot-searchd](../../bins/eliot-searchd/Cargo.toml) | 0 | F1/F2; S1 next | Native bootstrap settings and four direct plain-root commands retained. Legacy binary closure, feature routes and exclusive fixtures removed. Windows debug root scope qualified; source/preparation/Qdrant/query handlers remain unconnected. |
-| [eliot-search](../../bins/eliot-search/Cargo.toml) | 0 | F1/F2; U1/X1 next | Four one-shot root subcommands use an owned daemon child with bounded validated output. Old clients/handlers/fixtures removed. ad8cc9e8 CLI deadline delta verified; framed search and live query sessions are future consumers. |
+| [eliot-searchd](../../bins/eliot-searchd/Cargo.toml) | 0 | F1/F2/S1/P1 | Root, retain-file and retained-only prepare-source handlers connected; old binary routes/fixtures removed. Qdrant and framed queries remain unconnected. |
+| [eliot-search](../../bins/eliot-search/Cargo.toml) | 0 | F1/F2/S1/P1; U1/X1 next | Same owned child, bounded validated root/source/stored-unit output and parsed request binding. Framed search/live sessions remain future consumers. |
 | [search-os-secrets-windows](../../crates/search-runtime/search-os-secrets-windows/Cargo.toml) | 2 | F2/U1 | Move needed file/OS operations first; remove credential/DPAPI wiring, not user data. |
 | [search-provider-transport-windows](../../crates/search-runtime/search-provider-transport-windows/Cargo.toml) | 2 | U1 | Remove unused listening-pipe route with client imports; stdio uses no second transport. |
 

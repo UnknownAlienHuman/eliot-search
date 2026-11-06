@@ -1,5 +1,5 @@
 # Working on the daemon
 
-The daemon owns native invocation/bootstrap, the four root operations, and the first retain-file operation. Keep the existing root child and root guard path. For retain-file, capture current source state, acquire one bounded file, publish and read back its plain ObjectRef, commit one guarded current row, and emit the result only after commit.
+The daemon owns native invocation/bootstrap, four root operations, retain-file and retained-only prepare-source. Keep the existing root child, root guard and original execution deadline. Follow [FUNCTIONS.md](FUNCTIONS.md): object I/O and stored-artifact decoding precede the short source/preparation CAS; output follows commit.
 
-Do not restore legacy admission, receipt, registry replay, Git, inventory, query, Qdrant, or temporary transport routes. Preserve the existing root/control safety behavior. Runtime qualification is owned by the designated verifier.
+Prepare-source preserves selected settings and emits complete stored text/ranges with the JSON-derived stdout bound. Never reopen the live source or rebuild a missing/corrupt Ready artifact. Do not restore legacy admission, receipts, replay, Git, inventory, query, Qdrant or temporary transport routes. Preserve root/control safety. Runtime qualification belongs to the designated verifier.

@@ -6,8 +6,9 @@ This page owns delivery order and cross-owner values. Use [code map](CODE_MAP.md
 
 ## Connected path
 
-The current binaries expose the four root operator operations and retain-file. The first retained-file/current-row
-part of Stage 2 is connected; preparation, Qdrant publication, framed queries and later stages remain future work.
+The current binaries expose four root operations, retain-file and retained-only prepare-source. Stage 2 connects
+the source/current row and complete stored preparation/current outcome. Qdrant publication, framed queries and
+later stages remain future work; exact native scopes belong in the registry.
 
 ```text
 selected source → stable acquired bytes → immutable ObjectRef/current SourceRecord
@@ -91,13 +92,13 @@ registry; this delivery sequence is not a second status ledger.
 <a id="2-walking-skeleton--one-file-to-one-cli-result"></a>
 ### 2. One file to one CLI result
 
-Coordinator #264. The first S1 slice is connected: one explicit local file → one stable native-handle read → plain ObjectRef publication and verified readback → guarded CurrentSourceRecord in the same control/control.redb → factual CLI result. S1 Windows debug final gates/builds/basic execution passed at 06bb6877; earlier binary and deeper library native outcomes remain separately bound to their revisions in the [registry](../audit/ANALYSIS_REGISTRY.md#evidence-status). P1 is the next ready connected result.
+Coordinator #264. S1 connects one explicit local file → one stable native-handle read → plain ObjectRef publication/readback → guarded CurrentSourceRecord in control/control.redb → factual CLI result.
 
-Next P1 must consume the verified retained input, create one owned UTF-8 preparation product and bounded unit ranges, store the complete prepared artifact through the shared object writer, and install a guarded current preparation outcome. Artifact production and the guarded outcome belong to the same connected slice.
+P1 connects prepare-source --source-id UUID [--unit N] through the existing owned child. It reads verified retained input without reopening the live path, creates exact UTF-8 text and bounded ranges, stores the complete artifact through the shared writer, decodes its stored bytes, then installs a guarded current outcome and returns one complete stored unit. Empty and Gap are explicit. CONTROL preserves selected settings and compares source/registration/input/settings and expected outcome with non-reset revisions. [Owner rules](../../crates/search-control-redb/FUNCTIONS.md#current-preparation) and the [registry](../audit/ANALYSIS_REGISTRY.md#evidence-status) distinguish implementation from exact native/gate scopes.
 
-The rest of Stage 2 continues from that source row through materialization/unitization, a fresh vectorless Qdrant collection, the scoring-text index, InsertOnly/readback/canary, matching current/evidence commit, PublishedView, TextQuery, and a retained excerpt. Upgrade exact Qdrant client/server/schema and real consumers together at that code cut. Use lexical/bridge owner settings and the operator-started local server. A fresh root without a published generation is buildable, not a corrupt root or a successful empty search.
+Next Q1 consumes actual stored text/units into a fresh vectorless Qdrant collection, the scoring-text index, InsertOnly/readback/canary, matching current/evidence commit and PublishedView. U1 then connects TextQuery and a retained excerpt. Upgrade exact Qdrant client/server/schema and real consumers together at that cut. Use lexical/bridge owner settings and the operator-started local server. A fresh root without a published generation is buildable, not a corrupt root or a successful empty search.
 
-The first source command uses the existing root-owned one-shot child. It does not add a temporary line protocol. Live paging/windows arrive in Stage 4. Broad inventory, watchers, encryption, permission systems, point mutation, and cleanup remain later scope. Missing or corrupt retained evidence is not a card. S1 implementation alone does not complete Stage 2 or the product.
+Both source operations use the existing root-owned one-shot child, with no temporary protocol or automatic second preparation route inside retain-file. Live paging/windows arrive in Stage 4. Broad inventory, watchers, point mutation and cleanup remain later scope; encryption/permission platforms are outside local scope. Missing or corrupt retained evidence is not a card. S1/P1 do not complete Stage 2 or the product.
 <a id="3a-fresh-generation-convergence"></a>
 ### 3A. Fresh-generation convergence
 

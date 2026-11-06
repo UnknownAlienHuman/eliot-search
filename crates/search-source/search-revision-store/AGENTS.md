@@ -1,5 +1,5 @@
-# Working on immutable source objects
+# Working on immutable objects
 
-This owner writes and reads exact plain source bytes beneath PlainRootGuard.object_dir. Use the root owner's existing same-parent no-clobber publication method. The acquired buffer moves directly to this writer; compute maintained BLAKE3 over those exact bytes and verify the final object's actual length and digest by readback before the caller commits current source state.
+Use store_object/read_object for exact Source bytes and complete Prepared artifacts beneath PlainRootGuard.object_dir. Borrow the caller's bytes, preserve the 8 MiB Source bound, require the explicit Prepared allowance and independently verify final length/BLAKE3 before current-state installation. Use the existing root no-clobber publisher.
 
 Do not open the mutable source pathname, start a writer transaction across object I/O, overwrite a conflicting object, create keys/ciphers/receipts, or delete prior immutable references. The connected daemon is the actual caller.
