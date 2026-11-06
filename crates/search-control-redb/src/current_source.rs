@@ -8,7 +8,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 
 use redb_plain::{
-    Database, ReadTransaction, ReadableDatabase, ReadableTable, TableDefinition, TableHandle,
+    Database, ReadOnlyDatabase, ReadTransaction, ReadableDatabase, ReadableTable, TableDefinition,
+    TableHandle,
 };
 use search_contracts::{Blake3Digest32, SourceId, SourceNamespaceId};
 use search_source_registry::{
@@ -351,7 +352,8 @@ pub fn capture_current_source(
 ) -> Result<SourceCapture, SourceControlError> {
     check(deadline, cancellation)?;
     let locator = locator_bytes(selected_file)?;
-    let database = Database::open(control_path).map_err(|_| SourceControlError::Database)?;
+    let database =
+        ReadOnlyDatabase::open(control_path).map_err(|_| SourceControlError::Database)?;
     let transaction = database
         .begin_read()
         .map_err(|_| SourceControlError::Database)?;
@@ -544,7 +546,8 @@ fn load_current_source(
     cancellation: &AtomicBool,
 ) -> Result<Option<CurrentSourceRecord>, SourceControlError> {
     check(deadline, cancellation)?;
-    let database = Database::open(control_path).map_err(|_| SourceControlError::Database)?;
+    let database =
+        ReadOnlyDatabase::open(control_path).map_err(|_| SourceControlError::Database)?;
     let transaction = database
         .begin_read()
         .map_err(|_| SourceControlError::Database)?;

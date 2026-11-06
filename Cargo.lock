@@ -1293,8 +1293,10 @@ dependencies = [
 name = "search-safe-reader"
 version = "0.0.0"
 dependencies = [
+ "libc",
  "search-source-registry",
  "winapi-util",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

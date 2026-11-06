@@ -120,6 +120,11 @@ fn observe(file: &File) -> Result<NativeObservation, SourceReadError> {
     #[cfg(windows)]
     {
         use std::os::windows::fs::MetadataExt;
+        use windows_sys::Win32::Storage::FileSystem::FILE_ATTRIBUTE_REPARSE_POINT;
+
+        if metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+            return Err(SourceReadError::NotRegularFile);
+        }
         let information = winapi_util::file::information(file)
             .map_err(|_| SourceReadError::IdentityUnavailable)?;
         let volume_serial = u32::try_from(information.volume_serial_number())
@@ -164,6 +169,60 @@ fn read_error(error: io::Error) -> SourceReadError {
     }
 }
 
+#[cfg(any(unix, windows))]
+fn source_open_error(error: io::Error) -> SourceReadError {
+    #[cfg(windows)]
+    if error
+        .raw_os_error()
+        .and_then(|code| u32::try_from(code).ok())
+        == Some(windows_sys::Win32::Foundation::ERROR_SHARING_VIOLATION)
+    {
+        return SourceReadError::ChangedDuringRead;
+    }
+    #[cfg(unix)]
+    if error.raw_os_error() == Some(libc::ELOOP) {
+        return SourceReadError::NotRegularFile;
+    }
+    if error.kind() == io::ErrorKind::NotFound {
+        SourceReadError::OpenFailed
+    } else {
+        read_error(error)
+    }
+}
+
+fn open_source_file(path: &Path) -> Result<File, SourceReadError> {
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        use windows_sys::Win32::Storage::FileSystem::{
+            FILE_FLAG_OPEN_REPARSE_POINT, FILE_SHARE_READ,
+        };
+
+        // Deny write and delete access for the lifetime of this read handle.
+        std::fs::OpenOptions::new()
+            .read(true)
+            .share_mode(FILE_SHARE_READ)
+            .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT)
+            .open(path)
+            .map_err(source_open_error)
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+
+        std::fs::OpenOptions::new()
+            .read(true)
+            .custom_flags(libc::O_NOFOLLOW)
+            .open(path)
+            .map_err(source_open_error)
+    }
+    #[cfg(not(any(unix, windows)))]
+    {
+        let _ = path;
+        Err(SourceReadError::IdentityUnavailable)
+    }
+}
+
 fn same_handle_read_core(
     file: &mut File,
     maximum_bytes: u64,
@@ -205,8 +264,10 @@ fn same_handle_read_core(
 /// Reads one explicitly selected file through a single opened handle.
 ///
 /// The exact same handle supplies the before/after native identity, size and
-/// change metadata. There is no path-parent admission rule, source execution,
-/// network access, retry, or identity fallback.
+/// change metadata. Windows denies concurrent write/delete access and refuses
+/// opened reparse points; Unix refuses a symbolic link at the final component.
+/// There is no path-parent admission rule, source execution, network access,
+/// retry, or identity fallback.
 pub fn acquire_file(
     path: &Path,
     maximum_bytes: u64,
@@ -217,12 +278,6 @@ pub fn acquire_file(
         return Err(SourceReadError::TooLarge);
     }
     check(deadline, cancellation)?;
-    let mut file = File::open(path).map_err(|error| {
-        if error.kind() == io::ErrorKind::NotFound {
-            SourceReadError::OpenFailed
-        } else {
-            read_error(error)
-        }
-    })?;
+    let mut file = open_source_file(path)?;
     same_handle_read_core(&mut file, maximum_bytes, deadline, cancellation)
 }

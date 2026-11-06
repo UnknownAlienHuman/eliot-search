@@ -10,12 +10,8 @@ use std::time::Instant;
 
 use search_contracts::Blake3Digest32;
 use search_runtime_owner::{PlainRootError, PlainRootGuard};
-use search_source_registry::{
-    MAX_SOURCE_OBJECT_BYTES, ObjectKind, ObjectRef, SOURCE_OBJECT_FORMAT_VERSION,
-};
-
-/// Maximum source-object bytes accepted by this first connected operation.
-pub const MAX_SOURCE_OBJECT_BYTES: u64 = 8 * 1024 * 1024;
+pub use search_source_registry::MAX_SOURCE_OBJECT_BYTES;
+use search_source_registry::{ObjectKind, ObjectRef, SOURCE_OBJECT_FORMAT_VERSION};
 
 /// Closed immutable-object storage failures.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
