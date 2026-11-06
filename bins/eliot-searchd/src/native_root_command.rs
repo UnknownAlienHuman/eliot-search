@@ -4,15 +4,13 @@ use std::process::ExitCode;
 use std::sync::atomic::AtomicBool;
 use std::time::{Duration, Instant};
 
-use search_control_redb::current_source::{
-    SourceControlError, capture_current_source, commit_current_source,
-};
-use search_revision_store::{ObjectStoreError, store_source_bytes};
+use search_control_redb::current_source::{capture_current_source, commit_current_source};
+use search_revision_store::store_source_bytes;
 use search_runtime_owner::{
-    PlainRootError, PlainRootGuard, PlainRootStatus, discard_incomplete_plain, initialize_plain,
-    inspect_plain, open_plain,
+    discard_incomplete_plain, initialize_plain, inspect_plain, open_plain, PlainRootError,
+    PlainRootGuard, PlainRootStatus,
 };
-use search_safe_reader::{MAX_SOURCE_FILE_BYTES, acquire_file};
+use search_safe_reader::{acquire_file, MAX_SOURCE_FILE_BYTES};
 use search_source_registry::CurrentSourceRecord;
 
 use crate::app::{RootCommand, RootInvocation};
@@ -88,7 +86,7 @@ fn emit_source_record(record: &CurrentSourceRecord) {
 
 fn retain_file(
     data_root: &std::path::Path,
-    file_path: std::path::PathBuf,
+    file_path: &std::path::Path,
     deadline: Instant,
 ) -> ExitCode {
     let guard = match open_plain(data_root, deadline, &CANCELLED) {
@@ -96,20 +94,21 @@ fn retain_file(
         Err(error) => return emit_error(error),
     };
     let capture =
-        match capture_current_source(&guard.control_path(), &file_path, deadline, &CANCELLED) {
+        match capture_current_source(&guard.control_path(), file_path, deadline, &CANCELLED) {
             Ok(capture) => capture,
             Err(error) => return emit_source_error(error.code()),
         };
-    let acquired = match acquire_file(&file_path, MAX_SOURCE_FILE_BYTES, deadline, &CANCELLED) {
+    let acquired = match acquire_file(file_path, MAX_SOURCE_FILE_BYTES, deadline, &CANCELLED) {
         Ok(acquired) => acquired,
         Err(error) => return emit_source_error(error.code()),
     };
     let (bytes, file_key, acquired_length) = acquired.into_parts();
-    let object_ref = match store_source_bytes(&guard, bytes, deadline, &CANCELLED) {
+    let object_ref = match store_source_bytes(&guard, bytes.as_slice(), deadline, &CANCELLED) {
         Ok(object_ref) if object_ref.byte_length == acquired_length => object_ref,
         Ok(_) => return emit_source_error("SOURCE_LENGTH_MISMATCH"),
         Err(error) => return emit_source_error(error.code()),
     };
+    drop(bytes);
     let record = match commit_current_source(
         &guard.control_path(),
         capture,
@@ -162,9 +161,9 @@ pub fn run(invocation: RootInvocation, started: Instant) -> ExitCode {
                 Err(error) => emit_error(error),
             }
         }
-        RootCommand::RetainFile => match source_file {
-            Some(file_path) => retain_file(&data_root, file_path, deadline),
-            None => emit_source_error("SOURCE_FILE_REQUIRED"),
-        },
+        RootCommand::RetainFile => source_file.map_or_else(
+            || emit_source_error("SOURCE_FILE_REQUIRED"),
+            |file_path| retain_file(&data_root, &file_path, deadline),
+        ),
     }
 }

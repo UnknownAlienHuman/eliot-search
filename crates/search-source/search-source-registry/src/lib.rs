@@ -20,6 +20,7 @@ pub enum ObjectKind {
 
 impl ObjectKind {
     /// Stable byte used in the current source-row encoding.
+    #[must_use]
     pub const fn tag(self) -> u8 {
         match self {
             Self::Source => 1,
@@ -27,6 +28,7 @@ impl ObjectKind {
     }
 
     /// Decodes a stable object-kind byte.
+    #[must_use]
     pub const fn from_tag(tag: u8) -> Option<Self> {
         match tag {
             1 => Some(Self::Source),
@@ -50,6 +52,7 @@ pub struct ObjectRef {
 
 impl ObjectRef {
     /// Creates a reference to exact source bytes.
+    #[must_use]
     pub const fn source(digest: Blake3Digest32, byte_length: u64) -> Self {
         Self {
             format_version: SOURCE_OBJECT_FORMAT_VERSION,
@@ -81,6 +84,7 @@ pub enum NativeFileKey {
 
 impl NativeFileKey {
     /// Encodes the exact platform key into its fixed current-row representation.
+    #[must_use]
     pub const fn to_bytes(self) -> [u8; 17] {
         let mut bytes = [0_u8; 17];
         match self {
@@ -118,6 +122,7 @@ impl NativeFileKey {
     }
 
     /// Decodes a fixed native-key representation, rejecting unknown tags or padding.
+    #[must_use]
     pub fn from_bytes(bytes: [u8; 17]) -> Option<Self> {
         match bytes[0] {
             1 => {

@@ -40,6 +40,7 @@ pub enum ObjectStoreError {
 
 impl ObjectStoreError {
     /// Stable content-free machine error code.
+    #[must_use]
     pub const fn code(self) -> &'static str {
         match self {
             Self::InvalidReference => "OBJECT_REFERENCE_INVALID",
@@ -99,21 +100,27 @@ fn reference(bytes: &[u8]) -> Result<ObjectRef, ObjectStoreError> {
     Ok(ObjectRef::source(digest, byte_length))
 }
 
-/// Publishes the original acquired allocation and independently verifies its final bytes.
+/// Publishes bytes from the acquired buffer and independently verifies the final object.
+///
+/// # Errors
+///
+/// Returns an [`ObjectStoreError`] if the bytes exceed the object bound,
+/// no-clobber publication fails, read-back verification fails, or cancellation
+/// or the deadline is observed.
 pub fn store_source_bytes(
     root: &PlainRootGuard,
-    bytes: Vec<u8>,
+    bytes: &[u8],
     deadline: Instant,
     cancellation: &AtomicBool,
 ) -> Result<ObjectRef, ObjectStoreError> {
     check(deadline, cancellation)?;
-    let reference = reference(&bytes)?;
+    let reference = reference(bytes)?;
     let name = object_name(reference)?;
     let stage = format!(".{name}.stage");
     root.publish_object_noclobber(
         &name,
         &stage,
-        &bytes,
+        bytes,
         MAX_SOURCE_OBJECT_BYTES,
         deadline,
         cancellation,
@@ -132,6 +139,12 @@ pub fn store_source_bytes(
 }
 
 /// Reads retained source bytes only after verifying their declared length and BLAKE3 digest.
+///
+/// # Errors
+///
+/// Returns an [`ObjectStoreError`] if the reference is invalid, the object is
+/// missing or not a regular file, its bytes fail integrity verification, a
+/// bounded read or allocation fails, or cancellation or the deadline is observed.
 pub fn read_source_object(
     root: &PlainRootGuard,
     reference: ObjectRef,

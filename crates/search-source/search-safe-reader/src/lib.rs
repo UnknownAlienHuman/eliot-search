@@ -9,7 +9,7 @@ use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 
-use search_source_registry::{MAX_SOURCE_OBJECT_BYTES, NativeFileKey};
+use search_source_registry::{NativeFileKey, MAX_SOURCE_OBJECT_BYTES};
 
 /// Maximum bytes accepted by the first whole-file source operation.
 pub const MAX_SOURCE_FILE_BYTES: u64 = MAX_SOURCE_OBJECT_BYTES;
@@ -39,6 +39,7 @@ pub enum SourceReadError {
 
 impl SourceReadError {
     /// Stable content-free machine error code.
+    #[must_use]
     pub const fn code(self) -> &'static str {
         match self {
             Self::NotRegularFile => "SOURCE_NOT_REGULAR_FILE",
@@ -64,6 +65,7 @@ pub struct AcquiredFile {
 
 impl AcquiredFile {
     /// Consumes the result and transfers the original acquired allocation.
+    #[must_use]
     pub fn into_parts(self) -> (Vec<u8>, NativeFileKey, u64) {
         (self.bytes, self.file_key, self.byte_length)
     }
@@ -161,7 +163,7 @@ fn check(deadline: Instant, cancellation: &AtomicBool) -> Result<(), SourceReadE
     Ok(())
 }
 
-fn read_error(error: io::Error) -> SourceReadError {
+fn read_error(error: &io::Error) -> SourceReadError {
     if error.kind() == io::ErrorKind::UnexpectedEof {
         SourceReadError::ChangedDuringRead
     } else {
@@ -186,7 +188,7 @@ fn source_open_error(error: io::Error) -> SourceReadError {
     if error.kind() == io::ErrorKind::NotFound {
         SourceReadError::OpenFailed
     } else {
-        read_error(error)
+        read_error(&error)
     }
 }
 
@@ -268,6 +270,13 @@ fn same_handle_read_core(
 /// opened reparse points; Unix refuses a symbolic link at the final component.
 /// There is no path-parent admission rule, source execution, network access,
 /// retry, or identity fallback.
+///
+/// # Errors
+///
+/// Returns a [`SourceReadError`] if the size bound is invalid, the selected file
+/// cannot be opened or identified as a supported regular file, the file changes
+/// during acquisition, a bounded read or allocation fails, or cancellation or
+/// the deadline is observed.
 pub fn acquire_file(
     path: &Path,
     maximum_bytes: u64,
