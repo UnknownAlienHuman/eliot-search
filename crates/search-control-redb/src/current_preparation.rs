@@ -223,6 +223,74 @@ impl PreparationControlError {
     }
 }
 type Result<T> = std::result::Result<T, PreparationControlError>;
+
+pub(super) fn mark_objects(
+    tx: &redb_plain::ReadTransaction,
+    marks: &mut crate::object_marks::ObjectMarks,
+    deadline: Instant,
+    cancel: &AtomicBool,
+) -> std::result::Result<(), crate::object_marks::MarkError> {
+    use crate::object_marks::MarkError as E;
+    let table = match tx.open_table(PREPARATIONS) {
+        Ok(table) => table,
+        Err(TableError::TableDoesNotExist(_)) => return Ok(()),
+        Err(_) => return Err(E::Database),
+    };
+    let namespace = read_namespace(tx)
+        .map_err(|_| E::Corrupt)?
+        .ok_or(E::Corrupt)?;
+    let mut count = 0_usize;
+    let mut charged = 0_usize;
+    for row in table.iter().map_err(|_| E::Database)? {
+        crate::object_marks::check(deadline, cancel)?;
+        let (key, bytes) = row.map_err(|_| E::Database)?;
+        count = count.checked_add(1).ok_or(E::Limit)?;
+        charged = charged.checked_add(bytes.value().len()).ok_or(E::Limit)?;
+        if count > crate::current_source::MAX_CURRENT_SOURCES
+            || charged > crate::current_source::MAX_CURRENT_SOURCE_BYTES
+        {
+            return Err(E::Limit);
+        }
+        let preparation = decode(bytes.value()).map_err(|_| E::Corrupt)?;
+        if key.value() != preparation.source_id.as_bytes()
+            || preparation.source_namespace_id != namespace
+        {
+            return Err(E::Corrupt);
+        }
+        let source = read_source_by_id(tx, preparation.source_id)
+            .map_err(|_| E::Corrupt)?
+            .ok_or(E::Corrupt)?;
+        if source.source_namespace_id != namespace {
+            return Err(E::Corrupt);
+        }
+        marks.charge(bytes.value().len())?;
+        if let Some(outcome) = preparation.outcome {
+            let current_row_revision = source.row_revision;
+            if outcome.source_row_revision > current_row_revision
+                || outcome.registration_revision > source.registration_revision
+            {
+                return Err(E::Corrupt);
+            }
+            // A stale outcome and a Gap still retain their exact original input.
+            marks.insert(outcome.input, deadline, cancel)?;
+            if let PreparationOutcome::Ready { artifact } = outcome.result {
+                marks.prepared(
+                    artifact,
+                    crate::object_marks::PreparedExpectation {
+                        source_namespace_id: *preparation.source_namespace_id.as_bytes(),
+                        source_id: *preparation.source_id.as_bytes(),
+                        input: outcome.input,
+                        revision_settings: Some((outcome.registration_revision, outcome.settings)),
+                    },
+                    deadline,
+                    cancel,
+                )?;
+            }
+        }
+    }
+    Ok(())
+}
+
 fn check(deadline: Instant, cancel: &AtomicBool) -> Result<()> {
     if cancel.load(Ordering::Relaxed) {
         Err(PreparationControlError::Cancelled)

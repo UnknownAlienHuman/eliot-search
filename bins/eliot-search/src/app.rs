@@ -32,6 +32,7 @@ enum RootCommand {
     PublishPrepared,
     Index,
     Search,
+    CollectObjects,
 }
 
 impl RootCommand {
@@ -46,6 +47,7 @@ impl RootCommand {
             Self::PublishPrepared => "publish-prepared",
             Self::Index => "index",
             Self::Search => "search",
+            Self::CollectObjects => "collect-objects",
         }
     }
 
@@ -60,6 +62,7 @@ impl RootCommand {
             Self::PublishPrepared => "--publish-prepared",
             Self::Index => "--index",
             Self::Search => "--search-stdio",
+            Self::CollectObjects => "--collect-objects",
         }
     }
 }
@@ -169,6 +172,7 @@ enum DaemonResponse<'a> {
     Prepared(&'a str),
     Published(&'a str),
     Indexed(&'a str),
+    Collected(&'a str),
     Error(&'a str),
 }
 
@@ -222,6 +226,7 @@ fn command(value: &OsStr) -> Option<RootCommand> {
         "publish-prepared" => Some(RootCommand::PublishPrepared),
         "index" => Some(RootCommand::Index),
         "search" => Some(RootCommand::Search),
+        "collect-objects" => Some(RootCommand::CollectObjects),
         _ => None,
     }
 }
@@ -240,6 +245,7 @@ fn is_daemon_root_flag(value: &OsStr) -> bool {
                 | "--index"
                 | "--search-stdio"
                 | "--session-stdio"
+                | "--collect-objects"
         )
     )
 }
@@ -930,7 +936,8 @@ fn validated_snapshot(bytes: &[u8], command: RootCommand) -> Option<&str> {
         | RootCommand::PrepareSource
         | RootCommand::PublishPrepared
         | RootCommand::Index
-        | RootCommand::Search => {
+        | RootCommand::Search
+        | RootCommand::CollectObjects => {
             return None;
         }
         RootCommand::Inspect | RootCommand::DiscardIncomplete => &[
@@ -1030,13 +1037,30 @@ fn validated_daemon_error(bytes: &[u8]) -> Option<&str> {
     Some(line)
 }
 
+fn validated_collected(bytes: &[u8]) -> Option<&str> {
+    let line = validated_line(bytes)?;
+    let value: serde_json::Value = serde_json::from_str(line).ok()?;
+    if value.as_object()?.len() != 6
+        || value["operation"] != "collect-objects"
+        || value["state"] != "collected"
+        || value["marked"].as_u64()? != value["verified"].as_u64()?
+    {
+        return None;
+    }
+    value["deleted"].as_u64()?;
+    value["preserved"].as_u64()?;
+    Some(line)
+}
+
 fn validated_response<'a>(
     output: &'a ChildOutput,
     command: RootCommand,
     preparation: &PreparationRequest,
 ) -> Option<DaemonResponse<'a>> {
     if output.stderr.bytes.is_empty() {
-        if matches!(command, RootCommand::Index) {
+        if matches!(command, RootCommand::CollectObjects) {
+            validated_collected(&output.stdout.bytes).map(DaemonResponse::Collected)
+        } else if matches!(command, RootCommand::Index) {
             validated_line(&output.stdout.bytes)
                 .filter(|line| *line == "{\"operation\":\"index\",\"state\":\"refreshed\"}")
                 .map(DaemonResponse::Indexed)
@@ -1075,6 +1099,7 @@ fn print_help() {
         "\n\n",
         "  eliot-search --help\n",
         "  eliot-search --version\n",
+        "  eliot-search collect-objects [ROOT] [--data-root ROOT] [--config-file PATH] [--daemon PATH]\n",
         "  eliot-search session --data-root ROOT [--qdrant-url URL] [--config-file PATH] [--daemon PATH]\n",
         "    stdin/stdout: SessionClientFrame/SessionReply JSON, one object per line\n",
         "  eliot-search inspect-data-root [ROOT] [--data-root ROOT] [--config-file PATH] [--daemon PATH]\n",
@@ -1227,7 +1252,8 @@ pub fn run_main() -> i32 {
             | DaemonResponse::Retained(result)
             | DaemonResponse::Prepared(result)
             | DaemonResponse::Published(result)
-            | DaemonResponse::Indexed(result),
+            | DaemonResponse::Indexed(result)
+            | DaemonResponse::Collected(result),
         ) => (write_line(&mut std::io::stdout().lock(), result), 0),
         (false, DaemonResponse::Error(error)) => (
             write_line(&mut std::io::stderr().lock(), error),

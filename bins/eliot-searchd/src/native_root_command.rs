@@ -530,6 +530,9 @@ pub fn run(invocation: RootInvocation, started: Instant) -> ExitCode {
             |request| index_command(&data_root, index_path.as_deref(), &request, deadline),
         ),
         RootCommand::Search => crate::framed_search::run(&data_root, search_endpoint.as_deref()),
+        RootCommand::CollectObjects => {
+            crate::collect_objects::run(&data_root, deadline, &CANCELLED)
+        }
         RootCommand::Session => {
             crate::framed_search::run_session(&data_root, search_endpoint.as_deref())
         }

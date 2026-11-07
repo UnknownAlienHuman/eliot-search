@@ -9,7 +9,10 @@ mod prepared;
 
 pub use error::PreparationError;
 pub use layout::UnitSpan;
-pub use prepared::{PreparationLimits, PreparedUtf8, decode_prepared_utf8, prepare_utf8};
+pub use prepared::{
+    PreparationLimits, PreparedBinding, PreparedUtf8, decode_prepared_utf8, inspect_prepared_utf8,
+    prepare_utf8,
+};
 
 #[cfg(test)]
 mod tests;

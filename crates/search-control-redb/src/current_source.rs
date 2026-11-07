@@ -36,7 +36,7 @@ const MAX_LOCATOR_BYTES: usize = 32 * 1024;
 const SELECTION_PREFIX: &str = "admitted_selection:";
 /// Maximum current sources accepted by one bounded inventory or publication.
 pub const MAX_CURRENT_SOURCES: usize = 4096;
-const MAX_CURRENT_SOURCE_BYTES: usize = 16 * 1024 * 1024;
+pub(super) const MAX_CURRENT_SOURCE_BYTES: usize = 16 * 1024 * 1024;
 
 pub(super) const SOURCE_STATE: TableDefinition<&str, &[u8]> =
     TableDefinition::new(SOURCE_STATE_NAME);
@@ -803,11 +803,19 @@ fn capture_sources_database(
     let transaction = database
         .begin_read()
         .map_err(|_| SourceControlError::Database)?;
-    if !read_source_schema(&transaction)? {
+    read_sources(&transaction, deadline, cancellation)
+}
+
+fn read_sources(
+    transaction: &ReadTransaction,
+    deadline: Instant,
+    cancellation: &AtomicBool,
+) -> Result<Vec<CurrentSourceRecord>, SourceControlError> {
+    if !read_source_schema(transaction)? {
         return Ok(Vec::new());
     }
 
-    let namespace = read_namespace(&transaction)?.ok_or(SourceControlError::Corrupt)?;
+    let namespace = read_namespace(transaction)?.ok_or(SourceControlError::Corrupt)?;
     let rows = transaction
         .open_table(SOURCE_ROWS)
         .map_err(|_| SourceControlError::Corrupt)?;
@@ -870,6 +878,56 @@ fn capture_sources_database(
     }
     check(deadline, cancellation)?;
     Ok(sources)
+}
+
+pub(super) fn mark_objects(
+    tx: &ReadTransaction,
+    marks: &mut crate::object_marks::ObjectMarks,
+    deadline: Instant,
+    cancel: &AtomicBool,
+) -> Result<(), crate::object_marks::MarkError> {
+    use crate::object_marks::MarkError as E;
+    let mapped = |error| match error {
+        SourceControlError::Deadline => E::Deadline,
+        SourceControlError::Cancelled => E::Cancelled,
+        SourceControlError::Database => E::Database,
+        SourceControlError::InventoryLimit => E::Limit,
+        SourceControlError::UnsupportedSchema => E::Unsupported,
+        _ => E::Corrupt,
+    };
+    let sources = read_sources(tx, deadline, cancel).map_err(mapped)?;
+    for source in sources {
+        let bytes = encode_record(&source).map_err(mapped)?;
+        marks.charge(bytes.len())?;
+        marks.insert(source.object_ref, deadline, cancel)?;
+    }
+    if !read_source_schema(tx).map_err(mapped)? {
+        return Ok(());
+    }
+    let state = tx.open_table(SOURCE_STATE).map_err(|_| E::Corrupt)?;
+    let mut count = 0_usize;
+    let mut charged = 0_usize;
+    for row in state.iter().map_err(|_| E::Database)? {
+        crate::object_marks::check(deadline, cancel)?;
+        let (key, value) = row.map_err(|_| E::Database)?;
+        match key.value() {
+            SCHEMA_VERSION_KEY if value.value() == SOURCE_SCHEMA_VERSION => {}
+            NAMESPACE_KEY if value.value().len() == 16 => {}
+            WANTED_REVISION_KEY if value.value().len() == 8 => {}
+            key if key.starts_with(SELECTION_PREFIX) => {
+                count = count.checked_add(1).ok_or(E::Limit)?;
+                charged = charged
+                    .checked_add(key.len() + value.value().len())
+                    .ok_or(E::Limit)?;
+                if count > MAX_CURRENT_SOURCES || charged > MAX_CURRENT_SOURCE_BYTES {
+                    return Err(E::Limit);
+                }
+                decode_selection(key, value.value()).map_err(mapped)?;
+            }
+            _ => return Err(E::Unsupported),
+        }
+    }
+    Ok(())
 }
 
 fn source_revisions(

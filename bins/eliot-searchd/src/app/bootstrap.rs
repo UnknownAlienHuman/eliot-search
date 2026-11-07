@@ -114,6 +114,7 @@ fn is_command(value: &OsStr) -> Option<RootCommand> {
         "--index" => Some(RootCommand::Index),
         "--search-stdio" => Some(RootCommand::Search),
         "--session-stdio" => Some(RootCommand::Session),
+        "--collect-objects" => Some(RootCommand::CollectObjects),
         _ => None,
     }
 }
