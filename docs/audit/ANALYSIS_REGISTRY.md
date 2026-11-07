@@ -6,20 +6,28 @@ is source-reviewed with changed-owner check/strict Clippy/build gates passed. Th
 FULL_RELEASE_PASS on its stated sampling/evidence basis; this is not DEBUG query, universal peak,
 replacement-workload, platform or whole-product qualification. FIRST RAW at source
 6ced33494e8fb602c0c52ef16fa5d4401cdb8217 retains its source/native scope. Retained DecodedUtf8 at
-c9a5f1c101e8e0828f913edd6c5769499454716f has source/gates and scoped native PASS; X1 remains PARTIAL.
+c9a5f1c101e8e0828f913edd6c5769499454716f has source/gates and scoped native PASS. Window candidate source
+473447afb4f494eb877d3b51f429c9ad1190821f adds the connected session path with source/gates PASS and only the
+Raw runtime scopes below. X1 remains PARTIAL. This candidate checkpoint uses main handoff 9dc2ed98; it does
+not claim the pushed session branch is already merged into main.
 
 <a id="resume"></a>
 <a id="resume-after-interruption"></a>
 ## Next task
 
-**X1 PARTIAL: Raw and retained DecodedUtf8 identity modes are implemented at their recorded scopes.**
-Next implement same-session windows, Continue/Expand and expiry using the existing connection. Extracted has
-no current real producer or implemented route; arbitrary non-UTF-8 needle input remains unsupported. Use the
-[Exact rule](../../crates/search-query/search-exact/FUNCTIONS.md), [selection rule](../../crates/search-query/search-access/FUNCTIONS.md)
-and [window owner](../../crates/search-query/search-continuation/FUNCTIONS.md) beside the actual daemon/client.
-Exact scans the selected pinned published inventory, including retained raw inputs without prepared points;
-it does not substitute latest current source/preparation. Continue/Expand retain that same view/order and
-commit local cursor progress only after complete output. Keep the existing serviced child connection.
+**X1 next: qualify the session-window candidate at source 473447af.** CLI session, OwnedQuerySession and
+daemon --session-stdio are connected for Search/Raw/DecodedUtf8; the current policy is owned once by the
+[window recipe](../../crates/search-query/search-continuation/FUNCTIONS.md#current-consumer-and-usage).
+The [Exact](../../crates/search-query/search-exact/FUNCTIONS.md) and
+[selection](../../crates/search-query/search-access/FUNCTIONS.md) rules keep the committed published inventory
+and original representation. Continue pages only the bounded original prefix; Expand accepts only emitted
+locators. Fixed Open TTL includes work and never renews; cursor commitment follows complete frame flush.
+
+Only two Raw runtime scopes are currently qualified. Held-output deferred Cancel, ranked/Decoded session,
+TTL/EOF/Busy release and paging-boundary qualification remain pending/NOT_RUN, not inferred from SOURCE PASS.
+No new extracted/parser/nonidentity producer is a selected gate before M1. The current real prepared-representation producer is saved
+UTF-8 identity; extracted has no implemented route and arbitrary non-UTF-8 needle input remains unsupported.
+After X1 acceptance, M1 stopped-root archive/import precedes V1 relevance/scale/installed release qualification.
 
 R1's persisted unknown Insert/ABA, postcommit/pre-view interruption and fef held-view exclusion/cleanup are
 separately pinned native evidence. The 9e RELEASE resource run does not relabel those cases. Complete unsampled
@@ -45,7 +53,7 @@ DONE below is the named delivered scope, not completion of the product.
 | Q1 / DONE, Windows debug scope | P1 | Actual daemon publisher, CONTROL and concrete bridge | Full corpus → exact backend/readback/canary → guarded current/evidence → validated PublishedView; source 3c33d831. |
 | U1 / DONE, Windows debug scope | Q1 | CONTROL resolver, daemon/CLI, protocol/client | Read-only verified full retained units/citations; c843 targeted final-pin scope and earlier evidence below. |
 | R1 / ACCEPTED, recorded functional + RELEASE fixed-input scopes | U1 | CLI/daemon index helpers, source CONTROL and publication | Recorded owner gates include unknown Insert/ABA, postcommit boundary, held-query exclusion/cleanup and ordinary-repo-1 RELEASE fixed-input resource PASS; stronger unclaimed boundaries remain below. |
-| X1 / PARTIAL, Raw + DecodedUtf8 | R1 | Exact, framed daemon/client/CLI | Raw Source and saved Prepared UTF-8 identity matching work; next same-session windows/Continue/Expand/expiry. |
+| X1 / PARTIAL, session candidate | R1 | CLI/OwnedQuerySession/daemon window owner | Window code connected; two Raw native scopes passed; remaining mode/lifetime/backpressure/paging qualification is pending. |
 | M1 / WAIT | X1 | Retention and future stopped-root maintenance caller | Conservative collection/archive/import preserving originals. |
 | O1 / DEFERRED | Connected baseline + actual need | [Selected depth](../product/AGENT_ANALYSIS_FRAMEWORK.md#optional-depth) | Add only an actual source-backed consumer; remove unused scaffolds. |
 | V1 / WAIT | X1/M1 shipped paths | [Qualification](../implementation/TEST_CUTOVER.md), #215 | Measured relevance/scale/platform/release and installed-baseline evidence. |
@@ -91,6 +99,26 @@ hydration reuse. No application encryption, grants, OS-secret platform or second
 <a id="evidence-status"></a>
 <a id="execution-evidence"></a>
 ## Verification and known blockers
+
+### Session-window candidate evidence, source 473447af
+
+- Source audit Sol SOURCE PASS; focused locked check/strict Clippy and RELEASE builds exited 0. Entry path:
+  CLI session -> OwnedQuerySession -> daemon --session-stdio, using actual SessionClientFrame/SessionReply.
+  Source implementation is not a blanket runtime result or a claim that current main already contains it.
+- Public Raw flow Open -> client refusal -> valid Expand -> Continue -> Close passed: CLI PID 103172 exit 2,
+  daemon 13692 exit 0, both output EOF and OS absence observed. origin:"client" identifies a local refusal:
+  no corresponding daemon command is written, healthy continuation remains usable and aggregate CLI exit is 2.
+- Direct-server guard plus two late Cancels, three pages and Close passed: helper PID 104060/daemon 23456
+  both exited 0, replies 1..6 arrived exactly once, CONTROL and 16 objects remained unchanged.
+- The first held-output setup did not establish backpressure: the complete 677-byte page queued and no
+  deferred Cancel was sent. Cleanup/unchanged objects are not a passing held-output case; larger setup is pending.
+  A separate fresh UTF-8 fixture hit Qdrant CreateFieldIndex Internal Gridstore os3, with exact cause and
+  index-terminal observer race unknown. Decoded SESSION was not started. These are pending setup/NOT_RUN,
+  not Window FAIL/readiness or a newly established source defect.
+- Held-output deferred Cancel, ranked/Decoded windows, TTL/EOF, Busy release and paging bounds remain
+  unqualified until the native results arrive. X1 PARTIAL, M1 WAIT, V1 unfinished. Do not promote lifecycle
+  source policy, earlier one-shot tests or these two Raw runs into those cases. No parser/extracted/nonidentity
+  route is newly selected as a prerequisite; saved UTF-8 identity is the only current representation producer.
 
 ### Retained DecodedUtf8 evidence, source c9a5f1c1
 

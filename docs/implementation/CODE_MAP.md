@@ -1,6 +1,6 @@
 # Code entrypoints and change map
 
-Current binaries expose root operations, index [PATH], retain-file, prepare-source, publish-prepared, foreground watch, read-only search and Raw/DecodedUtf8 Exact. Native binary and library
+Current binaries expose root operations, index [PATH], retain-file, prepare-source, publish-prepared, foreground watch, read-only search, Raw/DecodedUtf8 Exact and the session-window candidate. Native binary and library
 cases have distinct exact-source scopes in the [registry](../audit/ANALYSIS_REGISTRY.md#evidence-status).
 U1 targeted Windows debug acceptance is at c843171, with earlier transport/budget and initial-publication scopes kept separate.
 The [owner map](README.md#owners) defines responsibilities; a row does not require keeping a crate.
@@ -27,6 +27,8 @@ routes are removed. Check the real binary; package names and retained workspace 
       retain-file --file PATH → same owned child → bounded retained-source response validation → output
       prepare-source          → same owned child → parsed source ID/unit-bound stored-unit validation → output
       publish-prepared        → same owned child → closed generation-state validation → output
+      session                 → line-oriented SessionClientFrame → OwnedQuerySession → --session-stdio
+                              → correlated SessionReply or explicit client-origin refusal → checked finish
       search                  → QueryClient serviced framed child → complete validated terminal → safe output
       exact --raw --literal   → same serviced child with RawExact → validated raw ranges/hex → safe output
       exact --decoded-utf8     → same serviced child with DecodedUtf8 → saved identity refs/ranges/text
@@ -51,6 +53,9 @@ routes are removed. Check the real binary; package names and retained workspace 
                               → RawExact: source_inventory → verified Source bytes/ranges/hex, no Qdrant
                               → DecodedUtf8: saved Prepared + Source → verified identity ranges/text
                               → bounded terminal flush with root/view retained
+      session-stdio           → session I/O/control + joinable worker owning one fixed window
+                              → Search/Raw/DecodedUtf8 Open → original prefix <=64 → flush-committed pages
+                              → emitted-item Expand → Close/expiry/EOF → join/release; client observes reap
 
 | CLI subcommand | Daemon flag | Root function |
 |---|---|---|
@@ -66,6 +71,7 @@ routes are removed. Check the real binary; package names and retained workspace 
 | search --query TEXT [--limit N] --qdrant-url URL | --search-stdio with framed SearchRequest | framed_search::run → pin_published → verified_query::execute → full retained unit/citation |
 | exact --raw --literal TEXT --data-root ROOT [--source-id UUID] [--limit N] | --search-stdio with RawExact frame, no endpoint | pin_published → source_inventory → raw_exact::execute → verified raw ranges/hex |
 | exact --decoded-utf8 --literal TEXT --data-root ROOT [--source-id UUID] [--limit N] | --search-stdio with DecodedUtf8 frame, no endpoint | same pinned inventory → decoded_exact::execute → verified saved identity ranges/text |
+| session --data-root ROOT [--qdrant-url URL] | --session-stdio with SessionClientFrame/SessionReply | CLI search_command::run_session → OwnedQuerySession → framed_search/session + window |
 
 Read-only/root operator functions take (&Path, Instant, &AtomicBool); open_plain_with_recovery takes the shared
 Arc cancellation flag for maintained engine repair callbacks. Index alone uses that capability.
@@ -106,7 +112,7 @@ Rows marked future identify integration owners, not installed commands or comple
 | Corpus publication/current/view | [Daemon publisher](../../bins/eliot-searchd/src/published_corpus.rs), [CONTROL](../../crates/search-control-redb/src/publication.rs), [RO graph validator](../../crates/search-control-redb/src/publication/verify.rs), [policy](../../crates/search-index-qdrant/search-publication/FUNCTIONS.md) |
 | Returned evidence and retained units | [Query worker](../../bins/eliot-searchd/src/verified_query.rs), [CONTROL resolver](../../crates/search-control-redb/src/publication.rs), [evidence rule](../../crates/search-query/search-candidate-validator/FUNCTIONS.md) |
 | Serviced framed child and presentation | [Daemon I/O](../../bins/eliot-searchd/src/framed_search.rs), [client](../../crates/search-provider-client/FUNCTIONS.md), [protocol](../../crates/search-provider-protocol/FUNCTIONS.md), [CLI](../../bins/eliot-search/FUNCTIONS.md) |
-| Raw/DecodedUtf8 / later windows | [Raw consumer](../../bins/eliot-searchd/src/raw_exact.rs), [Decoded consumer](../../bins/eliot-searchd/src/decoded_exact.rs), [Exact rule](../../crates/search-query/search-exact/FUNCTIONS.md), [query family](../../crates/search-query/README.md) |
+| Raw/DecodedUtf8 and candidate windows | [Raw](../../bins/eliot-searchd/src/raw_exact.rs), [Decoded](../../bins/eliot-searchd/src/decoded_exact.rs), [session I/O](../../bins/eliot-searchd/src/framed_search/session.rs), [window](../../bins/eliot-searchd/src/framed_search/window.rs), [owning window recipe](../../crates/search-query/search-continuation/FUNCTIONS.md) |
 
 The old projection-planner/publication source, manifests and exclusive fixtures were retired in P1 with their
 VerifiedUnitSet consumers. Their FUNCTIONS.md and AGENTS.md remain canonical Q1 recipes at the existing paths;
@@ -119,7 +125,8 @@ Do not restore deleted daemon implementations or unconsumed APIs because an olde
 
 That read-only query → pinned published evidence → verified retained text/citation → CLI path is connected.
 Scoped index, bare selection reload and foreground watch now use those helpers; R1's accepted scopes remain
-in the registry. X1 Raw/DecodedUtf8 are connected but PARTIAL; session/window work is next, without
+in the registry. X1 Raw/DecodedUtf8 and session-window code are connected but PARTIAL; remaining window
+runtime qualification is next, without
 a new concurrent view framework by default.
 Confirmed absence and inaccessible inventory stay distinct.
 Build the actual owners and delete displaced code with its callers. Root-only command checks, helper-native

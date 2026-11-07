@@ -1,26 +1,82 @@
 # Same-session query windows
 
-The unused continuation Rust package, stores, manifest and exclusive fixtures are removed.
-The current owned child handles one query; this is policy for a later connected session consumer.
+The old continuation crate/stores/manifest/exclusive fixtures remain removed. The connected candidate at
+source 473447af uses the real CLI, public SDK and daemon; it does not introduce another window service.
+Implemented policy and the limited executed native scope below are separate facts. X1 remains PARTIAL.
 
-A session may retain a bounded final-order evidence vector, its pinned view, cursor, fixed expiry
-and emitted-item indexes. Public (window_id, item_index) values locate only already emitted items
-in that same session. One-shot output has no reusable locator.
-Expiry/disconnect releases state; access does not renew expiry or reuse IDs.
+## Current consumer and usage
 
-Reserve finite item, metadata and optional excerpt memory before retrieval. Include temporary
-candidate values and encoded output in the actual bounds. Never list/hash the live source catalogue
-to authorize a pinned view. Read only a finite next prefix, preserving final rank.
-Handled cards/gaps advance progress; untouched candidates do not become gaps.
-An oversized item has an explicit bounded outcome rather than an endlessly empty page.
+    eliot-search session --data-root ROOT [--qdrant-url URL] [--config-file PATH] [--daemon PATH]
+
+[CLI search_command.rs](../../../bins/eliot-search/src/search_command.rs) reads one SessionClientFrame JSON
+object per input line and emits SessionReply JSON records. This line-oriented CLI facade is implemented;
+the [OwnedQuerySession SDK](../../search-provider-client/src/lib.rs) and daemon use the existing bounded
+length-prefixed frame codec. The CLI launches --session-stdio, not the one-shot --search-stdio route.
+SDK operations are open/submit/next_reply/request/finish on the caller's Tokio runtime; finish observes
+child wait and stdout/stderr EOF. Dropping without finish is emergency cleanup, not successful completion.
+
+Enter one record and consume its correlated reply before the next data operation. This Raw example assumes
+Open emits item_index 0 in window_id 1; choose a literal present in the already published inventory:
+
+    {"type":"open","request_id":1,"remaining_ms":120000,"query":{"mode":"raw","request":{"literal":"timeout","source_ids":null,"limit":8}},"page_size":2,"ttl_ms":120000}
+    {"type":"expand","request_id":2,"remaining_ms":120000,"window_id":1,"item_index":0,"before_bytes":0,"after_bytes":0}
+    {"type":"continue","request_id":3,"remaining_ms":120000,"window_id":1,"page_size":2}
+    {"type":"close","request_id":4}
+
+These fields come from [SessionClientFrame/WindowQuery](../../search-provider-protocol/src/dto.rs).
+WindowQuery.mode is search, raw or decoded_utf8, with its existing request payload. Only search needs a
+Qdrant endpoint. Open is accepted once per child; a new original query requires a new session. Data request
+IDs are nonzero and increase; Cancel names correlated active work rather than creating another data request.
+
+## Fixed window and paging
+
+Open executes the original query once and retains its final-order prefix of at most 64 entries, its pinned
+PublishedView, cursor and source bindings. Exact total found_matches/scanning facts remain separate from
+retained_items; Continue never promises all Exact matches beyond this original prefix or rescans/repins.
+Open/Continue page_size is 1..64, default 16. Pages expose window_id, start_index, next_index, original summary,
+whole WindowEntry values with zero-based item_index, has_more and page_stop. Frame-size cuts retain whole items
+under the existing 8 MiB total cap. has_more concerns stored entries, not unbounded matches.
+
+The fixed TTL starts at accepted Open BEFORE query work/root acquisition/pinning; default and maximum are
+120000 ms. Access, Continue and Expand never renew it. Each operation's remaining_ms is also bounded by the
+original window expiry. Later source/preparation changes cannot replace the pinned inventory or representation.
+Only completely flushed pages commit cursor/emitted indexes. One-shot results have no reusable locator.
+
+## Expansion
+
+Expand requires explicit before_bytes and after_bytes and an already emitted (window_id, item_index) in this
+same child. The returned neighborhood includes the original span; its TOTAL is at most 65536 bytes.
+Underflow/out-of-range or UTF-8 scalar-splitting endpoints are refused, not silently clipped/normalized.
+Search/DecodedUtf8 context uses the actual saved UTF-8 representation and verified Source with the supported
+identity map; Raw uses verified Source bytes and returns hex. Original refs/ranges/text must still match.
+Gaps are not expandable matches. No arbitrary revision offsets, latest-source lookup or live fallback is added.
 
 ## Operation ownership
 
-One session owner services the active operation and cancellation. Own the needed pending state;
-hold no mutable map borrow or mutex across object reads, encoding or output.
-Prepare the cursor/emitted-index update before output and apply it only after complete local flush.
-Partial output closes the session and commits no progress. Healthy pre-output failure leaves the
-old cursor unchanged; work already spent stays charged. Local flush is not peer acknowledgement.
+The I/O owner services data/control while the joinable worker owns the root/view/window. Prepare a page's
+cursor update before output and apply it only after the complete daemon frame flush. Local flush is not peer
+acknowledgement. Partial output commits no page progress and closes the session. No writer/view/window mutex
+or mutable shared borrow spans reads, encoding or output.
 
-Expansion stays inside a bounded neighborhood of an emitted item's retained representation/range.
-No durable resume/replan, bearer tokens, grants, receipt history or second window service.
+Healthy pre-output failures preserve the prior cursor/window. SDK local CommandRejected writes no daemon
+command and leaves the session usable. The CLI identifies such a record with origin:"client"; it is not a
+daemon SessionReply. Any such failure makes aggregate CLI exit 2 even when later operations/Close succeed
+and the daemon exits 0.
+
+Expiry, EOF/disconnect and Close cancel/join active work, release the root/view and finish/reap the child;
+the implemented expiry/shutdown path also services output backpressure. No detached timeout worker, durable
+resume, renewal, grants or second state platform is added. Runtime qualification is limited as recorded below.
+
+## Verification scope
+
+Source review PASS at 473447af and focused locked check/strict Clippy/RELEASE builds passed. Actual native
+proof supplied so far is Raw only: public Open -> client-origin refusal -> valid Expand -> Continue -> Close
+(CLI PID 103172 exit 2, daemon 13692 exit 0, both EOF and OS absence). A direct-server guard/two late-Cancel/
+three-page/Close run (helper 104060, daemon 23456, both exit 0) received replies 1..6 exactly once and preserved
+CONTROL plus 16 objects.
+
+Held-output deferred Cancel, ranked/Decoded windows, TTL/EOF, Busy release and paging-boundary qualification
+remain pending. Do not promote source-reviewed lifecycle policy or these two Raw runs into those results.
+X1 remains PARTIAL, M1 WAIT and V1 unfinished. The current prepared-representation producer is saved UTF-8 identity;
+new extracted/parser/nonidentity routes are not selected gates before M1. Historical Markdown/JATS are not
+restored, and unavailable representations remain explicit gaps rather than invented text.

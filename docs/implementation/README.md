@@ -123,8 +123,9 @@ Persisted unknown Insert/ABA, postcommit/pre-view and held-query exclusion/clean
 native scopes; the resource run does not relabel them. Fixed-input RELEASE measurement passed the declared
 profile with sampled/OS-reported counters; complete unsampled product peaks and generation-replacement peak
 remain UNKNOWN/NOT_RUN. DEBUG query performance is not qualified. See the registry for exact boundaries.
-X1 is PARTIAL: Raw and saved DecodedUtf8 identity matching are connected; next same-session windows/Continue/Expand/expiry,
-then M1 archive/import and V1 release checks.
+X1 is PARTIAL: Raw/DecodedUtf8 are qualified at their named scopes; same-session window code is connected,
+with limited Raw runtime proof and remaining qualification. M1 archive/import and V1 release checks follow
+X1 acceptance.
 Search stays read-only; query and writer share exclusive root exclusion through flush, so a concurrent view
 manager is not the next prerequisite.
 
@@ -152,11 +153,19 @@ not complete X1. DecodedUtf8 now verifies retained Source and SAVED Prepared UTF
 proves byte-identity mapping and emits both refs/ranges plus text. It scans full representation across units;
 no on-the-fly materialization, reprepare, normalization or live fallback occurs. PrepGap/missing representations
 are explicit gaps; corruption fails. Extracted still has no real producer or implemented route.
-Continue/Expand/expiry and held-daemon-output window qualification remain pending.
-Extend the same serviced framed
-connection with bounded QueryWindows; do not replace the one-shot transport. Continue pages stored order;
-Expand uses an emitted item's neighborhood. Complete terminal output precedes the prepared local cursor update;
-partial transport output commits nothing and closes the session.
+The candidate CLI session -> OwnedQuerySession -> daemon --session-stdio opens one Search/Raw/DecodedUtf8
+window and retains at most the original 64-entry final-order prefix; Exact total matches remain separate.
+Open/Continue pages are 1..64 (default 16). TTL starts at accepted Open including work, defaults/caps at
+120000 ms and never renews. Expand requires emitted locators and explicit before/after bytes, with 65536 total
+bytes including the original span, original representation and valid UTF-8 boundaries. Complete daemon frame
+flush commits cursor progress; expiry/EOF cancels, joins and releases through the owned client reap path.
+
+These are source-reviewed implemented policies, not blanket runtime qualification. Actual current proof is
+limited to the public Raw client-refusal/Expand/Continue/Close flow and the direct server guard/late-Cancel/
+three-page/Close case. Held-output deferred Cancel, ranked/Decoded windows, TTL/EOF/Busy release and paging bounds
+remain pending. No new extracted/parser/nonidentity route is a selected gate before M1: saved UTF-8 identity
+is the current producer and unavailable representations remain explicit. Historical parsers are not restored.
+See the [window owner](../../crates/search-query/search-continuation/FUNCTIONS.md).
 
 ### 5. Maintenance and selected product depth
 
