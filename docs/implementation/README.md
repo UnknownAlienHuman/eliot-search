@@ -10,7 +10,7 @@ The current binaries expose four root operations, explicit file/tree index, reta
 prepare-source, publish-prepared, foreground watch and framed read-only Search/Raw/DecodedUtf8 Exact. The connected path reaches source/current row, complete preparation/current outcome,
 Qdrant generation/current evidence/view and verified retained units/citations. Publication returns generation
 state/counts; Search and Raw/DecodedUtf8 Exact are read-only query operations. Their exact native scopes belong in the registry;
-Same-session Continue/Expand/expiry and stopped-root collect-objects are connected too. The
+Same-session Continue/Expand/expiry, stopped-root collect-objects and plain archive-export are connected too. The
 [registry](../audit/ANALYSIS_REGISTRY.md#work-register) owns their exact qualification scopes and remaining work;
 connected commands do not imply an installed baseline or completion of the product.
 
@@ -125,8 +125,9 @@ Persisted unknown Insert/ABA, postcommit/pre-view and held-query exclusion/clean
 native scopes; the resource run does not relabel them. Fixed-input RELEASE measurement passed the declared
 profile with sampled/OS-reported counters; complete unsampled product peaks and generation-replacement peak
 remain UNKNOWN/NOT_RUN. DEBUG query performance is not qualified. See the registry for exact boundaries.
-X1 is DONE in its selected Windows/Release scope; M1 collector is connected/PARTIAL; archive/import are not delivered.
-Archive/import and V1 relevance/scale/installed-release work remain unfinished.
+X1 is DONE in its selected Windows/Release scope. M1 collect-objects and archive-export are delivered in their
+recorded Windows/Release scopes; M1 remains PARTIAL with import next. V1 relevance/scale/installed-release work
+remains unfinished.
 Search stays read-only; query and writer share exclusive root exclusion through flush, so a concurrent view
 manager is not the next prerequisite.
 
@@ -182,7 +183,13 @@ Every-32 scratch durability checkpoints bound engine bookkeeping, not object cou
 not universal native RAM measurement. Current root.importing is unsupported/refused, not an import flow.
 See the [collector rule/checks](../../crates/search-runtime/search-retention/FUNCTIONS.md#implemented-checks-and-remaining-m1).
 
-Archive/import remain unimplemented and are next. Owners #302/#244/#281/#227/#335; optional #219/#239/#248/#334/#336 implement those consumers first,
+Archive export now connects the owned daemon to a verified, non-runnable plain archive: copied CONTROL and
+required objects, independent copy verification, supported directory flush and archive.complete last. It
+requires a served generation and fresh non-overlapping output; no Qdrant storage or runnable root metadata is
+copied. Source 597/whole-tree-equivalent rebased 6137 and earlier 06f/7a7d native scopes remain distinct in the
+[registry](../audit/ANALYSIS_REGISTRY.md#core-corrections-and-archive-export).
+
+Fresh-destination import remains unimplemented and is next. Owners #302/#244/#281/#227/#335; optional #219/#239/#248/#334/#336 implement those consumers first,
 then selected source-backed orientation/comparison/Git/document capabilities. Optional donors join existing
 consumers. No encryption or restricted-user phase. Qdrant Edge, if studied later, is a replacement experiment.
 

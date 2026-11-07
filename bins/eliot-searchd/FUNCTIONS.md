@@ -35,6 +35,25 @@ repeats saved-selection Index with no overlap and a new original budget per iter
 cancellation, including when the parent disappears. This flag is Index-only and creates no public protocol.
 Query and writer retain root exclusion through output; no concurrent view manager is required by this cut.
 
+## Catalogue and exclusion boundaries
+
+Index uses the existing v2 source totals, full projected-union preflight and bounded confirmed-missing legacy
+reconciliation before row writes. Source/publication readers count locator bytes too. A v2 accounting mismatch
+is corruption; no query-side reset/repair or silent omission occurs. Data-root and candidate exclusion use
+resolved filesystem paths while stored native locator identity is unchanged. The Unix OsString import fix has no Unix run.
+
+## Archive export path
+
+    eliot-searchd --archive-export --archive-path OUT [--data-root ROOT] [--config-file PATH]
+
+[archive_export.rs](src/archive_export.rs) takes stopped-root exclusion/open_plain_with_recovery and verifies
+the rooted object closure before creating fresh OUT. It copies CONTROL and required final objects only, writes
+archive.header (plain v1, served baseline), then verifies CONTROL/objects/bindings from the copy with the shared
+read_object_in surface. Source/OUT equality/nesting and parent reparse are refused. No runnable root.toml,
+root.lock, initialization marker, scratch or Qdrant storage is copied. Files/directories are flushed with the
+root owner's primitive, archive.complete is written last and the result is verified again. The original root
+and external backend are not reset/adopted. Import remains unfinished; interruptions do not become complete archives.
+
 ## retain-file path
 
 1. Resolve --source-file against the captured startup directory while preserving native path bytes.

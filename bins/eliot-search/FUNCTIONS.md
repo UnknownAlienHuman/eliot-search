@@ -72,6 +72,16 @@ not stop the scan, and gaps prevent complete negative. The connected session com
 [window owner](../../crates/search-query/search-continuation/FUNCTIONS.md); its qualification is scoped there.
 There is no extracted producer/route or arbitrary non-UTF-8 needle syntax.
 
+## Archive export
+
+    eliot-search archive-export --archive-path OUT [ROOT] [--data-root ROOT] [--config-file PATH] [--daemon PATH]
+
+Use a supported current root with a served generation and a fresh non-overlapping OUT under an existing
+non-reparse parent. The owned child creates a plain non-runnable archive, verifies the copied closure and
+publishes archive.complete last. It returns the closed archive-export/complete summary with generation,
+objects and control_bytes. No backend connection, source re-read from live paths or import is performed.
+A partial/missing/forged marker does not make the archive an ordinary root. Import remains unimplemented.
+
 ## Retained result
 
 The daemon returns one bounded JSON line only after the source object has been read back and the current source row committed. The CLI validates the operation, random namespace/source IDs, nonzero revisions, source ObjectRef version/kind/digest/length, native file-key shape, and the verified-readback marker before printing it.
