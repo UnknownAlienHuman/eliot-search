@@ -2,7 +2,32 @@
 
 The disconnected Exact Rust package, proof/spine APIs, manifest and exclusive fixtures are removed.
 The current Search command is ranked text retrieval; it does not claim exhaustive exact matching.
-This is policy for the later real Exact consumer.
+FIRST RAW is connected through the actual CLI and daemon; the remaining X1 modes/windows are not complete.
+
+## Implemented raw slice
+
+    eliot-search exact --raw --literal TEXT --data-root ROOT [--source-id UUID] [--limit N]
+
+[raw_exact.rs](../../../bins/eliot-searchd/src/raw_exact.rs) scans the UTF-8 literal's bytes over undecoded
+retained Source objects, without Qdrant, live-file reads, preparation or publication. The literal is nonempty
+and at most 4096 UTF-8 bytes; arbitrary non-UTF-8 needle input is not supported by this String CLI.
+PublishedView::source_inventory supplies the selected committed sources, including Empty and PreparationGap
+inputs without points. Latest current/unpublished source rows never replace the pinned revisions.
+
+One private matcher preserves overlapping matches and state across bounded byte blocks, resetting per source.
+Each Source ObjectRef is verified by length/BLAKE3 before its occurrences become evidence; one object buffer
+is retained at a time. RawSourceRef carries namespace/source IDs, row/registration revisions and the Source
+ObjectRef. Matches contain raw byte start/end and exact bytes_hex, not prepared-unit or line coordinates.
+
+The complete result accounts selected/scanned/missing sources, scanned bytes and total matches. --limit N
+bounds whole emitted match/gap items to 1..64; it does not end input scanning. OutputLimit and scan_complete
+are separate facts. Missing Source objects are explicit SOURCE_OBJECT_MISSING gaps; corruption is fatal.
+complete_negative is true only when every selected source was verified/scanned with zero matches and no missing
+input. The shared total frame cap is 8 MiB; no range or matched bytes are clipped.
+
+DecodedUtf8 is next, using the existing retained UTF-8 Prepared representation and identity mapping. No decoded
+or extracted route is implemented here; extracted has no current producer after the old parsers were removed.
+Continue/Expand/expiry and held-output session/window qualification remain deferred. X1 is PARTIAL.
 
 ## Input semantics are part of the request
 

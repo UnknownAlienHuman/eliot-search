@@ -94,7 +94,7 @@ and [operator storage guidance](../../crates/search-runtime/search-runtime-owner
 
 ## Read-only search path
 
-    eliot-searchd --search-stdio --qdrant-url URL [ROOT] [--data-root ROOT] [--config-file PATH]
+    eliot-searchd --search-stdio [--qdrant-url URL] [ROOT] [--data-root ROOT] [--config-file PATH]
 
 [framed_search.rs](src/framed_search.rs) services Query/Cancel while one joinable synchronous worker runs
 [verified_query.rs](src/verified_query.rs) outside the I/O runtime. The worker opens the root and pin_published,
@@ -112,6 +112,22 @@ Search never writes CONTROL/collections, publishes, prepares, reconciles or open
 Root/view stay held through complete terminal flush; the worker is joined before teardown.
 The [protocol](../../crates/search-provider-protocol/FUNCTIONS.md) admits one correlated terminal and caps total
 framing at 8 MiB with whole-card OutputLimit. Do not add detached timeout workers or a session framework.
+
+## FIRST RAW execution
+
+The same serviced framed worker accepts RawExactRequest and calls [raw_exact.rs](src/raw_exact.rs) instead
+of the backend-query branch. Qdrant is never connected for this operation. The read-only root/view stay held
+through the terminal, and the worker is joined. It obtains the entire committed source inventory through
+PublishedView::source_inventory, including Empty/PreparationGap inputs, then applies the requested source subset.
+Latest current rows, live paths and Prepared/Qdrant point inventory do not replace those raw Source bindings.
+
+One private literal matcher is compiled per request, preserves overlaps/block state and resets between sources.
+One retained object at a time is length/BLAKE3 verified before any occurrence becomes evidence. Output contains
+RawSourceRef/revisions/ObjectRef/start/end/bytes_hex. Missing Source is a Gap; corruption is a failed terminal.
+The <=64 item prefix does not stop scanning; scan_complete/complete_negative use actual whole-inventory work.
+The literal is a nonempty UTF-8 String <=4096 bytes, not arbitrary non-UTF-8 needle input; framing remains 8 MiB.
+Raw Cancel and short remaining-duration cases use the production wire; they do not qualify future session
+held-output/window behavior. Decoded/extracted routes and Continue/Expand/expiry are not implemented.
 
 ## Verification state
 

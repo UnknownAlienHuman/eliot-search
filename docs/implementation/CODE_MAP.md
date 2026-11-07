@@ -1,6 +1,6 @@
 # Code entrypoints and change map
 
-Current binaries expose root operations, index [PATH], retain-file, prepare-source, publish-prepared, foreground watch and read-only search. Native binary and library
+Current binaries expose root operations, index [PATH], retain-file, prepare-source, publish-prepared, foreground watch, read-only search and FIRST RAW Exact. Native binary and library
 cases have distinct exact-source scopes in the [registry](../audit/ANALYSIS_REGISTRY.md#evidence-status).
 U1 targeted Windows debug acceptance is at c843171, with earlier transport/budget and initial-publication scopes kept separate.
 The [owner map](README.md#owners) defines responsibilities; a row does not require keeping a crate.
@@ -28,6 +28,7 @@ routes are removed. Check the real binary; package names and retained workspace 
       prepare-source          → same owned child → parsed source ID/unit-bound stored-unit validation → output
       publish-prepared        → same owned child → closed generation-state validation → output
       search                  → QueryClient serviced framed child → complete validated terminal → safe output
+      exact --raw --literal   → same serviced child with RawExact → validated raw ranges/hex → safe output
 
     daemon entry → app::run_main → app/bootstrap::parse
       standalone help/version → local output, no config/root acquisition
@@ -43,10 +44,11 @@ routes are removed. Check the real binary; package names and retained workspace 
       publish-prepared        → open root → all-source/preparation capture → fixed pages/evidence
                               → actual backend build/readback + checked canary → current CAS
                               → complete matching RO PublishedView → generation state/counts
-      search-stdio            → framed Query/Cancel I/O + one joinable synchronous worker
-                              → root + bounded pin_published → exact backend query
-                              → returned evidence/CapturedSource in same snapshot
-                              → verified Source/Prepared + full unit/citation → bounded terminal flush
+      search-stdio            → framed Search/RawExact/Cancel I/O + one joinable synchronous worker
+                              → root + bounded pin_published
+                              → Search: backend nominations → retained Source/Prepared unit/citation
+                              → RawExact: source_inventory → verified Source bytes/ranges/hex, no Qdrant
+                              → bounded terminal flush with root/view retained
 
 | CLI subcommand | Daemon flag | Root function |
 |---|---|---|
@@ -60,6 +62,7 @@ routes are removed. Check the real binary; package names and retained workspace 
 | prepare-source --source-id UUID [--unit N] | --prepare-source --source-id UUID [--unit N] | open_plain → prepared_source::run → retained read/prepare/store/decode → commit_preparation |
 | publish-prepared --qdrant-url URL | --publish-prepared with matching settings | open_plain → published_corpus::run → compact references/Prepared hydration/backend/current/view → generation state |
 | search --query TEXT [--limit N] --qdrant-url URL | --search-stdio with framed SearchRequest | framed_search::run → pin_published → verified_query::execute → full retained unit/citation |
+| exact --raw --literal TEXT --data-root ROOT [--source-id UUID] [--limit N] | --search-stdio with RawExact frame, no endpoint | pin_published → source_inventory → raw_exact::execute → verified raw ranges/hex |
 
 Read-only/root operator functions take (&Path, Instant, &AtomicBool); open_plain_with_recovery takes the shared
 Arc cancellation flag for maintained engine repair callbacks. Index alone uses that capability.
@@ -100,7 +103,7 @@ Rows marked future identify integration owners, not installed commands or comple
 | Corpus publication/current/view | [Daemon publisher](../../bins/eliot-searchd/src/published_corpus.rs), [CONTROL](../../crates/search-control-redb/src/publication.rs), [RO graph validator](../../crates/search-control-redb/src/publication/verify.rs), [policy](../../crates/search-index-qdrant/search-publication/FUNCTIONS.md) |
 | Returned evidence and retained units | [Query worker](../../bins/eliot-searchd/src/verified_query.rs), [CONTROL resolver](../../crates/search-control-redb/src/publication.rs), [evidence rule](../../crates/search-query/search-candidate-validator/FUNCTIONS.md) |
 | Serviced framed child and presentation | [Daemon I/O](../../bins/eliot-searchd/src/framed_search.rs), [client](../../crates/search-provider-client/FUNCTIONS.md), [protocol](../../crates/search-provider-protocol/FUNCTIONS.md), [CLI](../../bins/eliot-search/FUNCTIONS.md) |
-| Future Exact/windows | [Query family](../../crates/search-query/README.md); retained policy recipes, no restored dormant crates |
+| FIRST RAW / later decoded and windows | [Raw consumer](../../bins/eliot-searchd/src/raw_exact.rs), [Exact rule](../../crates/search-query/search-exact/FUNCTIONS.md), [query family](../../crates/search-query/README.md); no restored dormant crate |
 
 The old projection-planner/publication source, manifests and exclusive fixtures were retired in P1 with their
 VerifiedUnitSet consumers. Their FUNCTIONS.md and AGENTS.md remain canonical Q1 recipes at the existing paths;
@@ -112,8 +115,9 @@ Do not restore deleted daemon implementations or unconsumed APIs because an olde
 ## Keep the implementation small
 
 That read-only query → pinned published evidence → verified retained text/citation → CLI path is connected.
-Scoped index, bare selection reload and foreground watch now use those helpers. R1 next qualifies remaining
-recovery/convergence/lifetime gates; it does not require a concurrent view framework by default.
+Scoped index, bare selection reload and foreground watch now use those helpers; R1's accepted scopes remain
+in the registry. X1 FIRST RAW is connected but PARTIAL; DecodedUtf8 and session/window work are next, without
+a new concurrent view framework by default.
 Confirmed absence and inaccessible inventory stay distinct.
 Build the actual owners and delete displaced code with its callers. Root-only command checks, helper-native
 probes and retained workspace libraries do not qualify that pipeline or an installed baseline.

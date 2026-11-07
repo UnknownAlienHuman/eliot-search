@@ -3,13 +3,14 @@
 ## Actual API
 
 `SearchRequest { query, limit }` is shared by CLI and daemon. `ClientFrame` has JSON tag `type`:
-Query carries `request_id = 1`, `remaining_ms` and `request`; Cancel carries that same ID.
+Query and RawExact carry `request_id = 1`, `remaining_ms` and `request`; Cancel carries that same ID.
 Query UTF-8 is nonempty, at most 4096 bytes, without NUL; limit is 1..=64. Remaining duration is
 1..=120000 milliseconds. The parent samples it at send and independently enforces its original deadline.
 The receiver charges observed partial-frame time to the duration; processes never exchange Instant values.
 
 `Terminal { request_id, outcome }` has one `QueryOutcome` tagged `status`: Complete contains
-generation, ordered items and stop (complete/output_limit); Cancelled contains no result; Failed carries
+generation, ordered items and stop (complete/output_limit); RawExact contains its separately validated raw result;
+Cancelled contains no result; Failed carries
 a validated 1..=64 byte uppercase/digit/underscore FailureCode. Unknown and duplicate DTO fields fail.
 
 `SearchItem` is tagged `kind = hit|gap`. Both carry original contiguous one-based rank, finite f32 score
@@ -26,6 +27,25 @@ Rank and score remain outside the immutable retained citation; no live-path clai
 The daemon resolves evidence and its captured source/preparation from the same published read snapshot,
 verifies both retained objects and decoder/range/line bindings, and supplies the full unit. The wire's
 structural checks do not perform those storage/backend checks.
+
+## Raw Exact request and result
+
+RawExactRequest { literal, source_ids, limit } uses a nonempty UTF-8 String of at most 4096 bytes as a literal
+byte needle over undecoded retained input. Arbitrary non-UTF-8 needle encoding is not implemented. The CLI
+supports one optional --source-id; the DTO uses canonical unique UUIDs, omitted = all published sources and
+explicit empty = none. Limit is 1..=64 whole match/gap items, independent of input scan completeness.
+
+RawSourceRef binds namespace/source UUIDs, row/registration revisions and the Source ObjectRef. A raw Match
+contains source/start/end/bytes_hex; a raw Gap contains source and only SOURCE_OBJECT_MISSING. No PreparedRef,
+unit/line coordinate or ranking score is invented. Corruption produces Failed, not a missing-object Gap.
+RawExactResult carries generation, selected_sources/scanned_sources/missing_sources, scanned_bytes, total
+matches, items, scan_complete, complete_negative and stop. Complete negative requires every selected source
+verified/scanned and zero matches/missing input. OutputLimit describes an emitted prefix, not incomplete input.
+The client validates literal bytes, selection and limit against the complete correlated result.
+
+prepare_raw_exact encodes the producer's already bounded whole-item prefix under the same 8 MiB total frame
+cap; it clips no match/range and rejects an oversized frame. Ranked prepare_complete below retains its own
+whole-card sizing behavior. Both operation variants use the existing Cancel/terminal/EOF/reap path.
 
 ## Framing and bounded output
 

@@ -42,6 +42,21 @@ Qdrant remains operator-owned; watch is a foreground process, not an installed s
 
 The CLI forwards --file as the daemon's native --source-file argument. Root settings keep their existing precedence and native path handling. It does not open the root or source file itself.
 
+## Raw Exact
+
+    eliot-search exact --raw --literal TEXT --data-root ROOT [--source-id UUID] [--limit N] [--config-file PATH] [--daemon PATH]
+
+This FIRST RAW command uses the existing --search-stdio child with RawExactRequest and no Qdrant endpoint.
+The nonempty UTF-8 literal (at most 4096 bytes) is matched literally over undecoded retained Source objects.
+Omitted source ID selects all committed published sources, including Empty/PreparationGap inputs; a supplied
+UUID must belong to that pinned inventory. Current unpublished inputs and live files are not consulted.
+
+Output carries generation, source/ObjectRef/revision bindings, exact raw byte ranges and bytes_hex. N bounds
+whole emitted match/gap items to 1..64; full scan counters continue beyond that prefix. OutputLimit does not
+imply incomplete scanning. Missing Source is an explicit Gap; corruption fails. Complete negative requires
+all selected objects verified/scanned with zero matches and no missing input. The total frame remains 8 MiB.
+This is not arbitrary byte-needle syntax, a decoded/extracted mode or a reusable window/expansion locator.
+
 ## Retained result
 
 The daemon returns one bounded JSON line only after the source object has been read back and the current source row committed. The CLI validates the operation, random namespace/source IDs, nonzero revisions, source ObjectRef version/kind/digest/length, native file-key shape, and the verified-readback marker before printing it.

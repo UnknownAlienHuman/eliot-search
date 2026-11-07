@@ -177,6 +177,28 @@ observes child exit/reap. CONTROL and backend collections are unchanged by searc
 [query evidence rule](crates/search-query/search-candidate-validator/FUNCTIONS.md) and
 [wire bounds](crates/search-provider-protocol/FUNCTIONS.md#framing-and-bounded-output).
 
+## Raw literal Exact
+
+Use the matching RELEASE siblings built above and an existing committed published inventory:
+
+    .\target\release\eliot-search.exe exact --raw --literal "needle" --data-root "C:\example\data-root" --limit 10 --daemon .\target\release\eliot-searchd.exe
+
+Add --source-id UUID to scan one published source; omission scans all published sources, including Empty and
+PreparationGap inputs without points. The command itself needs no Qdrant endpoint/server and never publishes,
+prepares or opens live source paths. An initialized but unpublished root is not an empty successful scan.
+
+TEXT is a nonempty UTF-8 literal of at most 4096 bytes, matched as bytes over UNDECODED retained Source.
+Results bind generation/source/revisions/ObjectRef, raw byte ranges and exact bytes_hex. Missing Source objects
+produce explicit gaps; corrupt bytes fail. --limit N allows 1..64 whole emitted match/gap items without ending
+the scan. OutputLimit and scan_complete are separate; complete_negative needs every selected input verified/
+scanned, zero matches and no missing input. The total frame remains 8 MiB.
+
+This FIRST RAW slice is qualified at its recorded source/native scope, not an R1 resource-profile rerun or all
+of X1. DecodedUtf8 identity mapping is next. Extracted has no producer/implemented route; arbitrary non-UTF-8
+needles, Continue/Expand/expiry and held-daemon-output window qualification are not delivered. See the
+[Exact recipe](crates/search-query/search-exact/FUNCTIONS.md#implemented-raw-slice) and
+[registry](docs/audit/ANALYSIS_REGISTRY.md#evidence-status).
+
 ## File, environment and CLI settings
 
 An explicit UTF-8 TOML file at C:\example\settings\operator.toml may contain:

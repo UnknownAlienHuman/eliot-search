@@ -5,6 +5,9 @@
 `QueryClient::new()` constructs one Tokio 1.53.1 current-thread I/O runtime outside an async context.
 `query_owned_child(&mut self, executable: &Path, args: &[OsString], request: SearchRequest,
 deadline: Instant, cancelled: &AtomicBool)` returns QueryCompletion or content-free ClientError.
+raw_exact_owned_child has the same ownership/deadline arguments with RawExactRequest and returns the same
+QueryCompletion. Both methods use the serviced child I/O/reap owner; the raw result is additionally validated
+against its literal, published-source selection and output limit. Raw matches stay in bytes_hex form.
 The CLI supplies native invocation settings, starts the original deadline before setup and owns safe rendering.
 
 The CLI explicitly calls enable_ctrl_c() before its query. Other callers leave signal handling disabled.
