@@ -13,13 +13,22 @@ See the [exact source, artifacts and verification scope](docs/audit/ANALYSIS_REG
 
 ## Index and search
 
+The qualified ordinary-repo-1 measurements use optimized RELEASE, not target/debug or default cargo run.
+From the repository root build both sibling executables:
+
+    cargo +1.98.0 build --release --locked -p eliot-search -p eliot-searchd --bins
+
+The commands below explicitly select that release pair. If Cargo's target directory is configured elsewhere,
+replace .\target with that actual directory; retain the release subdirectory and matching --daemon path.
+Other bare executable examples below describe command syntax, not DEBUG performance qualification.
+
 Start the operator-owned Qdrant 1.20.0 service first. Initialize a new application data root once; index opens
 an existing current root and does not initialize it. Paths below are placeholders, separate from user originals:
 
-    eliot-search initialize-data-root --data-root "C:\example\data-root"
-    eliot-search index "C:\example\repo" --data-root "C:\example\data-root" --qdrant-url http://127.0.0.1:6334
-    eliot-search index --data-root "C:\example\data-root" --qdrant-url http://127.0.0.1:6334
-    eliot-search search --query "supersede_unknown_build" --limit 10 --data-root "C:\example\data-root" --qdrant-url http://127.0.0.1:6334
+    .\target\release\eliot-search.exe initialize-data-root --data-root "C:\example\data-root" --daemon .\target\release\eliot-searchd.exe
+    .\target\release\eliot-search.exe index "C:\example\repo" --data-root "C:\example\data-root" --qdrant-url http://127.0.0.1:6334 --daemon .\target\release\eliot-searchd.exe
+    .\target\release\eliot-search.exe index --data-root "C:\example\data-root" --qdrant-url http://127.0.0.1:6334 --daemon .\target\release\eliot-searchd.exe
+    .\target\release\eliot-search.exe search --query "supersede_unknown_build" --limit 10 --data-root "C:\example\data-root" --qdrant-url http://127.0.0.1:6334 --daemon .\target\release\eliot-searchd.exe
 
 These command forms were executed against isolated native fixtures and the managed repository; the native
 operator used its own endpoint. Supply --daemon PATH for a matching binary pair when needed.
@@ -38,13 +47,13 @@ still returns PUBLICATION_SOURCE_NOT_PREPARED if any current row lacks matching 
 Unchanged native identity plus ObjectRef preserves the logical source head and avoids a new collection.
 Search returns verified retained units and is read-only. ec9fb6f selection-reload source/native checks passed
 in the scopes recorded in the [registry](docs/audit/ANALYSIS_REGISTRY.md#resume); earlier cases retain their own
-binary scope. Foreground watch is connected; R1 still needs its remaining Stage 3A qualification.
+binary scope. Foreground watch and R1's recorded functional/optimized RELEASE fixed-input scopes are accepted; X1 is next.
 
 ## Watch admitted selections
 
 After initializing the root and admitting at least one file/tree with index PATH, run:
 
-    eliot-search watch --qdrant-url http://127.0.0.1:6334 --data-root "C:\example\data-root"
+    .\target\release\eliot-search.exe watch --qdrant-url http://127.0.0.1:6334 --data-root "C:\example\data-root" --daemon .\target\release\eliot-searchd.exe
 
 Watch accepts no PATH. It reloads saved selections in each owned Index child. The default interval is 30000 ms;
 --interval-ms N selects a positive interval. The interval starts after child/pipe cleanup and report output,
@@ -212,5 +221,5 @@ CurrentSourceRecord. prepare-source consumes retained bytes and stores the compl
 outcome. publish-prepared connects those stored inputs to actual Qdrant/current/evidence/PublishedView.
 Read-only search returns verified retained units and citations from that pinned generation. Index now connects
 explicit file/tree retention, preparation and publication without manual SourceId assembly. Admission is durable,
-and bare index reloads it at writable startup. Foreground periodic watch is connected; broader R1 and installed-baseline qualification remain unfinished. Confirmed filesystem deletion excludes membership from
+and bare index reloads it at writable startup. Foreground periodic watch is connected; broader peak/platform and installed-baseline qualification remain unfinished. Confirmed filesystem deletion excludes membership from
 new generations while preserving retained objects and pinned views. Inaccessible or partial inventory is not removal.

@@ -2,7 +2,7 @@
 
 During implementation, use only the [minimal check/Clippy closure](WORKING_GUIDE.md#minimal-production-checks).
 This page is the later behavior checklist, not a reason to build a test platform before the product.
-No result below is claimed executed. [The registry](../audit/ANALYSIS_REGISTRY.md#evidence-status) records runs.
+Checklist rows are not execution claims. [The registry](../audit/ANALYSIS_REGISTRY.md#evidence-status) records actual runs and their scopes.
 
 ## Stage 1 — Foundation
 
@@ -29,10 +29,13 @@ Restart/reopen; edit/removal; partial inventory; stale acquisition/preparation a
 fixed-input generation; commit/install interruption; old pinned view; whole-generation cleanup. Confirm scope
 filters and IDF use the intended population and never widen an unknown/empty selection.
 
-#### Predeclared Stage 3A corpus qualification profile (NOT measured)
+#### Predeclared Stage 3A corpus qualification profile
 
-This profile is predeclared before benchmarking and does not itself claim a supported corpus.
-Measurement and benchmarking remain NOT_RUN until explicitly executed against this profile.
+This profile was predeclared before benchmarking; corpus and acceptance limits below are unchanged.
+The 9e574180 optimized RELEASE fixed-input run is FULL_RELEASE_PASS at its recorded sampling/evidence scope;
+[the registry](../audit/ANALYSIS_REGISTRY.md#release-fixed-input-resource-evidence) records pins, measurements,
+UNKNOWN unsampled peaks and unexercised replacement. Earlier DEBUG failures/incomplete runs remain distinct.
+This is not universal peak, replacement-workload, platform or whole-product qualification.
 
 **Corpus class `ordinary-repo-1`:** exactly 1000 unique UTF-8 code/text/JSON files totalling exactly 128 MiB;
 exactly one 8 MiB boundary file and every other file at most 256 KiB. Content derives from representative
@@ -48,7 +51,8 @@ Working set / handles: product combined <=4 GiB / 512, Qdrant <=8 GiB / 1024. Di
 <=2x corpus + 1 GiB. Separately, Qdrant storage <=8x corpus + 1 GiB after convergence and 10 min of cleanup;
 transient replacement storage high-water <=16x corpus + 2 GiB. These backend bounds cover all current and
 retained generations, WAL/index/payload and any snapshots. Measure on dedicated, initially empty benchmark
-storage; report total Qdrant storage and all generations, not only live point count. These bounds are NOT measured.
+storage; report total Qdrant storage and all generations, not only live point count. The fixed-input run
+measured total storage/observed high-water; generation-replacement high-water remains unexercised.
 Stable known cleanup backlog is 0 beyond the current generation after 10 min; no partial generation is visible.
 Retained caps remain the existing source caps; no application/model quota changes.
 
