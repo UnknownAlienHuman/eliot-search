@@ -7,9 +7,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 
 use search_control_redb::current_preparation::PreparationOutcome;
+use search_control_redb::plain_control::{ControlWriter, PlainControlError};
 use search_control_redb::publication::{
-    self as control, CaptureStaging, CapturedSource, Generation, PendingGeneration,
-    PendingOperation, PointEvidence, PublicationError, PublishedView, UploadPage, UploadPoint,
+    self as control, CapturedSource, Generation, PendingGeneration, PendingOperation,
+    PointEvidence, PublicationError, PublishedView, UploadPage, UploadPoint,
 };
 use search_qdrant_bridge::{
     Backend, BackendError, BackendLimits, MAX_HITS, MAX_PAGE_BYTES, MAX_PAGE_POINTS,
@@ -17,7 +18,7 @@ use search_qdrant_bridge::{
 };
 use search_revision_store::{ObjectStoreError, read_object};
 use search_runtime_owner::{PlainRootError, PlainRootGuard, open_plain};
-use search_source_registry::MAX_PUBLICATION_RESPONSE_BYTES;
+use search_source_registry::{CurrentSourceRecord, MAX_PUBLICATION_RESPONSE_BYTES, ObjectRef};
 use search_unitizer::{PreparationError, PreparationLimits, PreparedUtf8, decode_prepared_utf8};
 use serde_json::{Value, json};
 
@@ -75,10 +76,32 @@ fn unit_text<'a>(view: &'a PreparedUtf8<'_>, e: &PointEvidence) -> Result<&'a st
         .ok_or("PUBLICATION_CORRUPT")
 }
 
+fn hydrate_point(
+    view: &PreparedUtf8<'_>,
+    source: &CurrentSourceRecord,
+    artifact: ObjectRef,
+    point: UploadPoint,
+) -> Result<HydratedPoint, &'static str> {
+    if point.evidence.source_namespace_id != source.source_namespace_id
+        || point.evidence.input != source.object_ref
+        || point.evidence.prepared != artifact
+    {
+        return Err("PUBLICATION_CORRUPT");
+    }
+    let text = unit_text(view, &point.evidence)?;
+    let mut owned = String::new();
+    owned
+        .try_reserve_exact(text.len())
+        .map_err(|_| "PUBLICATION_ALLOCATION_FAILED")?;
+    owned.push_str(text);
+    Ok(HydratedPoint { point, text: owned })
+}
+
 // One pass retains one verified object and its borrowing decoder view until the
 // source changes. Only one page of transient upload text is accumulated.
 fn visit_pages(
     root: &PlainRootGuard,
+    writer: Option<&ControlWriter>,
     generation: &Generation,
     pages: std::ops::Range<u64>,
     deadline: Instant,
@@ -90,8 +113,13 @@ fn visit_pages(
         return Ok(());
     }
     let path = root.control_path();
-    let page = control::read_upload_page(&path, generation, number, deadline, cancel)
-        .map_err(PublicationError::code)?;
+    let read_page = |number| {
+        writer.map_or_else(
+            || control::read_upload_page(&path, generation, number, deadline, cancel),
+            |writer| writer.read_upload_page(generation, number, deadline, cancel),
+        )
+    };
+    let page = read_page(number).map_err(PublicationError::code)?;
     let mut request_bytes = page.request_bytes;
     let mut points = page.points.into_iter().peekable();
     let mut hydrated = Vec::new();
@@ -100,14 +128,27 @@ fn visit_pages(
         .map_err(|_| "PUBLICATION_ALLOCATION_FAILED")?;
     while let Some(first) = points.peek() {
         check(deadline, cancel)?;
-        let captured = control::read_generation_source(
-            &path,
-            generation,
-            first.evidence.source_id,
-            deadline,
-            cancel,
-        )
-        .map_err(PublicationError::code)?;
+        let captured = writer
+            .map_or_else(
+                || {
+                    control::read_generation_source(
+                        &path,
+                        generation,
+                        first.evidence.source_id,
+                        deadline,
+                        cancel,
+                    )
+                },
+                |writer| {
+                    writer.read_generation_source(
+                        generation,
+                        first.evidence.source_id,
+                        deadline,
+                        cancel,
+                    )
+                },
+            )
+            .map_err(PublicationError::code)?;
         let Some(PreparationOutcome::Ready { artifact }) =
             captured.preparation.outcome.as_ref().map(|o| o.result)
         else {
@@ -131,19 +172,7 @@ fn visit_pages(
             {
                 check(deadline, cancel)?;
                 let point = points.next().ok_or("PUBLICATION_CORRUPT")?;
-                if point.evidence.source_namespace_id != captured.source.source_namespace_id
-                    || point.evidence.input != captured.source.object_ref
-                    || point.evidence.prepared != artifact
-                {
-                    return Err("PUBLICATION_CORRUPT");
-                }
-                let text = unit_text(&view, &point.evidence)?;
-                let mut owned = String::new();
-                owned
-                    .try_reserve_exact(text.len())
-                    .map_err(|_| "PUBLICATION_ALLOCATION_FAILED")?;
-                owned.push_str(text);
-                hydrated.push(HydratedPoint { point, text: owned });
+                hydrated.push(hydrate_point(&view, &captured.source, artifact, point)?);
             }
             if points.peek().is_some() {
                 break;
@@ -165,8 +194,7 @@ fn visit_pages(
                 return Ok(());
             }
             check(deadline, cancel)?;
-            let page = control::read_upload_page(&path, generation, number, deadline, cancel)
-                .map_err(PublicationError::code)?;
+            let page = read_page(number).map_err(PublicationError::code)?;
             request_bytes = page.request_bytes;
             points = page.points.into_iter().peekable();
             hydrated
@@ -178,7 +206,7 @@ fn visit_pages(
 }
 
 fn stage_complete_page(
-    staging: &CaptureStaging,
+    staging: &ControlWriter,
     pending: &PendingGeneration,
     page: UploadPage,
     prepared: &PreparedUtf8<'_>,
@@ -235,7 +263,7 @@ fn stage_complete_page(
 }
 fn stage_source(
     root: &PlainRootGuard,
-    staging: &CaptureStaging,
+    staging: &ControlWriter,
     pending: &PendingGeneration,
     captured: &CapturedSource,
     next_point: &mut u64,
@@ -324,7 +352,7 @@ fn stage_source(
     }
 }
 fn settle(
-    path: &Path,
+    writer: &ControlWriter,
     pending: &PendingGeneration,
     operation: PendingOperation,
     operation_revision: u64,
@@ -335,26 +363,26 @@ fn settle(
     if matches!(result, Err(BackendError::UnknownDispatch)) {
         return Err(BackendError::UnknownDispatch.code());
     }
-    control::finish_dispatch(
-        path,
-        pending,
-        operation,
-        operation_revision,
-        result.is_ok(),
-        deadline,
-        cancel,
-    )
-    .map_err(PublicationError::code)?;
+    writer
+        .finish_dispatch(
+            pending,
+            operation,
+            operation_revision,
+            result.is_ok(),
+            deadline,
+            cancel,
+        )
+        .map_err(PublicationError::code)?;
     result.map_err(BackendError::code)
 }
 fn upload(
     backend: &Backend,
     root: &PlainRootGuard,
+    writer: &ControlWriter,
     mut pending: PendingGeneration,
     deadline: Instant,
     cancel: &AtomicBool,
 ) -> Result<PendingGeneration, &'static str> {
-    let path = &root.control_path();
     let collection = pending.generation.collection();
     if !pending.created {
         if backend
@@ -363,11 +391,11 @@ fn upload(
         {
             return Err("PUBLICATION_COLLECTION_CONFLICT");
         }
-        let revision =
-            control::record_dispatch(path, &pending, PendingOperation::Create, deadline, cancel)
-                .map_err(PublicationError::code)?;
+        let revision = writer
+            .record_dispatch(&pending, PendingOperation::Create, deadline, cancel)
+            .map_err(PublicationError::code)?;
         settle(
-            path,
+            writer,
             &pending,
             PendingOperation::Create,
             revision,
@@ -375,7 +403,8 @@ fn upload(
             deadline,
             cancel,
         )?;
-        pending = control::load_pending(path, deadline, cancel)
+        pending = writer
+            .load_pending(deadline, cancel)
             .map_err(PublicationError::code)?
             .ok_or("PUBLICATION_STALE")?;
     }
@@ -385,21 +414,17 @@ fn upload(
     let generation = pending.generation.clone();
     visit_pages(
         root,
+        Some(writer),
         &generation,
         pending.uploaded_pages..generation.page_count,
         deadline,
         cancel,
         |number, page| {
-            let revision = control::record_dispatch(
-                path,
-                &pending,
-                PendingOperation::Insert(number),
-                deadline,
-                cancel,
-            )
-            .map_err(PublicationError::code)?;
+            let revision = writer
+                .record_dispatch(&pending, PendingOperation::Insert(number), deadline, cancel)
+                .map_err(PublicationError::code)?;
             settle(
-                path,
+                writer,
                 &pending,
                 PendingOperation::Insert(number),
                 revision,
@@ -407,13 +432,15 @@ fn upload(
                 deadline,
                 cancel,
             )?;
-            pending = control::load_pending(path, deadline, cancel)
+            pending = writer
+                .load_pending(deadline, cancel)
                 .map_err(PublicationError::code)?
                 .ok_or("PUBLICATION_STALE")?;
             Ok(())
         },
     )?;
-    control::load_pending(path, deadline, cancel)
+    writer
+        .load_pending(deadline, cancel)
         .map_err(PublicationError::code)?
         .ok_or("PUBLICATION_STALE")
 }
@@ -436,6 +463,7 @@ fn verify_generation(
     let mut point_count = 0_u64;
     visit_pages(
         root,
+        None,
         generation,
         0..generation.page_count,
         deadline,
@@ -494,12 +522,13 @@ fn canary_query(text: &str) -> Option<&str> {
 }
 fn cleanup(
     backend: &Backend,
-    path: &Path,
+    writer: &ControlWriter,
     deadline: Instant,
     cancel: &AtomicBool,
 ) -> Result<(), &'static str> {
-    for retired in
-        control::retired_generations(path, deadline, cancel).map_err(PublicationError::code)?
+    for retired in writer
+        .retired_generations(deadline, cancel)
+        .map_err(PublicationError::code)?
     {
         check(deadline, cancel)?;
         if retired.unresolved_build.is_some() {
@@ -517,89 +546,99 @@ fn cleanup(
                 return Err("PUBLICATION_CLEANUP_UNRESOLVED");
             }
         }
-        control::finish_retirement(path, &retired, deadline, cancel)
+        writer
+            .finish_retirement(&retired, deadline, cancel)
             .map_err(PublicationError::code)?;
     }
     Ok(())
 }
 fn stage_capture(
     root: &PlainRootGuard,
+    writer: &ControlWriter,
     pending: &PendingGeneration,
     sources: &[CapturedSource],
     deadline: Instant,
     cancel: &AtomicBool,
 ) -> Result<PendingGeneration, &'static str> {
-    let staging = CaptureStaging::open(&root.control_path(), deadline, cancel)
-        .map_err(PublicationError::code)?;
-    let captured = (|| {
-        let mut next_point = 0;
-        for source in sources {
-            stage_source(
-                root,
-                &staging,
-                pending,
-                source,
-                &mut next_point,
-                deadline,
-                cancel,
-            )?;
-        }
-        staging
-            .complete_capture(pending, deadline, cancel)
-            .map_err(PublicationError::code)
-    })();
-    // Always close, including object/decode/staging failures, before returning.
-    staging
-        .close(deadline, cancel)
-        .map_err(PublicationError::code)?;
-    captured
+    let mut next_point = 0;
+    for source in sources {
+        stage_source(
+            root,
+            writer,
+            pending,
+            source,
+            &mut next_point,
+            deadline,
+            cancel,
+        )?;
+    }
+    writer
+        .complete_capture(pending, deadline, cancel)
+        .map_err(PublicationError::code)
 }
 
 fn prepare_view(
     root: &PlainRootGuard,
+    writer: ControlWriter,
     backend: &Backend,
     deadline: Instant,
     cancel: &AtomicBool,
 ) -> Result<PublishedView, &'static str> {
     let path = root.control_path();
-    let mut capture =
-        control::capture_corpus(&path, deadline, cancel).map_err(PublicationError::code)?;
-    let mut superseded_unknown_create = false;
-    if let Some(pending) = capture.pending.clone() {
-        if matches!(
-            pending.in_flight.as_ref(),
-            Some(PendingOperation::Create | PendingOperation::Insert(_))
-        ) {
-            control::supersede_unknown_build(&path, &pending, deadline, cancel)
-                .map_err(PublicationError::code)?;
-            superseded_unknown_create = true;
-            capture =
-                control::capture_corpus(&path, deadline, cancel).map_err(PublicationError::code)?;
-        } else if pending.in_flight.is_some() {
-            return Err("PUBLICATION_EFFECT_UNRESOLVED");
+    let prepared = (|| {
+        let mut capture = writer
+            .capture_corpus(deadline, cancel)
+            .map_err(PublicationError::code)?;
+        let mut superseded_unknown_build = false;
+        if let Some(pending) = capture.pending.clone() {
+            if matches!(
+                pending.in_flight.as_ref(),
+                Some(PendingOperation::Create | PendingOperation::Insert(_))
+            ) {
+                writer
+                    .supersede_unknown_build(&pending, deadline, cancel)
+                    .map_err(PublicationError::code)?;
+                superseded_unknown_build = true;
+                capture = writer
+                    .capture_corpus(deadline, cancel)
+                    .map_err(PublicationError::code)?;
+            } else if pending.in_flight.is_some() {
+                return Err("PUBLICATION_EFFECT_UNRESOLVED");
+            }
         }
-    }
-    if let Some(pending) = &capture.pending
-        && (!pending.capture_complete || !capture.pending_matches())
-    {
-        control::abandon_build(&path, pending, deadline, cancel).map_err(PublicationError::code)?;
-        return Err("PUBLICATION_STALE");
-    }
-    cleanup(backend, &path, deadline, cancel)?;
-    let generation;
-    if capture.pending.is_none() && capture.current_matches() && !superseded_unknown_create {
-        generation = capture.current.ok_or("PUBLICATION_NOT_PUBLISHED")?;
-        verify_generation(backend, root, &generation, deadline, cancel)?;
-    } else {
-        let pending = if let Some(pending) = capture.pending.clone() {
-            pending
-        } else {
-            let pending = control::start_build(&path, &capture, deadline, cancel)
+        if let Some(pending) = &capture.pending
+            && (!pending.capture_complete || !capture.pending_matches())
+        {
+            writer
+                .abandon_build(pending, deadline, cancel)
                 .map_err(PublicationError::code)?;
-            stage_capture(root, &pending, &capture.sources, deadline, cancel)?
-        };
-        let pending = upload(backend, root, pending, deadline, cancel)?;
-        verify_generation(backend, root, &pending.generation, deadline, cancel)?;
+            return Err("PUBLICATION_STALE");
+        }
+        cleanup(backend, &writer, deadline, cancel)?;
+        if capture.pending.is_none() && capture.current_matches() && !superseded_unknown_build {
+            let generation = capture.current.ok_or("PUBLICATION_NOT_PUBLISHED")?;
+            Ok((generation, None))
+        } else {
+            let pending = if let Some(pending) = capture.pending.clone() {
+                pending
+            } else {
+                let pending = writer
+                    .start_build(&capture, deadline, cancel)
+                    .map_err(PublicationError::code)?;
+                stage_capture(root, &writer, &pending, &capture.sources, deadline, cancel)?
+            };
+            let pending = upload(backend, root, &writer, pending, deadline, cancel)?;
+            Ok((pending.generation.clone(), Some(pending)))
+        }
+    })();
+    // Close even after cancellation or a failed local commit. Native read-only
+    // verification and final publication never observe an open writer.
+    writer
+        .close(deadline, cancel)
+        .map_err(PlainControlError::code)?;
+    let (mut generation, pending) = prepared?;
+    verify_generation(backend, root, &generation, deadline, cancel)?;
+    if let Some(pending) = pending {
         generation = control::commit_generation(&path, &pending, deadline, cancel)
             .map_err(PublicationError::code)?;
     }
@@ -631,26 +670,37 @@ pub fn api_key() -> Result<Option<String>, &'static str> {
 /// Publishes and opens the validated view under an already-held root guard.
 pub fn publish(
     root: &PlainRootGuard,
+    writer: ControlWriter,
     request: &PublicationRequest,
     deadline: Instant,
     cancel: &AtomicBool,
 ) -> Result<PublishedView, &'static str> {
-    let key = api_key()?;
-    let backend = Backend::connect(
-        &request.endpoint,
-        key.as_deref(),
-        BackendLimits {
-            max_batch_points: MAX_PAGE_POINTS,
-            max_request_bytes: MAX_REQUEST_BYTES,
-            max_response_bytes: MAX_RESPONSE_BYTES,
-            max_query_bytes: MAX_QUERY_BYTES,
-            max_hits: MAX_HITS,
-        },
-        deadline,
-        cancel,
-    )
-    .map_err(BackendError::code)?;
-    prepare_view(root, &backend, deadline, cancel)
+    let connected = (|| {
+        let key = api_key()?;
+        Backend::connect(
+            &request.endpoint,
+            key.as_deref(),
+            BackendLimits {
+                max_batch_points: MAX_PAGE_POINTS,
+                max_request_bytes: MAX_REQUEST_BYTES,
+                max_response_bytes: MAX_RESPONSE_BYTES,
+                max_query_bytes: MAX_QUERY_BYTES,
+                max_hits: MAX_HITS,
+            },
+            deadline,
+            cancel,
+        )
+        .map_err(BackendError::code)
+    })();
+    match connected {
+        Ok(backend) => prepare_view(root, writer, &backend, deadline, cancel),
+        Err(error) => {
+            writer
+                .close(deadline, cancel)
+                .map_err(PlainControlError::code)?;
+            Err(error)
+        }
+    }
 }
 
 pub fn run(
@@ -661,7 +711,9 @@ pub fn run(
 ) -> ExitCode {
     let result = (|| {
         let root = open_plain(path, deadline, cancel).map_err(PlainRootError::code)?;
-        let view = publish(&root, request, deadline, cancel)?;
+        let writer = ControlWriter::open(&root.control_path(), deadline, cancel)
+            .map_err(PlainControlError::code)?;
+        let view = publish(&root, writer, request, deadline, cancel)?;
         let result = response(&view);
         let bytes = serde_json::to_vec(&result).map_err(|_| "PUBLICATION_RESPONSE_INVALID")?;
         if bytes.len() >= MAX_PUBLICATION_RESPONSE_BYTES {

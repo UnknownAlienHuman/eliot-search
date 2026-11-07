@@ -11,6 +11,7 @@ use search_control_redb::current_preparation::{
     CurrentPreparation, PreparationControlError, PreparationGap, PreparationOutcome,
     capture_preparation, commit_preparation, ensure_preparation_settings,
 };
+use search_control_redb::plain_control::ControlWriter;
 use search_revision_store::{ObjectStoreError, read_object, store_object};
 use search_runtime_owner::{PlainRootGuard, open_plain};
 use search_source_registry::{
@@ -155,16 +156,33 @@ pub struct PreparedSource {
 /// Reuses or creates the selected source's verified preparation without CLI serialization.
 pub fn prepare(
     root: &PlainRootGuard,
+    writer: Option<&ControlWriter>,
     id: SourceId,
     deadline: Instant,
     cancel: &AtomicBool,
 ) -> Result<PreparedSource, &'static str> {
     check(deadline, cancel)?;
     let control = root.control_path();
-    ensure_preparation_settings(&control, id, deadline, cancel)
+    writer
+        .map_or_else(
+            || ensure_preparation_settings(&control, id, deadline, cancel),
+            |writer| writer.ensure_preparation_settings(id, deadline, cancel),
+        )
         .map_err(PreparationControlError::code)?;
-    let capture = capture_preparation(&control, id, deadline, cancel)
+    let capture = writer
+        .map_or_else(
+            || capture_preparation(&control, id, deadline, cancel),
+            |writer| writer.capture_preparation(id, deadline, cancel),
+        )
         .map_err(PreparationControlError::code)?;
+    let commit = |result| {
+        writer
+            .map_or_else(
+                || commit_preparation(&control, &capture, result, deadline, cancel),
+                |writer| writer.commit_preparation(&capture, result, deadline, cancel),
+            )
+            .map_err(PreparationControlError::code)
+    };
     let source = capture.source.clone();
     let settings = capture.settings;
     let budget = limits();
@@ -189,8 +207,7 @@ pub fn prepare(
                 .map_err(ObjectStoreError::code)?;
             let _view = decode_prepared_utf8(&stored, &source, &settings, budget, deadline, cancel)
                 .map_err(PreparationError::code)?;
-            let current = commit_preparation(&control, &capture, result, deadline, cancel)
-                .map_err(PreparationControlError::code)?;
+            let current = commit(result)?;
             Ok(PreparedSource {
                 source,
                 current,
@@ -198,8 +215,7 @@ pub fn prepare(
             })
         }
         PreparationOutcome::Gap { reason } => {
-            let current = commit_preparation(&control, &capture, result, deadline, cancel)
-                .map_err(PreparationControlError::code)?;
+            let current = commit(result)?;
             match current.outcome.as_ref().map(|o| o.result) {
                 Some(PreparationOutcome::Ready { artifact }) => {
                     let stored = read_object(root, artifact, encoded_limit, deadline, cancel)
@@ -271,7 +287,7 @@ pub fn run(
         Ok(guard) => guard,
         Err(e) => return emit_error(e.code()),
     };
-    let prepared = match prepare(&guard, id, deadline, cancel) {
+    let prepared = match prepare(&guard, None, id, deadline, cancel) {
         Ok(prepared) => prepared,
         Err(code) => return emit_error(code),
     };

@@ -79,6 +79,56 @@ impl fmt::Display for PlainControlError {
 
 impl std::error::Error for PlainControlError {}
 
+/// One scoped writable CONTROL database, owned by an existing guarded operation.
+///
+/// Borrowers create short transactions and release them before object I/O or RPC.
+/// The owner must close before native read-only verification and published views.
+pub struct ControlWriter {
+    database: redb_plain::Database,
+}
+
+impl ControlWriter {
+    /// Opens an existing, already validated CONTROL file without creating its format.
+    ///
+    /// # Errors
+    /// Propagates engine, cancellation and original-deadline failures.
+    pub fn open(
+        path: &Path,
+        deadline: Instant,
+        cancellation: &AtomicBool,
+    ) -> Result<Self, PlainControlError> {
+        check(deadline, cancellation)?;
+        let database = redb_plain::Database::open(path).map_err(map_database_error)?;
+        if let Err(error) = check(deadline, cancellation) {
+            let _ = database.close();
+            return Err(error);
+        }
+        Ok(Self { database })
+    }
+
+    pub(crate) const fn database(&self) -> &redb_plain::Database {
+        &self.database
+    }
+
+    /// Closes the engine before verification, final pointer commit or view creation.
+    ///
+    /// # Errors
+    /// Propagates close failure, cancellation or the original deadline. The close
+    /// is attempted even when cancellation or deadline expiry has already occurred.
+    pub fn close(
+        self,
+        deadline: Instant,
+        cancellation: &AtomicBool,
+    ) -> Result<(), PlainControlError> {
+        let before = check(deadline, cancellation);
+        let closed = self.database.close().map_err(map_database_error);
+        let after = check(deadline, cancellation);
+        before?;
+        after?;
+        closed
+    }
+}
+
 fn check(deadline: Instant, cancellation: &AtomicBool) -> Result<(), PlainControlError> {
     if cancellation.load(Ordering::Relaxed) {
         return Err(PlainControlError::Cancelled);

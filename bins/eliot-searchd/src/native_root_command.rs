@@ -12,10 +12,11 @@ use std::time::{Duration, Instant};
 
 use ignore::WalkBuilder;
 use search_control_redb::current_source::{
-    AdmittedSelection, MAX_CURRENT_SOURCES, SelectionKind, SourceControlError, admit_selection,
+    AdmittedSelection, MAX_CURRENT_SOURCES, SelectionKind, SourceControlError,
     capture_current_source, capture_current_sources, capture_selections, commit_current_source,
-    remove_current_sources, source_locator_bytes, source_path_from_locator,
+    source_locator_bytes, source_path_from_locator,
 };
+use search_control_redb::plain_control::{ControlWriter, PlainControlError};
 use search_revision_store::store_object;
 use search_runtime_owner::{
     PlainRootError, PlainRootGuard, PlainRootStatus, discard_incomplete_plain, initialize_plain,
@@ -117,10 +118,15 @@ fn emit_source_record(record: &CurrentSourceRecord) {
 
 fn retain_file(
     root: &PlainRootGuard,
+    writer: Option<&ControlWriter>,
     file_path: &Path,
     deadline: Instant,
 ) -> Result<CurrentSourceRecord, &'static str> {
-    let capture = capture_current_source(&root.control_path(), file_path, deadline, &CANCELLED)
+    let capture = writer
+        .map_or_else(
+            || capture_current_source(&root.control_path(), file_path, deadline, &CANCELLED),
+            |writer| writer.capture_current_source(file_path, deadline, &CANCELLED),
+        )
         .map_err(SourceControlError::code)?;
     let acquired = acquire_file(file_path, MAX_SOURCE_FILE_BYTES, deadline, &CANCELLED)
         .map_err(SourceReadError::code)?;
@@ -138,14 +144,19 @@ fn retain_file(
         Err(error) => return Err(error.code()),
     };
     drop(bytes);
-    commit_current_source(
-        &root.control_path(),
-        capture,
-        file_key,
-        object_ref,
-        deadline,
-        &CANCELLED,
-    )
+    match writer {
+        Some(writer) => {
+            writer.commit_current_source(capture, file_key, object_ref, deadline, &CANCELLED)
+        }
+        None => commit_current_source(
+            &root.control_path(),
+            capture,
+            file_key,
+            object_ref,
+            deadline,
+            &CANCELLED,
+        ),
+    }
     .map_err(SourceControlError::code)
 }
 
@@ -154,7 +165,7 @@ fn retain_file_command(data_root: &Path, file_path: &Path, deadline: Instant) ->
         Ok(root) => root,
         Err(error) => return emit_error(error),
     };
-    match retain_file(&root, file_path, deadline) {
+    match retain_file(&root, None, file_path, deadline) {
         Ok(record) => {
             emit_source_record(&record);
             drop(root);
@@ -375,30 +386,48 @@ fn index_sources(
     let selections = index_selections(index_path, admitted, deadline)?;
     let mut files = BTreeMap::new();
     let scans = scan_selections(&selections, data_root, &mut files, deadline)?;
-    if index_path.is_some() {
-        let selection = selections.first().ok_or("INDEX_SELECTION_REQUIRED")?;
-        admit_selection(&control, selection, deadline, &CANCELLED)
-            .map_err(SourceControlError::code)?;
-    }
-    for file in files.values() {
-        check_index(deadline)?;
-        let source = retain_file(root, file, deadline)?;
-        crate::prepared_source::prepare(root, source.source_id, deadline, &CANCELLED)?;
-    }
-
-    {
-        let mut verified_files = BTreeMap::new();
-        let verified_scans =
-            scan_selections(&selections, data_root, &mut verified_files, deadline)?;
-        if scans != verified_scans || files.keys().ne(verified_files.keys()) {
-            return Err("INDEX_SCAN_CHANGED");
+    let writer =
+        ControlWriter::open(&control, deadline, &CANCELLED).map_err(PlainControlError::code)?;
+    let reconciled = (|| {
+        if index_path.is_some() {
+            let selection = selections.first().ok_or("INDEX_SELECTION_REQUIRED")?;
+            writer
+                .admit_selection(selection, deadline, &CANCELLED)
+                .map_err(SourceControlError::code)?;
         }
-    }
-    let removals = confirmed_removals(&inventory, &scans, &files, deadline)?;
-    remove_current_sources(&control, &removals, deadline, &CANCELLED)
-        .map_err(SourceControlError::code)?;
+        for file in files.values() {
+            check_index(deadline)?;
+            let source = retain_file(root, Some(&writer), file, deadline)?;
+            crate::prepared_source::prepare(
+                root,
+                Some(&writer),
+                source.source_id,
+                deadline,
+                &CANCELLED,
+            )?;
+        }
 
-    let view = crate::published_corpus::publish(root, request, deadline, &CANCELLED)?;
+        {
+            let mut verified_files = BTreeMap::new();
+            let verified_scans =
+                scan_selections(&selections, data_root, &mut verified_files, deadline)?;
+            if scans != verified_scans || files.keys().ne(verified_files.keys()) {
+                return Err("INDEX_SCAN_CHANGED");
+            }
+        }
+        let removals = confirmed_removals(&inventory, &scans, &files, deadline)?;
+        writer
+            .remove_current_sources(&removals, deadline, &CANCELLED)
+            .map_err(SourceControlError::code)
+    })();
+    if let Err(error) = reconciled {
+        writer
+            .close(deadline, &CANCELLED)
+            .map_err(PlainControlError::code)?;
+        return Err(error);
+    }
+
+    let view = crate::published_corpus::publish(root, writer, request, deadline, &CANCELLED)?;
     view.close().map_err(|_| "PUBLICATION_CLOSE_FAILED")?;
     Ok(())
 }
