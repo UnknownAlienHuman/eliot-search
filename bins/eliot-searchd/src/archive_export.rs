@@ -64,11 +64,9 @@ fn destination(source: &PlainRootGuard, out: &Path) -> Result<PathBuf, &'static 
         return Err("ARCHIVE_PATH_INVALID");
     }
     let name = out.file_name().ok_or("ARCHIVE_PATH_INVALID")?;
-    let parent = out
-        .parent()
-        .ok_or("ARCHIVE_PATH_INVALID")?
-        .canonicalize()
-        .map_err(|_| "ARCHIVE_PATH_IO")?;
+    let parent = out.parent().ok_or("ARCHIVE_PATH_INVALID")?;
+    plain(parent, true)?;
+    let parent = parent.canonicalize().map_err(|_| "ARCHIVE_PATH_IO")?;
     plain(&parent, true)?;
     let source = source
         .path()
