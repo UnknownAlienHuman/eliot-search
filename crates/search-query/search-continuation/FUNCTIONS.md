@@ -1,8 +1,8 @@
 # Same-session query windows
 
-The old continuation crate/stores/manifest/exclusive fixtures remain removed. The connected candidate at
-source 473447af uses the real CLI, public SDK and daemon; it does not introduce another window service.
-Implemented policy and the limited executed native scope below are separate facts. X1 remains PARTIAL.
+The old continuation crate/stores/manifest/exclusive fixtures remain removed. The real CLI/SDK/daemon window
+consumer is qualified for the selected Windows/Release X1 scope on main 59061070, using source-equivalent
+473447af binaries. X1 is DONE in that scope; M1 implementation is READY, not delivered. V1 remains unfinished.
 
 ## Current consumer and usage
 
@@ -69,14 +69,23 @@ resume, renewal, grants or second state platform is added. Runtime qualification
 
 ## Verification scope
 
-Source review PASS at 473447af and focused locked check/strict Clippy/RELEASE builds passed. Actual native
-proof supplied so far is Raw only: public Open -> client-origin refusal -> valid Expand -> Continue -> Close
-(CLI PID 103172 exit 2, daemon 13692 exit 0, both EOF and OS absence). A direct-server guard/two late-Cancel/
-three-page/Close run (helper 104060, daemon 23456, both exit 0) received replies 1..6 exactly once and preserved
-CONTROL plus 16 objects.
+Final Sol incremental X1 gate PASS covers the source-equivalent 473447af/main 59061070 Windows/Release
+consumer: public Raw client-refusal/healthy continuation, server guard/late Cancel; Decoded stable Source/
+Prepared refs and original bytes after live-input mutation; ranked generation-2 offline Continue/Expand,
+Busy Index and reopen after Close; public TTL/no-renewal/EOF/early TTL; calibrated held deferred Cancel and
+held-expiry finite partial exit 2; empty/unknown selection, gaps without false negative and 64-prefix end.
 
-Held-output deferred Cancel, ranked/Decoded windows, TTL/EOF, Busy release and paging-boundary qualification
-remain pending. Do not promote source-reviewed lifecycle policy or these two Raw runs into those results.
-X1 remains PARTIAL, M1 WAIT and V1 unfinished. The current prepared-representation producer is saved UTF-8 identity;
-new extracted/parser/nonidentity routes are not selected gates before M1. Historical Markdown/JATS are not
-restored, and unavailable representations remain explicit gaps rather than invented text.
+The real 4 MiB UTF-8/64 hard-64 KiB-line run cut a requested page into 63 whole items then one: committed
+cursor 63 then 64. All 64 texts/ranges were byte-exact at 65536 bytes each. Frames were 8300716/132042/50
+bytes, each <=8388608. Sol independently verified the v4 raw stdout/hash. Session wait, both EOFs and OS
+absence were observed; query CONTROL/objects remained unchanged.
+
+Exact pre-exit worker/root release timing remains UNKNOWN; SDK-only unread remains NOT_PROVEN and is not
+a separate selected gate. The earlier v1 Gridstore os3 cause remains UNKNOWN; short-path PASS does not
+establish its cause. Setup init/one-shot daemon observer remains UNKNOWN wherever not actually observed.
+These scopes do not qualify the whole project, other platforms or an installed final-head baseline.
+
+The current prepared-representation producer is saved UTF-8 identity. New extracted/parser/nonidentity routes
+are not selected gates before M1, and historical Markdown/JATS are not restored. Unavailable representations
+remain explicit. Next implement collect-objects under the [stopped-root owner rule](../../search-runtime/search-retention/FUNCTIONS.md#stopped-root-local-object-collection);
+M1 readiness does not mean collection/archive/import already exist.
