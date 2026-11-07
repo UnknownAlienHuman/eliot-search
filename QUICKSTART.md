@@ -218,6 +218,20 @@ remains available when a Prepared representation is absent. Same-session Continu
 see the [window owner](crates/search-query/search-continuation/FUNCTIONS.md#verification-scope) for their bounded
 Windows/Release qualification. Extracted still has no real producer/route.
 
+## Export a plain archive
+
+Use the matching RELEASE siblings built above and a current root with a served generation:
+
+    .\target\release\eliot-search.exe archive-export --archive-path "C:\example\archives\snapshot-1" --data-root "C:\example\data-root" --daemon .\target\release\eliot-searchd.exe
+
+The output must be fresh, outside/non-overlapping with the source, under an existing non-reparse parent.
+Export takes exclusive root ownership; close sessions first. It verifies the required retained closure, copies
+CONTROL/objects and independently verifies the copy before publishing archive.complete last. It makes no
+Qdrant connection and copies no backend storage. The archive is deliberately non-runnable, including after
+interruption; it is not a cloned installation. Import is not implemented. M1 remains PARTIAL; see the
+[archive owner](crates/search-runtime/search-retention/FUNCTIONS.md#implemented-archive-export-consumer) and
+[recorded qualification scopes](docs/audit/ANALYSIS_REGISTRY.md#core-corrections-and-archive-export).
+
 ## File, environment and CLI settings
 
 An explicit UTF-8 TOML file at C:\example\settings\operator.toml may contain:

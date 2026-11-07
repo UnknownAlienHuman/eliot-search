@@ -106,8 +106,16 @@ After successful publication the helper checks/removes the exact completed stage
 documented leftover hard link. A crash before cleanup leaves a recognized state above, rather than an unknown
 root entry. A failed or uncertain publication is resolved by exact final readback; it never overwrites or
 blindly replays. The init marker remains after final manifest publication. Directory sync is attempted on Unix;
-Windows does not open a directory handle for it. These steps do not establish universal power-loss durability:
+Supported Windows paths use the maintained directory handle with BACKUP_SEMANTICS/OPEN_REPARSE_POINT and write
+access before sync_all; Unix opens/syncs the directory. These steps do not establish universal power-loss durability:
 damaged bytes outside the exact metadata-prefix rules remain unsupported.
+
+## Shared directory flush API
+
+sync_directory(&Path, Instant, &AtomicBool) is the actual archive-export caller's directory flush primitive.
+It keeps existing absolute/non-reparse/directory checks and the original deadline/cancellation, propagating I/O
+and unsupported-platform failures. File/directory flush success is not a universal power-loss or install guarantee.
+No command-specific root wrapper or new ownership ledger is introduced.
 
 ## Explicit discard
 

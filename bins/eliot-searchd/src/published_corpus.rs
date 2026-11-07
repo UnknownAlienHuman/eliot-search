@@ -615,7 +615,21 @@ fn prepare_view(
             return Err("PUBLICATION_STALE");
         }
         cleanup(backend, &writer, deadline, cancel)?;
-        if capture.pending.is_none() && capture.current_matches() && !superseded_unknown_build {
+        let reuse_current = if capture.pending.is_none()
+            && capture.current_matches()
+            && !superseded_unknown_build
+        {
+            let generation = capture
+                .current
+                .as_ref()
+                .ok_or("PUBLICATION_NOT_PUBLISHED")?;
+            backend
+                .exists(&generation.collection(), deadline, cancel)
+                .map_err(BackendError::code)?
+        } else {
+            false
+        };
+        if reuse_current {
             let generation = capture.current.ok_or("PUBLICATION_NOT_PUBLISHED")?;
             Ok((generation, None))
         } else {

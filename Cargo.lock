@@ -933,6 +933,7 @@ version = "0.0.0"
 name = "search-control-redb"
 version = "0.0.0"
 dependencies = [
+ "blake3",
  "getrandom",
  "redb",
  "search-contracts",

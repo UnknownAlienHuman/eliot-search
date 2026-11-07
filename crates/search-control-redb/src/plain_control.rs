@@ -2,8 +2,12 @@
 //!
 //! Fresh plain roots use redb 4.5. The legacy redb 2.6 owner remains separate;
 //! this module never upgrades or reformats an existing populated database.
+
 //! An owned preformat empty database can finish initialization after a read-only
 //! proof. The caller holds root exclusion for initialization and discard.
+
+mod archive_copy;
+pub use archive_copy::{ControlCopy, copy_plain_control, describe_plain_control};
 
 use std::fmt;
 use std::fs::{File, Metadata, OpenOptions};

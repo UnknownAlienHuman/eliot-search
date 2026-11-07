@@ -33,6 +33,7 @@ enum RootCommand {
     Index,
     Search,
     CollectObjects,
+    ArchiveExport,
 }
 
 impl RootCommand {
@@ -48,6 +49,7 @@ impl RootCommand {
             Self::Index => "index",
             Self::Search => "search",
             Self::CollectObjects => "collect-objects",
+            Self::ArchiveExport => "archive-export",
         }
     }
 
@@ -63,6 +65,7 @@ impl RootCommand {
             Self::Index => "--index",
             Self::Search => "--search-stdio",
             Self::CollectObjects => "--collect-objects",
+            Self::ArchiveExport => "--archive-export",
         }
     }
 }
@@ -105,6 +108,54 @@ struct PublicationRequest {
     endpoint: Option<String>,
     query: Option<String>,
     limit: Option<usize>,
+}
+
+#[derive(Default)]
+struct RootPaths {
+    daemon: Option<PathBuf>,
+    data_root: Option<PathBuf>,
+    config: Option<PathBuf>,
+    archive: Option<PathBuf>,
+}
+
+impl RootPaths {
+    fn take_option(
+        &mut self,
+        command: RootCommand,
+        arguments: &[OsString],
+        index: usize,
+        positional_root: bool,
+        settings: &mut Vec<OsString>,
+    ) -> Result<bool, &'static str> {
+        let argument = &arguments[index];
+        let slot = match argument.to_str() {
+            Some("--daemon") => &mut self.daemon,
+            Some("--data-root") => {
+                if positional_root {
+                    return Err("USAGE_ERROR");
+                }
+                &mut self.data_root
+            }
+            Some("--config-file") => &mut self.config,
+            Some("--archive-path") => {
+                if !matches!(command, RootCommand::ArchiveExport) {
+                    return Err("USAGE_ERROR");
+                }
+                &mut self.archive
+            }
+            _ => return Ok(false),
+        };
+        if slot.is_some() {
+            return Err("USAGE_ERROR");
+        }
+        let value = path_option(arguments, index)?;
+        *slot = Some(PathBuf::from(value));
+        if argument != OsStr::new("--daemon") {
+            settings.push(argument.clone());
+            settings.push(value.clone());
+        }
+        Ok(true)
+    }
 }
 
 struct Captured {
@@ -173,6 +224,7 @@ enum DaemonResponse<'a> {
     Published(&'a str),
     Indexed(&'a str),
     Collected(&'a str),
+    Archived(&'a str),
     Error(&'a str),
 }
 
@@ -227,6 +279,7 @@ fn command(value: &OsStr) -> Option<RootCommand> {
         "index" => Some(RootCommand::Index),
         "search" => Some(RootCommand::Search),
         "collect-objects" => Some(RootCommand::CollectObjects),
+        "archive-export" => Some(RootCommand::ArchiveExport),
         _ => None,
     }
 }
@@ -246,6 +299,7 @@ fn is_daemon_root_flag(value: &OsStr) -> bool {
                 | "--search-stdio"
                 | "--session-stdio"
                 | "--collect-objects"
+                | "--archive-export"
         )
     )
 }
@@ -446,10 +500,8 @@ fn parse(arguments: &[OsString]) -> Result<Parsed, &'static str> {
     };
 
     let mut settings = Vec::new();
-    let mut daemon = None;
-    let mut data_root_seen = false;
+    let mut paths = RootPaths::default();
     let mut positional_root_seen = false;
-    let mut config_seen = false;
     let mut source_file_seen = false;
     let mut index_path_seen = false;
     let mut preparation = PreparationRequest::default();
@@ -460,30 +512,13 @@ fn parse(arguments: &[OsString]) -> Result<Parsed, &'static str> {
         if is_help_flag(argument) || is_version_flag(argument) || is_daemon_root_flag(argument) {
             return Err("USAGE_ERROR");
         }
-        if argument == OsStr::new("--daemon") {
-            if daemon.is_some() {
-                return Err("USAGE_ERROR");
-            }
-            let value = path_option(arguments, index)?;
-            daemon = Some(PathBuf::from(value));
-            index += 2;
-        } else if argument == OsStr::new("--data-root") {
-            if data_root_seen || positional_root_seen {
-                return Err("USAGE_ERROR");
-            }
-            let value = path_option(arguments, index)?;
-            data_root_seen = true;
-            settings.push(argument.clone());
-            settings.push(value.clone());
-            index += 2;
-        } else if argument == OsStr::new("--config-file") {
-            if config_seen {
-                return Err("USAGE_ERROR");
-            }
-            let value = path_option(arguments, index)?;
-            config_seen = true;
-            settings.push(argument.clone());
-            settings.push(value.clone());
+        if paths.take_option(
+            root_command,
+            arguments,
+            index,
+            positional_root_seen,
+            &mut settings,
+        )? {
             index += 2;
         } else if argument == OsStr::new("--file") {
             if source_file_seen || !matches!(root_command, RootCommand::RetainFile) {
@@ -514,7 +549,7 @@ fn parse(arguments: &[OsString]) -> Result<Parsed, &'static str> {
                 index_path_seen = true;
                 settings.push(OsString::from("--index-path"));
             } else {
-                if positional_root_seen || data_root_seen {
+                if positional_root_seen || paths.data_root.is_some() {
                     return Err("USAGE_ERROR");
                 }
                 positional_root_seen = true;
@@ -522,6 +557,9 @@ fn parse(arguments: &[OsString]) -> Result<Parsed, &'static str> {
             settings.push(argument.clone());
             index += 1;
         }
+    }
+    if matches!(root_command, RootCommand::ArchiveExport) != paths.archive.is_some() {
+        return Err("USAGE_ERROR");
     }
     validate_request_selection(
         root_command,
@@ -533,7 +571,7 @@ fn parse(arguments: &[OsString]) -> Result<Parsed, &'static str> {
     Ok(Parsed::Root {
         command: root_command,
         settings,
-        daemon,
+        daemon: paths.daemon,
         preparation,
         publication,
     })
@@ -937,7 +975,8 @@ fn validated_snapshot(bytes: &[u8], command: RootCommand) -> Option<&str> {
         | RootCommand::PublishPrepared
         | RootCommand::Index
         | RootCommand::Search
-        | RootCommand::CollectObjects => {
+        | RootCommand::CollectObjects
+        | RootCommand::ArchiveExport => {
             return None;
         }
         RootCommand::Inspect | RootCommand::DiscardIncomplete => &[
@@ -1052,13 +1091,30 @@ fn validated_collected(bytes: &[u8]) -> Option<&str> {
     Some(line)
 }
 
+fn validated_archived(bytes: &[u8]) -> Option<&str> {
+    let line = validated_line(bytes)?;
+    let value: serde_json::Value = serde_json::from_str(line).ok()?;
+    if value.as_object()?.len() != 5
+        || value["operation"] != "archive-export"
+        || value["state"] != "complete"
+        || value["generation"].as_u64()? == 0
+        || value["control_bytes"].as_u64()? == 0
+    {
+        return None;
+    }
+    value["objects"].as_u64()?;
+    Some(line)
+}
+
 fn validated_response<'a>(
     output: &'a ChildOutput,
     command: RootCommand,
     preparation: &PreparationRequest,
 ) -> Option<DaemonResponse<'a>> {
     if output.stderr.bytes.is_empty() {
-        if matches!(command, RootCommand::CollectObjects) {
+        if matches!(command, RootCommand::ArchiveExport) {
+            validated_archived(&output.stdout.bytes).map(DaemonResponse::Archived)
+        } else if matches!(command, RootCommand::CollectObjects) {
             validated_collected(&output.stdout.bytes).map(DaemonResponse::Collected)
         } else if matches!(command, RootCommand::Index) {
             validated_line(&output.stdout.bytes)
@@ -1100,6 +1156,7 @@ fn print_help() {
         "  eliot-search --help\n",
         "  eliot-search --version\n",
         "  eliot-search collect-objects [ROOT] [--data-root ROOT] [--config-file PATH] [--daemon PATH]\n",
+        "  eliot-search archive-export --archive-path OUT [ROOT] [--data-root ROOT] [--config-file PATH] [--daemon PATH]\n",
         "  eliot-search session --data-root ROOT [--qdrant-url URL] [--config-file PATH] [--daemon PATH]\n",
         "    stdin/stdout: SessionClientFrame/SessionReply JSON, one object per line\n",
         "  eliot-search inspect-data-root [ROOT] [--data-root ROOT] [--config-file PATH] [--daemon PATH]\n",
@@ -1253,7 +1310,8 @@ pub fn run_main() -> i32 {
             | DaemonResponse::Prepared(result)
             | DaemonResponse::Published(result)
             | DaemonResponse::Indexed(result)
-            | DaemonResponse::Collected(result),
+            | DaemonResponse::Collected(result)
+            | DaemonResponse::Archived(result),
         ) => (write_line(&mut std::io::stdout().lock(), result), 0),
         (false, DaemonResponse::Error(error)) => (
             write_line(&mut std::io::stderr().lock(), error),

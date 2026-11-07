@@ -92,6 +92,16 @@ publication before view installation succeeds or recovery refuses serving.
 Query addresses the view's physical collection, not an alias. Visible Stage 2/3A collections are immutable.
 A physical profile or selected-state change builds a fresh complete generation. Query k/b alone does not.
 
+## Confirmed missing derived generation
+
+Writable Index/publish-prepared reuses matching current state only after the bridge's typed existence check.
+A confirmed absent physical collection enters the existing complete build with a fresh never-reused generation,
+retained input and normal schema/points/count/canary verification before current commit. Healthy current reuse
+allocates no replacement. Connection/RPC failure is an error, not proof of absence or permission to allocate;
+foreign collections are not adopted. Retained objects and unresolved cleanup obligations remain preserved.
+Publication reads also enforce source catalogue count/byte accounting including locators, independently of the
+publication capture-byte allowance. Read-only Search does not repair a missing backend.
+
 <a id="apply-observed-state-is-not-dispatch-completion"></a>
 ## Uncertain effects
 

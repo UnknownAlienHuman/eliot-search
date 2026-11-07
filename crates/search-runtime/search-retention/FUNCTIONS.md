@@ -3,7 +3,8 @@
 This recipe owns local-object reachability, archive and import. [Publication](../../search-index-qdrant/search-publication/FUNCTIONS.md)
 owns live Qdrant retirement. [Local scope](../../../docs/architecture/LOCAL_SCOPE.md) selects plain storage, not key migration.
 The unused coordinator Rust package, manifest and exclusive fixtures remain removed. The stopped-root
-collect-objects slice is connected at source f01809bc; archive/import are not implemented. M1 is PARTIAL.
+collect-objects and archive-export slices are connected at their recorded source/native scopes. Import remains
+unimplemented; M1 is PARTIAL and V1/installed final-head qualification is unfinished.
 
 ## No maintenance scan in the query path
 
@@ -70,14 +71,35 @@ state; publish the small archive-complete marker last. No marker means incomplet
 Record the actual durability limit. Normal root open refuses before recovery/backend work; the archive reader
 never calls ordinary root open. Preserve original/archive. A raw OS clone is unsupported, not automatically adopted.
 
+## Implemented archive-export consumer
+
+    eliot-search archive-export --archive-path OUT --data-root ROOT [--daemon PATH]
+
+[archive_export.rs](../../../bins/eliot-searchd/src/archive_export.rs) uses stopped-root exclusion and the actual
+typed closure. The selected export baseline is served, recorded with format/version, served generation,
+CONTROL length/digest and closure count in archive.header. A fresh non-overlapping OUT contains control/ and
+objects/, not runnable root metadata/lock or backend data. Required current/stale/published/pending/cleanup
+objects are verified; unrelated final orphans/foreign entries are not made archive authority.
+
+The exported copy's CONTROL and required objects/bindings are verified from the copy itself, using shared
+read_object_in without ordinary root adoption. After supported file/directory flushes, archive.complete is
+published last and verified. Incomplete/missing/forged completion and normal-open refusal stay distinct from
+import support. The directory flush primitive does not claim universal power-loss durability.
+
+Archive 06f A-D, 7a7d v2 positive/Busy/incomplete-scan and final 597 interruption retain separate native scopes
+in the registry. The earlier interrupted-test setup lacked root.lock before OUT and is not interruption proof.
+A killed exporter may leave owned scratch outside the source/OUT; the reported forensic scratch is neither a
+final object nor archive payload. This is not a resume journal or permission to reset original state.
+
 ## Explicit restore/import into a fresh destination
 
 1. Read the complete archive without writes or original backend effects. Validate format, references, exact objects,
    representation/gaps and bounded paths. Missing/unsupported/corrupt input fails, not rereads of changed live files.
 2. Under the destination's exclusive root guard, initialize an empty plain root. Persist a destination-bound
    incomplete-import marker before importing rows/objects or issuing RPCs. Normal open refuses it before recovery.
-3. Use the destination object owner for exact bytes. Allocate new destination identity and never-reused generation
-   names; copy no process locks, source generation counters, routes or credentials as writable authority.
+3. Use the destination object owner for exact bytes, preserving portable Source identities and Prepared bindings.
+   Allocate a fresh destination PublicationNamespace and never-reused backend generation names; copy no process
+   locks, source generation counters, routes or credentials as writable authority. This is future import work.
 4. Copied pending/cleanup/cursor records are archive evidence only. They authorize no retry, compensation or delete
    against the original installation. Track actual destination effects with its ordinary publication owner.
 5. Choose one complete baseline: archived served inventory OR archived desired source/preparation state. Do not mix
@@ -107,5 +129,6 @@ corrupt D1 Prepared (296 bytes) returned OBJECT_INTEGRITY_FAILURE before changes
 Observed waits/both EOF/OS absence belong to the recorded native scopes. Additional guard/refusal checks are
 recorded in the [registry](../../../docs/audit/ANALYSIS_REGISTRY.md#evidence-status); older dbf runs stay older evidence.
 
-Only the collector slice is delivered. Next implement archive/import through the rules above and actual consumers,
-preserving originals. M1 remains PARTIAL; V1/installed final-head and whole-product qualification remain NOT_RUN.
+Collector and archive export are delivered only in their recorded scopes. Next implement fresh-destination import
+through the rules above and actual consumers, preserving originals. M1 remains PARTIAL; V1/installed final-head
+and whole-product qualification remain NOT_RUN.

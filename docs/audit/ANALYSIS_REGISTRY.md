@@ -11,20 +11,22 @@ source-equivalent 473447af/main 5906107080c0c567721afb66d6a2f947f488eaca closes 
 window gates below. Executed binaries retain their 473447af build provenance; no fresh 590 rebuild is claimed.
 X1 is DONE in that scope. Collector source f01809bc9826314cf1850e6e4e92b970105908ab has Sol SOURCE PASS,
 changed-owner gates and scoped Windows/Release A/B/C plus Busy/import-marker refusal proof below; M1 is PARTIAL.
-Archive/import are not implemented. Whole-project/installed final-head qualification remains NOT_RUN.
+Core corrections/archive export have final Sol SOURCE PASS at 597, whole-tree-equivalent to rebased source
+6137dcc27e2957010474a4ead0dec4c4e49ca33b. The scoped native results below deliver export, not import.
+M1 remains PARTIAL. Whole-project/installed final-head qualification remains NOT_RUN.
 
 <a id="resume"></a>
 <a id="resume-after-interruption"></a>
 ## Next task
 
-**M1 next: implement archive creation and fresh-destination import.** The stopped-root collect-objects slice
-is connected; follow the existing [archive rule](../../crates/search-runtime/search-retention/FUNCTIONS.md#backup-is-a-completed-archive-not-a-runnable-clone)
-and [import rule](../../crates/search-runtime/search-retention/FUNCTIONS.md#explicit-restoreimport-into-a-fresh-destination)
-with actual consumers. Preserve originals, verify copied CONTROL/required objects from the copy and publish the
-non-runnable archive completion marker last. Copied pending/cleanup records authorize no original backend effects.
-Do not create a new ledger/service or treat reserved root.importing refusal as implemented import support.
+**M1 next: implement fresh-destination import.** collect-objects and archive-export are delivered only in their
+recorded scopes. Follow the existing [import rule](../../crates/search-runtime/search-retention/FUNCTIONS.md#explicit-restoreimport-into-a-fresh-destination):
+preserve portable Source identities/Prepared bindings, use a fresh destination PublicationNamespace and new
+backend generation names, and preserve original/archive data. The existing root manifest has format/version,
+not a RootId. This is future work, not an implemented import API. Copied pending/cleanup records authorize no
+original backend effects; reserved root.importing refusal is not import support.
 
-M1 remains PARTIAL: the collector has only its recorded source/native scope; archive/import do not exist yet.
+M1 remains PARTIAL: collector and archive export have their recorded Windows/Release scopes; import is unfinished.
 Busy-root refusal/release and reserved import-marker refusal native checks are closed at their recorded scope.
 The scratch bookkeeping bound is source-reviewed, not a universal native RAM benchmark. Cooperating root
 exclusion does not make unlink atomic against external same-account renames.
@@ -35,7 +37,7 @@ R1's persisted unknown Insert/ABA, postcommit/pre-view interruption and fef held
 separately pinned native evidence. The 9e RELEASE resource run does not relabel those cases. Complete unsampled
 product peaks and generation-replacement peak remain UNKNOWN/NOT_RUN; exact pre-spawn timing, wire-level
 lost-ACK/original delayed RPC and real power loss remain NOT_RUN, not newly invented prerequisites.
-After X1, deliver M1 stopped-root archive/import, then V1 relevance/scale/installed release qualification.
+After the delivered collector/export slices, finish M1 import, then V1 relevance/scale/installed release qualification.
 Do not restore a deleted task queue or add a concurrent view framework by default: root exclusion remains.
 
 <a id="work-register"></a>
@@ -56,7 +58,7 @@ DONE below is the named delivered scope, not completion of the product.
 | U1 / DONE, Windows debug scope | Q1 | CONTROL resolver, daemon/CLI, protocol/client | Read-only verified full retained units/citations; c843 targeted final-pin scope and earlier evidence below. |
 | R1 / ACCEPTED, recorded functional + RELEASE fixed-input scopes | U1 | CLI/daemon index helpers, source CONTROL and publication | Recorded owner gates include unknown Insert/ABA, postcommit boundary, held-query exclusion/cleanup and ordinary-repo-1 RELEASE fixed-input resource PASS; stronger unclaimed boundaries remain below. |
 | X1 / DONE, Windows/Release selected scope | R1 | CLI/OwnedQuerySession/daemon window owner | Final Sol PASS: Raw/Decoded/ranked, lifetime/held-output/selection and real 63+1 frame cut at recorded scopes. |
-| M1 / PARTIAL, collector scope | X1 | Stopped-root collector and archive/import owner | collect-objects source f01809bc/Windows Release delivered at recorded scope; archive/import implementation is next. |
+| M1 / PARTIAL, collector + export scopes | X1 | Stopped-root collector and archive/import owner | collect-objects and archive-export delivered at their recorded Windows/Release scopes; fresh-destination import implementation is next. |
 | O1 / DEFERRED | Connected baseline + actual need | [Selected depth](../product/AGENT_ANALYSIS_FRAMEWORK.md#optional-depth) | Add only an actual source-backed consumer; remove unused scaffolds. |
 | V1 / WAIT | X1/M1 shipped paths | [Qualification](../implementation/TEST_CUTOVER.md), #215 | Measured relevance/scale/platform/release and installed-baseline evidence. |
 
@@ -102,6 +104,45 @@ hydration reuse. No application encryption, grants, OS-secret platform or second
 <a id="execution-evidence"></a>
 ## Verification and known blockers
 
+<a id="core-corrections-and-archive-export"></a>
+### Core corrections and archive export, source 597 / rebased 6137
+
+- Final Sol SOURCE PASS is at 597; rebased 6137 has the same whole tree. Changed-owner locked checks/strict
+  Clippy and RELEASE builds passed at their reported scopes. A4's Unix OsString import correction is source-only:
+  no Unix build/native qualification. A3 uses resolved exclusion while preserving native locator identity.
+- A1 source v2 totals and bounded reconciliation/preflight preserve the existing 4096-source / 16 MiB
+  catalogue caps. Accounting includes encoded rows and reverse locators; publication enforces it independently
+  of its own capture-byte cap. Publication source_count is the captured inventory length, including Empty/Gap,
+  as verified in the actual CONTROL capture/API and source audit; it is not a point count.
+- A1 count: legacy 4097 refused, removal of one generated input allowed bounded repair to 4096/generation 2
+  and Raw; all 4099 objects remained. Restoring the input made Index refuse without changing the recorded
+  rows/publication/counters. Prevention-run current wanted/totals remain UNKNOWN: pre-CONTROL was not retained.
+- Final597 A1 byte cases: normal v1/v2 publication exited 0. Legacy two-Index state had 1802 real rows and
+  2300 UTF-16 paths: source charge 16,782,026 exceeded 16,777,216 while publication charge 8,809,978 was below
+  its separate cap. Publish PID 108828 exited 2 PUBLICATION_LIMIT; current/counter stayed 2→2 and publication/
+  retired values, collections and objects were unchanged. In the closed v2 copy (root.lock preserved), changing
+  only total bytes 437→438 made PID 42340 exit 2 PUBLICATION_CORRUPT without effects. These preservation facts
+  are known, not covered by the separate prevention-run wanted/totals UNKNOWN.
+- Byte-case CLIs waited/both EOF/OS gone; fast v2 init/mismatch independent daemon custody remains UNKNOWN.
+  Qdrant 73148 stopped/gone. Exact result:
+  C:\Development\Rust\targets\task-a1-byte-native\run-20261107-v1\result.json.
+- A2 native healthy reuse/no allocation, missing collection→fresh generation 2 with Search and byte-exact retained citations, and unavailable
+  RPC→no allocation passed at recorded scope. Unavailable-case retired-payload diff remains UNKNOWN.
+- Archive 06f A-D functional closure/inert-layout/missing-corrupt/parent-reparse and 7a7d v2 positive/Busy/
+  incomplete-scan preservation passed at those earlier scopes; they are not relabelled final597 runs.
+- Final597 interruption used actual a1lg1\a: owned exporter 85580 was killed after a nonempty 30-byte object
+  copy and before completion. Wait/both EOF/OS absence were observed; partial header/CONTROL/one object stayed,
+  with no RootManifest/complete marker, and normal open refused (2). Original CONTROL, 4099 objects, 4097 inputs
+  and root descriptors were byte-identical; Raw generation 2 selected/scanned 4096 and exited 0.
+  The 2,396,160-byte forensic .eliot-collect-abab8097d5aad65b83ecdcb367362126.redb outside source a was preserved,
+  not final objects/archive payload. Root release/process absence were observed; follow-up CLI child custody/
+  wanted remain UNKNOWN. Earlier setup lacking root.lock before OUT is not interruption PASS.
+- Final interruption artifacts: C:\Development\Rust\targets\task-m1-archive-native\rawls-59772538-v1\logs\01-interruption.exit.json,
+  preservation.json and custody-release.json. A11 was not reproduced; existing output-phase fail-closed is
+  permitted, exact daemon error remains UNKNOWN, and no new source bug is established.
+- M1 remains PARTIAL: GC/export are delivered only at these Windows/Release scopes; import is unimplemented.
+  V1/installed final-head, whole product and stronger unclaimed power-loss/platform boundaries are not qualified.
+
 ### Stopped-root collector evidence, source f01809bc
 
 - Sol SOURCE PASS at f01809bc after the old dbf RAM/bookkeeping-bound P2 rejection. Current CONTROL/store/
@@ -129,8 +170,9 @@ hydration reuse. No application encryption, grants, OS-secret platform or second
   relabel them. Init/fast-child observer remains UNKNOWN where no actual observer evidence exists.
   Root exclusion coordinates cooperating application processes; final pathname unlink is not atomic against
   a noncooperating same-account external rename/reparse replacement.
-- M1 is PARTIAL: only this collector/source+Windows Release scope is delivered. Archive/import, universal
-  native RAM bounds, V1/installed final-head and the whole product are not qualified.
+- At this f018 checkpoint only the collector/source+Windows Release slice was delivered; later export evidence
+  is above. M1 remains PARTIAL; import, universal native RAM bounds, V1/installed final-head and the whole product
+  are not qualified.
 
 ### Session-window qualification, Windows/Release
 

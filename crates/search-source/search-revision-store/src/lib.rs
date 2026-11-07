@@ -5,6 +5,7 @@
 
 use std::fs::{self, File};
 use std::io::{self, Read};
+use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 
@@ -81,7 +82,11 @@ fn hex(bytes: &[u8]) -> String {
     output
 }
 
-fn object_name(reference: ObjectRef, maximum_bytes: u64) -> Result<String, ObjectStoreError> {
+/// Returns only the canonical store basename for a supported bounded integrity reference.
+///
+/// # Errors
+/// Refuses unsupported formats/kinds or the caller's existing object byte ceiling.
+pub fn object_name(reference: ObjectRef, maximum_bytes: u64) -> Result<String, ObjectStoreError> {
     if reference.format_version != SOURCE_OBJECT_FORMAT_VERSION
         || maximum_bytes == 0
         || reference.byte_length > maximum_bytes
@@ -162,10 +167,41 @@ pub fn read_object(
     deadline: Instant,
     cancellation: &AtomicBool,
 ) -> Result<Vec<u8>, ObjectStoreError> {
+    read_object_in(
+        &root.object_dir(),
+        reference,
+        maximum_bytes,
+        deadline,
+        cancellation,
+    )
+}
+
+/// Reads one exact object from a validated plain object directory, including archive copies.
+/// This read-only surface does not construct or adopt a runnable root.
+///
+/// # Errors
+/// Preserves existing regular/no-reparse, size, digest, I/O and caller-budget failures.
+pub fn read_object_in(
+    directory: &Path,
+    reference: ObjectRef,
+    maximum_bytes: u64,
+    deadline: Instant,
+    cancellation: &AtomicBool,
+) -> Result<Vec<u8>, ObjectStoreError> {
     check(deadline, cancellation)?;
-    let path = root
-        .object_dir()
-        .join(object_name(reference, maximum_bytes)?);
+    let metadata = fs::symlink_metadata(directory).map_err(|_| ObjectStoreError::Io)?;
+    if !metadata.is_dir() || metadata.file_type().is_symlink() {
+        return Err(ObjectStoreError::NotRegularFile);
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        use windows_sys::Win32::Storage::FileSystem::FILE_ATTRIBUTE_REPARSE_POINT;
+        if metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+            return Err(ObjectStoreError::NotRegularFile);
+        }
+    }
+    let path = directory.join(object_name(reference, maximum_bytes)?);
     let metadata = fs::symlink_metadata(&path).map_err(|error| {
         if error.kind() == io::ErrorKind::NotFound {
             ObjectStoreError::Missing

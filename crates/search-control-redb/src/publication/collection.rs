@@ -351,6 +351,7 @@ pub fn mark_objects(
     }
     drop(table);
     let state = read_state(tx).map_err(|_| E::Corrupt)?;
+    marks.set_served(state.current.clone());
     let namespace = match tx.open_table(crate::current_source::SOURCE_STATE) {
         Ok(_) => crate::current_source::read_namespace(tx).map_err(|_| E::Corrupt)?,
         Err(TableError::TableDoesNotExist(_)) => None,

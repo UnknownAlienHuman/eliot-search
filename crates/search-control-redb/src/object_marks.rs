@@ -201,6 +201,7 @@ pub struct ObjectMarks {
     metadata_bytes: u64,
     marked: u64,
     pending_commits: u8,
+    served: Option<crate::publication::Generation>,
 }
 
 impl Drop for ObjectMarks {
@@ -313,6 +314,7 @@ impl ObjectMarks {
             metadata_bytes: 0,
             marked: 0,
             pending_commits: 0,
+            served: None,
         };
         let backend = FileBackend::new(file).map_err(|_| MarkError::Database)?;
         let mut builder = redb_plain::Builder::new();
@@ -503,6 +505,16 @@ impl ObjectMarks {
     #[must_use]
     pub const fn len(&self) -> u64 {
         self.marked
+    }
+
+    /// Original served pointer captured by the same consistent mark snapshot.
+    #[must_use]
+    pub const fn served_generation(&self) -> Option<&crate::publication::Generation> {
+        self.served.as_ref()
+    }
+
+    pub(super) const fn set_served(&mut self, generation: Option<crate::publication::Generation>) {
+        self.served = generation;
     }
 
     /// Whether the completed mark has no retained objects.

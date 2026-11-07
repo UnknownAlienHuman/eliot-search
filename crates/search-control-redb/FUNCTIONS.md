@@ -17,7 +17,7 @@ cannot establish durable acceptance. Displaced unused path-opening publication A
 
 ## Source operation
 
-current_source adds three ordinary current tables on the first successful retained-source commit:
+current_source owns three ordinary current tables in the same database:
 
 - source_state stores the source-row schema version, persisted root-local SourceNamespaceId and non-reset wanted_corpus_revision, plus durable admitted-selection records.
 - current_source_rows stores typed CurrentSourceRecord values by independently generated SourceId.
@@ -36,6 +36,22 @@ remove_current_sources compares the captured full source rows/namespace/locator 
 their current source/locator/preparation entries and advances the wanted-corpus guard. It does not delete
 immutable objects, admission records or saved generation source/page/evidence rows. Only confirmed filesystem
 absence in the refreshed scopes authorizes removal; excluded-but-present and inaccessible observations do not.
+
+## Catalogue capacity and bounded reconciliation
+
+Source schema v2 stores exact current_source_totals in source_state; legacy v1 remains readable only through
+its supported bounded paths. The existing 4096-source / 16 MiB catalogue bounds are unchanged. Accounting
+includes encoded source rows AND reverse-locator bytes, not Source object content size. Source mutations
+compare guards and projected totals in the same transaction; inserts/replacements cannot commit an unreadable
+catalogue. Current readers and publication paths enforce the same accounting even when publication's own
+capture-byte charge is below its separate cap. Publication source_count is the captured Source inventory length,
+including Empty/Gap inputs, not a point count. Mismatched v2 totals are corruption, not silently rebuilt counters.
+
+Index completes bounded stable observations and preflight_current_sources before row mutations. Its projected
+union includes outside-scope rows and only confirmed in-scope missing removals. The narrow bounded legacy
+reconciliation route can remove those missing generated inputs and restore an over-cap catalogue; it does not
+reset CONTROL, drop an unread subset or repair through query. Uncertain/unreadable observation authorizes no removal.
+The Unix OsString import correction is source-only evidence; it is not a Unix build/native qualification.
 
 ## Durable selections
 
@@ -98,6 +114,13 @@ preparation bindings and generation counts; current unpublished source rows neve
 The raw consumer selects from these captured Source ObjectRefs, not generation_evidence hits or latest current
 preparation. An unknown requested SourceId fails; it does not widen selection. No source/preparation/publication
 write, live-file fallback or Qdrant request is performed by this read-only Exact path.
+
+## Plain CONTROL archive copy
+
+copy_plain_control copies the supported closed CONTROL state under the caller's existing exclusive guard;
+describe_plain_control independently verifies its bytes/format description. Archive export checks the copy,
+typed reference closure and saved objects before completion publication. Copied pending/cleanup records are
+evidence, not authority to mutate the original backend. This introduces no import/restore entrypoint or new table.
 
 ## Guarded engine recovery
 

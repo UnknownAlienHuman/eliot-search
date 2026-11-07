@@ -13,7 +13,7 @@ use std::time::{Duration, Instant};
 use ignore::WalkBuilder;
 use search_control_redb::current_source::{
     AdmittedSelection, MAX_CURRENT_SOURCES, SelectionKind, SourceControlError,
-    capture_current_source, capture_current_sources, capture_selections, commit_current_source,
+    SourceInventoryTotals, capture_current_source, capture_selections, commit_current_source,
     source_locator_bytes, source_path_from_locator,
 };
 use search_control_redb::plain_control::{ControlWriter, PlainControlError};
@@ -209,8 +209,12 @@ fn is_git_metadata(path: &Path) -> bool {
         .any(|component| component.as_os_str() == OsStr::new(".git"))
 }
 
-fn protected_index_path(path: &Path, data_root: &Path) -> bool {
-    is_git_metadata(path) || path.starts_with(data_root)
+fn protected_index_path(path: &Path, data_root: &Path) -> Result<bool, &'static str> {
+    if is_git_metadata(path) {
+        return Ok(true);
+    }
+    let resolved = fs::canonicalize(path).map_err(|_| "INDEX_SCAN_INCOMPLETE")?;
+    Ok(is_git_metadata(&resolved) || resolved.starts_with(data_root))
 }
 
 fn scan_index_path(
@@ -222,7 +226,7 @@ fn scan_index_path(
     check_index(deadline)?;
     let index_path = &selection.path;
     let is_directory = selection.kind == SelectionKind::Tree;
-    if !index_path.is_absolute() || protected_index_path(index_path, data_root) {
+    if !index_path.is_absolute() || is_git_metadata(index_path) {
         return Err("INDEX_SCOPE_INVALID");
     }
     let metadata = match fs::symlink_metadata(index_path) {
@@ -240,6 +244,9 @@ fn scan_index_path(
     if file_type.is_symlink() {
         return Err("INDEX_REPARSE_REFUSED");
     }
+    if protected_index_path(index_path, data_root)? {
+        return Err("INDEX_SCOPE_INVALID");
+    }
     if !metadata.is_file() && !metadata.is_dir() {
         return Err("INDEX_SCOPE_INVALID");
     }
@@ -248,6 +255,8 @@ fn scan_index_path(
     }
     if is_directory {
         let excluded_root = data_root.to_path_buf();
+        let resolution_failed = Arc::new(AtomicBool::new(false));
+        let filter_failed = Arc::clone(&resolution_failed);
         let cwd = std::env::current_dir().map_err(|_| "INDEX_SCAN_INCOMPLETE")?;
         let mut builder = WalkBuilder::new(index_path);
         builder
@@ -255,7 +264,20 @@ fn scan_index_path(
             .standard_filters(true)
             .follow_links(false)
             .filter_entry(move |entry| {
-                !is_git_metadata(entry.path()) && !entry.path().starts_with(&excluded_root)
+                if is_git_metadata(entry.path()) {
+                    return false;
+                }
+                // Let the iterator report links as refusals without resolving their targets.
+                if entry.file_type().is_some_and(|kind| kind.is_symlink()) {
+                    return true;
+                }
+                protected_index_path(entry.path(), &excluded_root).map_or_else(
+                    |_| {
+                        filter_failed.store(true, Ordering::Relaxed);
+                        false
+                    },
+                    |protected| !protected,
+                )
             });
         for entry in builder.build() {
             check_index(deadline)?;
@@ -275,6 +297,9 @@ fn scan_index_path(
                 return Err("INDEX_SCAN_INCOMPLETE");
             }
             record_index_file(files, path)?;
+        }
+        if resolution_failed.load(Ordering::Relaxed) {
+            return Err("INDEX_SCAN_INCOMPLETE");
         }
     } else {
         record_index_file(files, index_path)?;
@@ -371,28 +396,79 @@ fn scan_selections(
     Ok(scans)
 }
 
+fn verify_index_scan(
+    selections: &[AdmittedSelection],
+    data_root: &Path,
+    files: &BTreeMap<Vec<u8>, PathBuf>,
+    scans: &[IndexScan],
+    deadline: Instant,
+) -> Result<(), &'static str> {
+    let mut verified_files = BTreeMap::new();
+    let verified_scans = scan_selections(selections, data_root, &mut verified_files, deadline)?;
+    if scans != verified_scans || files.keys().ne(verified_files.keys()) {
+        return Err("INDEX_SCAN_CHANGED");
+    }
+    Ok(())
+}
+
 fn index_sources(
     root: &PlainRootGuard,
-    data_root: &Path,
     index_path: Option<&Path>,
     request: &crate::app::PublicationRequest,
     deadline: Instant,
 ) -> Result<(), &'static str> {
     let control = root.control_path();
-    let inventory = capture_current_sources(&control, deadline, &CANCELLED)
-        .map_err(SourceControlError::code)?;
+    let data_root = fs::canonicalize(root.path()).map_err(|_| "INDEX_SCAN_INCOMPLETE")?;
     let admitted =
         capture_selections(&control, deadline, &CANCELLED).map_err(SourceControlError::code)?;
     let selections = index_selections(index_path, admitted, deadline)?;
     let mut files = BTreeMap::new();
-    let scans = scan_selections(&selections, data_root, &mut files, deadline)?;
+    let scans = scan_selections(&selections, &data_root, &mut files, deadline)?;
+    // Capacity/removal preflight needs complete stable observations before any row writes.
+    verify_index_scan(&selections, &data_root, &files, &scans, deadline)?;
     let writer =
         ControlWriter::open(&control, deadline, &CANCELLED).map_err(PlainControlError::code)?;
     let reconciled = (|| {
+        let mut observed = SourceInventoryTotals::default();
+        let mut removed = SourceInventoryTotals::default();
+        let mut after = None;
+        loop {
+            let page = writer
+                .current_source_page(after, deadline, &CANCELLED)
+                .map_err(SourceControlError::code)?;
+            if page.is_empty() {
+                break;
+            }
+            after = page.last().map(|source| source.source_id);
+            observed.include(&page).map_err(SourceControlError::code)?;
+            let removals = confirmed_removals(&page, &scans, &files, deadline)?;
+            removed
+                .include(&removals)
+                .map_err(SourceControlError::code)?;
+        }
+        let selected: Vec<_> = files.values().map(PathBuf::as_path).collect();
+        writer
+            .preflight_current_sources(&selected, observed, removed, deadline, &CANCELLED)
+            .map_err(SourceControlError::code)?;
         if index_path.is_some() {
             let selection = selections.first().ok_or("INDEX_SELECTION_REQUIRED")?;
             writer
                 .admit_selection(selection, deadline, &CANCELLED)
+                .map_err(SourceControlError::code)?;
+        }
+        // Only the explicit, scoped, confirmed-missing recovery route may reduce legacy over-cap state.
+        let mut after = None;
+        loop {
+            let page = writer
+                .current_source_page(after, deadline, &CANCELLED)
+                .map_err(SourceControlError::code)?;
+            if page.is_empty() {
+                break;
+            }
+            after = page.last().map(|source| source.source_id);
+            let removals = confirmed_removals(&page, &scans, &files, deadline)?;
+            writer
+                .remove_current_sources(&removals, deadline, &CANCELLED)
                 .map_err(SourceControlError::code)?;
         }
         for file in files.values() {
@@ -407,18 +483,7 @@ fn index_sources(
             )?;
         }
 
-        {
-            let mut verified_files = BTreeMap::new();
-            let verified_scans =
-                scan_selections(&selections, data_root, &mut verified_files, deadline)?;
-            if scans != verified_scans || files.keys().ne(verified_files.keys()) {
-                return Err("INDEX_SCAN_CHANGED");
-            }
-        }
-        let removals = confirmed_removals(&inventory, &scans, &files, deadline)?;
-        writer
-            .remove_current_sources(&removals, deadline, &CANCELLED)
-            .map_err(SourceControlError::code)
+        verify_index_scan(&selections, &data_root, &files, &scans, deadline)
     })();
     if let Err(error) = reconciled {
         writer
@@ -442,7 +507,7 @@ fn index_command(
         Ok(root) => root,
         Err(error) => return emit_error(error),
     };
-    match index_sources(&root, data_root, index_path, request, deadline) {
+    match index_sources(&root, index_path, request, deadline) {
         Ok(()) => {
             if CANCELLED.load(Ordering::Acquire) {
                 return ExitCode::from(130);
@@ -480,6 +545,7 @@ pub fn run(invocation: RootInvocation, started: Instant) -> ExitCode {
         unit,
         publication,
         search_endpoint,
+        archive_path,
     } = invocation;
     if index_owner_stdio && let Err(code) = install_owner_lifeline() {
         return emit_source_error(code);
@@ -533,6 +599,10 @@ pub fn run(invocation: RootInvocation, started: Instant) -> ExitCode {
         RootCommand::CollectObjects => {
             crate::collect_objects::run(&data_root, deadline, &CANCELLED)
         }
+        RootCommand::ArchiveExport => archive_path.map_or_else(
+            || emit_source_error("ARCHIVE_PATH_REQUIRED"),
+            |out| crate::archive_export::run(&data_root, &out, deadline, &CANCELLED),
+        ),
         RootCommand::Session => {
             crate::framed_search::run_session(&data_root, search_endpoint.as_deref())
         }
