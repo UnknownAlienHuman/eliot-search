@@ -1,6 +1,6 @@
 //! Executes one plain-root operation and emits its observed final state.
 
-use std::collections::{BTreeMap, HashSet};
+use std::collections::BTreeMap;
 use std::ffi::OsStr;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -142,12 +142,23 @@ fn retain_file_command(data_root: &Path, file_path: &Path, deadline: Instant) ->
     }
 }
 
+#[derive(Eq, PartialEq)]
 struct IndexScan {
     root: PathBuf,
     is_directory: bool,
     root_missing: bool,
-    files: Vec<PathBuf>,
-    locators: HashSet<Vec<u8>>,
+}
+
+fn record_index_file(
+    files: &mut BTreeMap<Vec<u8>, PathBuf>,
+    path: &Path,
+) -> Result<(), &'static str> {
+    let locator = source_locator_bytes(path).map_err(SourceControlError::code)?;
+    files.entry(locator).or_insert_with(|| path.to_path_buf());
+    if files.len() > MAX_CURRENT_SOURCES {
+        return Err("INDEX_SOURCE_LIMIT");
+    }
+    Ok(())
 }
 
 fn check_index(deadline: Instant) -> Result<(), &'static str> {
@@ -172,6 +183,7 @@ fn protected_index_path(path: &Path, data_root: &Path) -> bool {
 fn scan_index_path(
     selection: &AdmittedSelection,
     data_root: &Path,
+    files: &mut BTreeMap<Vec<u8>, PathBuf>,
     deadline: Instant,
 ) -> Result<IndexScan, &'static str> {
     check_index(deadline)?;
@@ -187,8 +199,6 @@ fn scan_index_path(
                 root: index_path.clone(),
                 is_directory,
                 root_missing: true,
-                files: Vec::new(),
-                locators: HashSet::new(),
             });
         }
         Err(_) => return Err("INDEX_SCAN_INCOMPLETE"),
@@ -203,7 +213,6 @@ fn scan_index_path(
     if metadata.is_dir() != is_directory {
         return Err("INDEX_SCOPE_KIND_CHANGED");
     }
-    let mut files = Vec::new();
     if is_directory {
         let excluded_root = data_root.to_path_buf();
         let cwd = std::env::current_dir().map_err(|_| "INDEX_SCAN_INCOMPLETE")?;
@@ -232,30 +241,15 @@ fn scan_index_path(
             if !file_type.is_file() {
                 return Err("INDEX_SCAN_INCOMPLETE");
             }
-            if files.len() >= MAX_CURRENT_SOURCES {
-                return Err("INDEX_SOURCE_LIMIT");
-            }
-            files.push(path.to_path_buf());
+            record_index_file(files, path)?;
         }
     } else {
-        files.push(index_path.clone());
-    }
-    files.sort_by(|left, right| {
-        left.as_os_str()
-            .as_encoded_bytes()
-            .cmp(right.as_os_str().as_encoded_bytes())
-    });
-    let mut locators = HashSet::with_capacity(files.len());
-    for path in &files {
-        check_index(deadline)?;
-        locators.insert(source_locator_bytes(path).map_err(SourceControlError::code)?);
+        record_index_file(files, index_path)?;
     }
     Ok(IndexScan {
         root: index_path.clone(),
         is_directory,
         root_missing: false,
-        files,
-        locators,
     })
 }
 
@@ -270,6 +264,7 @@ fn source_is_in_scope(source_path: &Path, scan: &IndexScan) -> bool {
 fn confirmed_removals(
     inventory: &[CurrentSourceRecord],
     scans: &[IndexScan],
+    files: &BTreeMap<Vec<u8>, PathBuf>,
     deadline: Instant,
 ) -> Result<Vec<CurrentSourceRecord>, &'static str> {
     let mut removals = Vec::new();
@@ -277,9 +272,7 @@ fn confirmed_removals(
         check_index(deadline)?;
         let path = source_path_from_locator(&source.locator).map_err(SourceControlError::code)?;
         if !scans.iter().any(|scan| source_is_in_scope(&path, scan))
-            || scans
-                .iter()
-                .any(|scan| scan.locators.contains(&source.locator))
+            || files.contains_key(&source.locator)
         {
             continue;
         }
@@ -335,27 +328,14 @@ fn index_selections(
 fn scan_selections(
     selections: &[AdmittedSelection],
     data_root: &Path,
+    files: &mut BTreeMap<Vec<u8>, PathBuf>,
     deadline: Instant,
 ) -> Result<Vec<IndexScan>, &'static str> {
-    selections
-        .iter()
-        .map(|selection| scan_index_path(selection, data_root, deadline))
-        .collect()
-}
-
-fn scanned_files(scans: &[IndexScan], deadline: Instant) -> Result<Vec<PathBuf>, &'static str> {
-    let mut files = BTreeMap::new();
-    for scan in scans {
-        for file in &scan.files {
-            check_index(deadline)?;
-            let locator = source_locator_bytes(file).map_err(SourceControlError::code)?;
-            files.entry(locator).or_insert_with(|| file.clone());
-            if files.len() > MAX_CURRENT_SOURCES {
-                return Err("INDEX_SOURCE_LIMIT");
-            }
-        }
+    let mut scans = Vec::with_capacity(selections.len());
+    for selection in selections {
+        scans.push(scan_index_path(selection, data_root, files, deadline)?);
     }
-    Ok(files.into_values().collect())
+    Ok(scans)
 }
 
 fn index_sources(
@@ -371,28 +351,28 @@ fn index_sources(
     let admitted =
         capture_selections(&control, deadline, &CANCELLED).map_err(SourceControlError::code)?;
     let selections = index_selections(index_path, admitted, deadline)?;
-    let scans = scan_selections(&selections, data_root, deadline)?;
-    let files = scanned_files(&scans, deadline)?;
+    let mut files = BTreeMap::new();
+    let scans = scan_selections(&selections, data_root, &mut files, deadline)?;
     if index_path.is_some() {
         let selection = selections.first().ok_or("INDEX_SELECTION_REQUIRED")?;
         admit_selection(&control, selection, deadline, &CANCELLED)
             .map_err(SourceControlError::code)?;
     }
-    for file in &files {
+    for file in files.values() {
         check_index(deadline)?;
         let source = retain_file(root, file, deadline)?;
         crate::prepared_source::prepare(root, source.source_id, deadline, &CANCELLED)?;
     }
 
-    let verified = scan_selections(&selections, data_root, deadline)?;
-    if scans.iter().zip(&verified).any(|(before, after)| {
-        before.is_directory != after.is_directory
-            || before.root_missing != after.root_missing
-            || before.locators != after.locators
-    }) {
-        return Err("INDEX_SCAN_CHANGED");
+    {
+        let mut verified_files = BTreeMap::new();
+        let verified_scans =
+            scan_selections(&selections, data_root, &mut verified_files, deadline)?;
+        if scans != verified_scans || files.keys().ne(verified_files.keys()) {
+            return Err("INDEX_SCAN_CHANGED");
+        }
     }
-    let removals = confirmed_removals(&inventory, &scans, deadline)?;
+    let removals = confirmed_removals(&inventory, &scans, &files, deadline)?;
     remove_current_sources(&control, &removals, deadline, &CANCELLED)
         .map_err(SourceControlError::code)?;
 
