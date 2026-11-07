@@ -6,8 +6,8 @@ use std::path::Path;
 use std::sync::atomic::AtomicBool;
 use std::time::Instant;
 
-use search_provider_client::{ClientError, QueryClient};
-use search_provider_protocol::{QueryOutcome, SearchRequest};
+use search_provider_client::{ClientError, QueryClient, QueryCompletion};
+use search_provider_protocol::{QueryOutcome, RawExactRequest, SearchRequest};
 
 fn failure(error: ClientError) -> i32 {
     eprintln!("{{\"error\":\"{}\"}}", error.code());
@@ -17,28 +17,56 @@ fn failure(error: ClientError) -> i32 {
         _ => 2,
     }
 }
+fn configured_client() -> Result<QueryClient, ClientError> {
+    let mut client = QueryClient::new()?;
+    client.enable_ctrl_c();
+    Ok(client)
+}
+
 pub fn run(
     daemon: &Path,
     arguments: &[OsString],
     request: SearchRequest,
     deadline: Instant,
 ) -> i32 {
-    let mut client = match QueryClient::new() {
+    let mut client = match configured_client() {
         Ok(client) => client,
         Err(error) => return failure(error),
     };
-    client.enable_ctrl_c();
     let cancel = AtomicBool::new(false);
     let completion = match client.query_owned_child(daemon, arguments, request, deadline, &cancel) {
         Ok(completion) => completion,
         Err(error) => return failure(error),
     };
+    render(&completion)
+}
+
+pub fn run_raw_exact(
+    daemon: &Path,
+    arguments: &[OsString],
+    request: RawExactRequest,
+    deadline: Instant,
+) -> i32 {
+    let mut client = match configured_client() {
+        Ok(client) => client,
+        Err(error) => return failure(error),
+    };
+    let cancel = AtomicBool::new(false);
+    let completion =
+        match client.raw_exact_owned_child(daemon, arguments, request, deadline, &cancel) {
+            Ok(completion) => completion,
+            Err(error) => return failure(error),
+        };
+    render(&completion)
+}
+
+fn render(completion: &QueryCompletion) -> i32 {
     let exit = match &completion.terminal.outcome {
-        QueryOutcome::Complete { .. } => 0,
+        QueryOutcome::Complete { .. } | QueryOutcome::RawExact { .. } => 0,
         QueryOutcome::Cancelled => 130,
         QueryOutcome::Failed { .. } => 2,
     };
-    // Serde escapes untrusted controls while preserving the exact decoded UTF-8 unit.
+    // Serde escapes untrusted controls; raw source bytes retain their validated hex encoding.
     // No child bytes or diagnostics are streamed before complete terminal validation.
     let Ok(bytes) = serde_json::to_vec(&completion.terminal) else {
         eprintln!("{{\"error\":\"QUERY_SERIALIZATION_FAILED\"}}");

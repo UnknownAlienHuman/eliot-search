@@ -1493,6 +1493,92 @@ pub struct PublishedView {
     database: ReadOnlyDatabase,
 }
 impl PublishedView {
+    /// Reads the complete committed source inventory from this pinned generation.
+    /// Empty inputs and preparation Gaps remain members, even without points.
+    ///
+    /// # Errors
+    /// Refuses incomplete or foreign source bindings, inconsistent generation
+    /// counts, allocation failure, cancellation and the original deadline.
+    pub fn source_inventory(
+        &self,
+        deadline: Instant,
+        cancel: &AtomicBool,
+    ) -> Result<Vec<CapturedSource>> {
+        check(deadline, cancel)?;
+        let count =
+            usize::try_from(self.generation.source_count).map_err(|_| PublicationError::Corrupt)?;
+        if count > MAX_SOURCES {
+            return Err(PublicationError::Corrupt);
+        }
+        let table = self
+            .transaction
+            .open_table(SOURCES)
+            .map_err(|_| PublicationError::Corrupt)?;
+        let prefix = self.generation.sequence.to_be_bytes();
+        let mut inventory = Vec::new();
+        inventory
+            .try_reserve_exact(count)
+            .map_err(|_| PublicationError::Allocation)?;
+        let mut namespace = None;
+        let mut gaps = 0_u64;
+        let mut units = 0_u64;
+        for row in table
+            .range(prefix.as_slice()..)
+            .map_err(|_| PublicationError::Database)?
+        {
+            check(deadline, cancel)?;
+            let (row_key, value) = row.map_err(|_| PublicationError::Database)?;
+            if !row_key.value().starts_with(&prefix) {
+                break;
+            }
+            if row_key.value().len() != 24 || inventory.len() >= count {
+                return Err(PublicationError::Corrupt);
+            }
+            let entry = codec::decode_source(value.value())?;
+            let source = &entry.captured.source;
+            if !entry.complete
+                || row_key.value()[8..] != *source.source_id.as_bytes()
+                || namespace.is_some_and(|expected| expected != source.source_namespace_id)
+            {
+                return Err(PublicationError::Corrupt);
+            }
+            namespace = Some(source.source_namespace_id);
+            match entry
+                .captured
+                .preparation
+                .outcome
+                .as_ref()
+                .ok_or(PublicationError::Corrupt)?
+                .result
+            {
+                PreparationOutcome::Ready { .. } => {
+                    if (source.object_ref.byte_length == 0) != (entry.staged_units == 0) {
+                        return Err(PublicationError::Corrupt);
+                    }
+                }
+                PreparationOutcome::Gap { .. } => {
+                    if entry.staged_units != 0 {
+                        return Err(PublicationError::Corrupt);
+                    }
+                    gaps += 1;
+                }
+            }
+            units = units
+                .checked_add(entry.staged_units)
+                .filter(|value| *value <= MAX_POINTS)
+                .ok_or(PublicationError::Corrupt)?;
+            inventory.push(entry.captured);
+        }
+        if inventory.len() != count
+            || gaps != self.generation.gap_count
+            || units != self.generation.point_count
+        {
+            return Err(PublicationError::Corrupt);
+        }
+        check(deadline, cancel)?;
+        Ok(inventory)
+    }
+
     /// Resolves a real returned point through this generation's pinned metadata.
     ///
     /// # Errors

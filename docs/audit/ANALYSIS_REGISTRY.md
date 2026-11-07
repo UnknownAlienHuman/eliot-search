@@ -4,13 +4,16 @@ Current checkpoint, 2026-11-07: R1 is accepted at its separately recorded Window
 ordinary-repo-1 optimized RELEASE fixed-input scopes. Source 9e57418039d8e0effdb2edfd6b9e33d633e9e1c3
 is source-reviewed with changed-owner check/strict Clippy/build gates passed. The fixed-input run is
 FULL_RELEASE_PASS on its stated sampling/evidence basis; this is not DEBUG query, universal peak,
-replacement-workload, platform or whole-product qualification. X1 is READY; manager owns the next branch.
+replacement-workload, platform or whole-product qualification. FIRST RAW at source
+6ced33494e8fb602c0c52ef16fa5d4401cdb8217 has source/gates and scoped native PASS; X1 remains PARTIAL.
 
 <a id="resume"></a>
 <a id="resume-after-interruption"></a>
 ## Next task
 
-**X1 next: literal Exact and same-session Continue/Expand/expiry.** Use the
+**X1 PARTIAL: FIRST RAW is implemented and scoped native-qualified at 6ced3349.** Next implement DecodedUtf8
+against the retained Prepared UTF-8 identity map, then same-session Continue/Expand/expiry. Extracted has no
+current producer or implemented route; arbitrary non-UTF-8 needle input is not supported. Use the
 [Exact rule](../../crates/search-query/search-exact/FUNCTIONS.md), [selection rule](../../crates/search-query/search-access/FUNCTIONS.md)
 and [window owner](../../crates/search-query/search-continuation/FUNCTIONS.md) beside the actual daemon/client.
 Exact scans the selected pinned published inventory, including retained raw inputs without prepared points;
@@ -41,7 +44,7 @@ DONE below is the named delivered scope, not completion of the product.
 | Q1 / DONE, Windows debug scope | P1 | Actual daemon publisher, CONTROL and concrete bridge | Full corpus → exact backend/readback/canary → guarded current/evidence → validated PublishedView; source 3c33d831. |
 | U1 / DONE, Windows debug scope | Q1 | CONTROL resolver, daemon/CLI, protocol/client | Read-only verified full retained units/citations; c843 targeted final-pin scope and earlier evidence below. |
 | R1 / ACCEPTED, recorded functional + RELEASE fixed-input scopes | U1 | CLI/daemon index helpers, source CONTROL and publication | Recorded owner gates include unknown Insert/ABA, postcommit boundary, held-query exclusion/cleanup and ordinary-repo-1 RELEASE fixed-input resource PASS; stronger unclaimed boundaries remain below. |
-| X1 / READY | R1 | Exact/query window and client owners | Retained exact denominator, same-session paging/expansion and expiry. |
+| X1 / PARTIAL, FIRST RAW | R1 | Exact/control, framed daemon/client/CLI | Raw literal over pinned published Source inventory works; next DecodedUtf8 identity map and same-session Continue/Expand/expiry. |
 | M1 / WAIT | X1 | Retention and future stopped-root maintenance caller | Conservative collection/archive/import preserving originals. |
 | O1 / DEFERRED | Connected baseline + actual need | [Selected depth](../product/AGENT_ANALYSIS_FRAMEWORK.md#optional-depth) | Add only an actual source-backed consumer; remove unused scaffolds. |
 | V1 / WAIT | X1/M1 shipped paths | [Qualification](../implementation/TEST_CUTOVER.md), #215 | Measured relevance/scale/platform/release and installed-baseline evidence. |
@@ -87,6 +90,30 @@ hydration reuse. No application encryption, grants, OS-secret platform or second
 <a id="evidence-status"></a>
 <a id="execution-evidence"></a>
 ## Verification and known blockers
+
+### FIRST RAW evidence, source 6ced3349
+
+- Source audit, minimal locked checks/strict Clippy and RELEASE builds passed. CLI SHA256
+  12C249A186D4644200DA0306A6294A784A3CD996DC5E6F98F1E415601E43AC4E; daemon SHA256
+  4D04A9159760E456769E20540A54F8C999AB493C50C0C7C1525CB9B97B18CF11. R1 resource results below
+  retain their earlier source/build scope; they were not rerun for this RAW candidate.
+- Actual CLI raw scan over the 1000-source R1 published inventory completed in an observed 213 ms with one
+  correct positive range: functional evidence, not a new resource-profile qualification. Nine-file baseline
+  cases passed boundary/overlap/block split, Unicode, duplicate content, empty input, subset, exclusion of
+  current-unpublished input, output limit and independence from live paths. Healthy/missing/corrupt clones
+  passed; originals stayed unchanged. Missing input was a Gap/no complete negative; corruption was fatal.
+- Production-codec wire cases passed without Qdrant: RawExact remaining_ms=120000, then separately flushed
+  Cancel id 1, stdin held until typed Cancelled, then close/wait/both EOF; daemon 113548 exited 0. A fresh
+  remaining_ms=1 RawExact returned Failed QUERY_DEADLINE; daemon 48620 exited 0. Helpers exited 0, no forced
+  kill/survivors remained and CONTROL bytes were unchanged. This is stdio query cancellation/deadline proof,
+  not Qdrant wire-level lost-ACK/original-delay qualification.
+- Existing evidence: C:\Development\Rust\targets\task-x1-native\run-20261107-v1, raw-basic-four.result.json,
+  raw-next-six.result.json, raw-limit-livefallback.result.json, raw-wire-two.result.json and
+  bin/raw-6ced-release/pins.json. The existing helper was copied/adapted only outside the repository;
+  earlier helpers were unchanged. Native custody is complete.
+- X1 remains PARTIAL. Decoded/extracted routes, arbitrary non-UTF-8 needle input, Continue/Expand/expiry and
+  held-daemon-output window qualification are not delivered. Extracted has no current producer or implemented
+  unsupported-gap route. No whole-product or installed-release claim follows from FIRST RAW.
 
 <a id="release-fixed-input-resource-evidence"></a>
 ### ordinary-repo-1 RELEASE fixed-input resource evidence

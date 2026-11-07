@@ -6,7 +6,12 @@ prepare, publish or reopen live paths. The actual consumers are
 [framed_search](../../bins/eliot-searchd/src/framed_search.rs) and
 [verified_query](../../bins/eliot-searchd/src/verified_query.rs); there is no validator/projector Rust crate.
 
-Later Exact scans retained inventory; Continue/Expand will keep their original window view and order. There is no authentication/grant/revocation system in
+FIRST RAW Exact now scans selected committed retained Source inventory through
+[raw_exact.rs](../../bins/eliot-searchd/src/raw_exact.rs), including Empty/PreparationGap inputs without points.
+It matches UTF-8 literal bytes over undecoded input without Qdrant or latest/live fallback, returning verified
+raw ranges/hex and separate scan/presentation accounting. X1 is PARTIAL: DecodedUtf8 identity-map is next;
+extracted has no producer/route, and Continue/Expand/expiry/held-output windows remain future work.
+There is no authentication/grant/revocation system in
 [the local product](../../docs/architecture/LOCAL_SCOPE.md).
 
 <a id="direct-operations-not-a-recipe-operating-system"></a>

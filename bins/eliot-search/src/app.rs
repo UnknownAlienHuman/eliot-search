@@ -2,6 +2,7 @@
 
 mod watch;
 
+use search_provider_protocol::RawExactRequest;
 use search_source_registry::{MAX_PREPARATION_RESPONSE_BYTES, MAX_PUBLICATION_RESPONSE_BYTES};
 use std::env;
 use std::ffi::{OsStr, OsString};
@@ -67,6 +68,11 @@ enum Parsed {
     Help,
     Version,
     Watch(watch::Request),
+    RawExact {
+        settings: Vec<OsString>,
+        daemon: Option<PathBuf>,
+        request: RawExactRequest,
+    },
     Root {
         command: RootCommand,
         settings: Vec<OsString>,
@@ -241,6 +247,9 @@ fn standalone_invocation(arguments: &[OsString]) -> Option<Result<Parsed, &'stat
     }
     if arguments[0] == OsStr::new("watch") {
         return Some(watch::parse(arguments));
+    }
+    if arguments[0] == OsStr::new("exact") {
+        return Some(parse_raw_exact(arguments));
     }
     if arguments.len() == 1 && (is_help_flag(&arguments[0]) || is_help_command(&arguments[0])) {
         return Some(Ok(Parsed::Help));
@@ -508,6 +517,95 @@ fn parse(arguments: &[OsString]) -> Result<Parsed, &'static str> {
         daemon,
         preparation,
         publication,
+    })
+}
+
+fn parse_raw_exact(arguments: &[OsString]) -> Result<Parsed, &'static str> {
+    let mut settings = Vec::new();
+    let mut daemon = None;
+    let mut data_root_seen = false;
+    let mut config_seen = false;
+    let mut raw = false;
+    let mut literal = None;
+    let mut source_id = None;
+    let mut limit = None;
+    let mut index = 1;
+    while index < arguments.len() {
+        let argument = &arguments[index];
+        match argument.to_str() {
+            Some("--raw") => {
+                if raw {
+                    return Err("USAGE_ERROR");
+                }
+                raw = true;
+                index += 1;
+                continue;
+            }
+            Some("--literal" | "--source-id") => {
+                let value = arguments
+                    .get(index + 1)
+                    .and_then(|v| v.to_str())
+                    .ok_or("USAGE_ERROR")?;
+                let slot = if argument == OsStr::new("--literal") {
+                    &mut literal
+                } else {
+                    &mut source_id
+                };
+                if slot.replace(value.to_owned()).is_some() {
+                    return Err("USAGE_ERROR");
+                }
+            }
+            Some("--limit") => {
+                if limit.is_some() {
+                    return Err("USAGE_ERROR");
+                }
+                limit = Some(
+                    arguments
+                        .get(index + 1)
+                        .and_then(|v| v.to_str())
+                        .and_then(|v| canonical_decimal(v, false))
+                        .and_then(|n| u8::try_from(n).ok())
+                        .filter(|n| usize::from(*n) <= search_provider_protocol::MAX_ITEMS)
+                        .ok_or("USAGE_ERROR")?,
+                );
+            }
+            Some("--data-root" | "--config-file") => {
+                let seen = if argument == OsStr::new("--data-root") {
+                    &mut data_root_seen
+                } else {
+                    &mut config_seen
+                };
+                if *seen {
+                    return Err("USAGE_ERROR");
+                }
+                let value = path_option(arguments, index)?;
+                *seen = true;
+                settings.push(argument.clone());
+                settings.push(value.clone());
+            }
+            Some("--daemon") => {
+                if daemon.is_some() {
+                    return Err("USAGE_ERROR");
+                }
+                daemon = Some(PathBuf::from(path_option(arguments, index)?));
+            }
+            _ => return Err("UNKNOWN_ARGUMENT"),
+        }
+        index += 2;
+    }
+    if !raw || !data_root_seen {
+        return Err("USAGE_ERROR");
+    }
+    let request = RawExactRequest {
+        literal: literal.ok_or("USAGE_ERROR")?,
+        source_ids: source_id.map(|id| vec![id]),
+        limit: limit.unwrap_or(10),
+    };
+    request.validate().map_err(|_| "USAGE_ERROR")?;
+    Ok(Parsed::RawExact {
+        settings,
+        daemon,
+        request,
     })
 }
 
@@ -885,7 +983,26 @@ fn print_help() {
         "  eliot-search index [PATH] --qdrant-url URL [--data-root ROOT] [--config-file PATH] [--daemon PATH]\n",
         "  eliot-search watch [--interval-ms N] --qdrant-url URL [--data-root ROOT] [--config-file PATH] [--daemon PATH]\n",
         "  eliot-search search --query TEXT [--limit N] --qdrant-url URL [--data-root ROOT] [--config-file PATH] [--daemon PATH]\n",
+        "  eliot-search exact --raw --literal TEXT --data-root ROOT [--source-id UUID] [--limit N] [--config-file PATH] [--daemon PATH]\n",
     ));
+}
+
+fn run_raw_exact(
+    settings: Vec<OsString>,
+    explicit_daemon: Option<PathBuf>,
+    request: RawExactRequest,
+    started: Instant,
+) -> i32 {
+    let Some(deadline) = started.checked_add(COMMAND_TIMEOUT) else {
+        return emit_error("DEADLINE_UNAVAILABLE");
+    };
+    let daemon = match daemon_path(explicit_daemon) {
+        Ok(path) => path,
+        Err(error) => return emit_error(error),
+    };
+    let mut arguments = vec![OsString::from("--search-stdio")];
+    arguments.extend(settings);
+    crate::search_command::run_raw_exact(&daemon, &arguments, request, deadline)
 }
 
 pub fn run_main() -> i32 {
@@ -900,6 +1017,13 @@ pub fn run_main() -> i32 {
     };
     let (command, settings, explicit_daemon, preparation, publication) = match parsed {
         Parsed::Watch(request) => return watch::run(request),
+        Parsed::RawExact {
+            settings,
+            daemon,
+            request,
+        } => {
+            return run_raw_exact(settings, daemon, request, started);
+        }
         Parsed::Root {
             command,
             settings,

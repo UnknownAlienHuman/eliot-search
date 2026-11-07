@@ -5,7 +5,7 @@ use std::io::{self, Write};
 
 use crate::{
     ClientFrame, FRAME_PREFIX_BYTES, MAX_BODY_BYTES, MAX_CLIENT_FRAME_BYTES, MAX_FRAME_BYTES,
-    MAX_ITEMS, ProtocolError, QueryOutcome, SearchItem, StopReason, Terminal,
+    MAX_ITEMS, ProtocolError, QueryOutcome, RawExactResult, SearchItem, StopReason, Terminal,
 };
 
 /// Incremental storage for exactly one length-prefixed frame.
@@ -120,6 +120,18 @@ pub fn decode_terminal_frame(frame: &[u8], requested_limit: u8) -> Result<Termin
     let terminal: Terminal = decode(frame, MAX_FRAME_BYTES)?;
     terminal.validate(requested_limit)?;
     Ok(terminal)
+}
+
+/// Encodes a fully accounted raw execution without clipping a byte range or gap.
+/// The producer has already retained only its requested whole-item prefix.
+pub fn prepare_raw_exact(
+    request_id: u64,
+    result: RawExactResult,
+) -> Result<Vec<u8>, ProtocolError> {
+    encode_terminal_frame(&Terminal {
+        request_id,
+        outcome: QueryOutcome::RawExact { result },
+    })
 }
 
 /// Produces a complete terminal with the largest whole rank prefix that fits.

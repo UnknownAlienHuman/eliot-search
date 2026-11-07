@@ -42,6 +42,39 @@ impl fmt::Debug for SearchRequest {
     }
 }
 
+/// Literal byte search over selected sources in one committed inventory.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RawExactRequest {
+    /// UTF-8 argument bytes used literally, without decoding the retained input.
+    pub literal: String,
+    /// None selects all published sources; Some(empty) selects none.
+    pub source_ids: Option<Vec<String>>,
+    /// Maximum whole match/gap items returned, independent of scan completeness.
+    pub limit: u8,
+}
+
+impl RawExactRequest {
+    /// Validates the literal, canonical selection and finite output bound.
+    pub fn validate(&self) -> Result<(), ProtocolError> {
+        if self.literal.is_empty()
+            || self.literal.len() > MAX_QUERY_BYTES
+            || self.limit == 0
+            || usize::from(self.limit) > MAX_ITEMS
+        {
+            return Err(ProtocolError::InvalidMessage);
+        }
+        if let Some(ids) = &self.source_ids {
+            for (index, id) in ids.iter().enumerate() {
+                if !canonical_uuid(id) || ids[..index].contains(id) {
+                    return Err(ProtocolError::InvalidMessage);
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
 /// The only parent-to-child messages for one query.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
@@ -55,6 +88,15 @@ pub enum ClientFrame {
         /// The single shared query DTO.
         request: SearchRequest,
     },
+    /// Start the sole raw literal execution on the same serviced connection.
+    RawExact {
+        /// Exact correlation identity, currently one.
+        request_id: u64,
+        /// Remaining original operation milliseconds sampled at send.
+        remaining_ms: u64,
+        /// Literal and pinned-source selection.
+        request: RawExactRequest,
+    },
     /// Cancel that same query without another work slot.
     Cancel {
         /// Exact active query identity.
@@ -67,6 +109,17 @@ impl ClientFrame {
     pub fn validate(&self) -> Result<(), ProtocolError> {
         let request_id = match self {
             Self::Query {
+                request_id,
+                remaining_ms,
+                request,
+            } => {
+                if *remaining_ms == 0 || *remaining_ms > MAX_REMAINING_MS {
+                    return Err(ProtocolError::InvalidMessage);
+                }
+                request.validate()?;
+                *request_id
+            }
+            Self::RawExact {
                 request_id,
                 remaining_ms,
                 request,
@@ -324,6 +377,229 @@ pub enum StopReason {
     OutputLimit,
 }
 
+/// A source revision from the committed inventory, without a prepared-point dependency.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RawSourceRef {
+    /// Canonical persisted source namespace UUID.
+    pub source_namespace_id: String,
+    /// Canonical persisted source UUID.
+    pub source_id: String,
+    /// Exact committed source-row revision.
+    pub row_revision: u64,
+    /// Exact committed registration revision.
+    pub registration_revision: u64,
+    /// Integrity address of the retained raw bytes.
+    pub input: ObjectRefDto,
+}
+
+impl RawSourceRef {
+    fn validate(&self) -> Result<(), ProtocolError> {
+        if !canonical_uuid(&self.source_namespace_id)
+            || !canonical_uuid(&self.source_id)
+            || self.row_revision == 0
+            || self.registration_revision == 0
+        {
+            return Err(ProtocolError::InvalidMessage);
+        }
+        self.input.validate(ObjectKindDto::Source)
+    }
+}
+
+/// One verified raw-byte literal occurrence.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RawExactMatch {
+    /// Pinned source revision and retained object.
+    pub source: RawSourceRef,
+    /// Inclusive byte start in that raw object.
+    pub start: u64,
+    /// Exclusive byte end in that raw object.
+    pub end: u64,
+    /// Exact matched bytes in lowercase hex, also valid for non-UTF-8 input.
+    pub bytes_hex: String,
+}
+
+/// An explicitly missing selected raw object; preparation Gaps do not cause this gap.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RawExactGap {
+    /// Pinned source revision and missing object.
+    pub source: RawSourceRef,
+    /// Only `SOURCE_OBJECT_MISSING`; corrupt bytes are a failed terminal.
+    pub code: FailureCode,
+}
+
+/// One whole raw match or missing-source gap in source/byte order.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum RawExactItem {
+    /// Verified raw occurrence; overlapping ranges are allowed.
+    Match(RawExactMatch),
+    /// Missing retained raw input.
+    Gap(RawExactGap),
+}
+
+impl RawExactItem {
+    /// Exact committed source binding for this item.
+    #[must_use]
+    pub const fn source(&self) -> &RawSourceRef {
+        match self {
+            Self::Match(hit) => &hit.source,
+            Self::Gap(gap) => &gap.source,
+        }
+    }
+
+    fn validate(&self) -> Result<(), ProtocolError> {
+        self.source().validate()?;
+        match self {
+            Self::Match(hit) => {
+                let length = hit
+                    .end
+                    .checked_sub(hit.start)
+                    .filter(|n| *n != 0)
+                    .ok_or(ProtocolError::InvalidMessage)?;
+                if hit.end > hit.source.input.bytes
+                    || length > MAX_QUERY_BYTES as u64
+                    || !lower_hex(
+                        &hit.bytes_hex,
+                        usize::try_from(length * 2).map_err(|_| ProtocolError::InvalidMessage)?,
+                    )
+                {
+                    return Err(ProtocolError::InvalidMessage);
+                }
+            }
+            Self::Gap(gap) if gap.code.as_str() != "SOURCE_OBJECT_MISSING" => {
+                return Err(ProtocolError::InvalidMessage);
+            }
+            Self::Gap(_) => {}
+        }
+        Ok(())
+    }
+}
+
+/// Exhaustive raw execution accounting, separate from its bounded emitted prefix.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RawExactResult {
+    /// Exact committed generation.
+    pub generation: u64,
+    /// Selected committed inventory size, including empty and preparation-Gap inputs.
+    pub selected_sources: u64,
+    /// Sources whose retained bytes were verified and fully scanned.
+    pub scanned_sources: u64,
+    /// Selected retained objects found missing.
+    pub missing_sources: u64,
+    /// Actual verified raw bytes scanned, including work beyond the emitted prefix.
+    pub scanned_bytes: u64,
+    /// Total occurrences found, including those beyond the presentation limit.
+    pub matches: u64,
+    /// Whole source/byte-order prefix, bounded before decoding an extra item.
+    #[serde(deserialize_with = "deserialize_items")]
+    pub items: Vec<RawExactItem>,
+    /// Every selected retained input was verified and fully scanned; false for missing inputs.
+    pub scan_complete: bool,
+    /// True only for complete scanning, zero matches and no missing input.
+    pub complete_negative: bool,
+    /// Complete emitted items versus a whole-item presentation cut.
+    pub stop: StopReason,
+}
+
+impl RawExactResult {
+    /// Validates this raw result against its exact literal and selected inventory.
+    ///
+    /// An explicit selection retains its full denominator; emitted items must belong
+    /// to it. Matched hex bytes must equal the original UTF-8 literal byte for byte.
+    pub fn validate_request(&self, request: &RawExactRequest) -> Result<(), ProtocolError> {
+        const DIGITS: &[u8; 16] = b"0123456789abcdef";
+        request.validate()?;
+        self.validate(request.limit)?;
+        if let Some(ids) = &request.source_ids
+            && (u64::try_from(ids.len()).ok() != Some(self.selected_sources)
+                || self
+                    .items
+                    .iter()
+                    .any(|item| !ids.contains(&item.source().source_id)))
+        {
+            return Err(ProtocolError::InvalidMessage);
+        }
+        let literal = request.literal.as_bytes();
+        let length = u64::try_from(literal.len()).map_err(|_| ProtocolError::InvalidMessage)?;
+        for item in &self.items {
+            if let RawExactItem::Match(hit) = item
+                && (hit.end - hit.start != length
+                    || hit
+                        .bytes_hex
+                        .as_bytes()
+                        .as_chunks::<2>()
+                        .0
+                        .iter()
+                        .zip(literal)
+                        .any(|(pair, byte)| {
+                            pair[0] != DIGITS[usize::from(*byte >> 4)]
+                                || pair[1] != DIGITS[usize::from(*byte & 15)]
+                        }))
+            {
+                return Err(ProtocolError::InvalidMessage);
+            }
+        }
+        Ok(())
+    }
+
+    /// Checks accounting, source bindings, byte ranges and complete-negative claims.
+    pub fn validate(&self, requested_limit: u8) -> Result<(), ProtocolError> {
+        let total = self
+            .matches
+            .checked_add(self.missing_sources)
+            .ok_or(ProtocolError::InvalidMessage)?;
+        if self.generation == 0
+            || requested_limit == 0
+            || usize::from(requested_limit) > MAX_ITEMS
+            || self.items.len() > usize::from(requested_limit)
+            || self.scanned_sources.checked_add(self.missing_sources) != Some(self.selected_sources)
+            || self.scan_complete != (self.scanned_sources == self.selected_sources)
+            || self.complete_negative != (self.scan_complete && self.matches == 0)
+            || self.matches > self.scanned_bytes
+            || (self.scanned_sources == 0 && self.scanned_bytes != 0)
+            || u64::try_from(self.items.len())
+                .ok()
+                .is_none_or(|count| count > total)
+            || (self.stop == StopReason::Complete) != (self.items.len() as u64 == total)
+        {
+            return Err(ProtocolError::InvalidMessage);
+        }
+        let mut match_count = 0_u64;
+        let mut gap_count = 0_u64;
+        for (index, item) in self.items.iter().enumerate() {
+            item.validate()?;
+            match item {
+                RawExactItem::Match(_) => match_count += 1,
+                RawExactItem::Gap(_) => gap_count += 1,
+            }
+            if let Some(previous) = index.checked_sub(1).map(|i| &self.items[i]) {
+                let left = previous.source();
+                let right = item.source();
+                if left.source_namespace_id != right.source_namespace_id
+                    || left.source_id > right.source_id
+                {
+                    return Err(ProtocolError::InvalidMessage);
+                }
+                if left.source_id == right.source_id
+                    && (left != right
+                        || !matches!((previous, item),
+                        (RawExactItem::Match(a), RawExactItem::Match(b)) if a.start < b.start))
+                {
+                    return Err(ProtocolError::InvalidMessage);
+                }
+            }
+        }
+        if match_count > self.matches || gap_count > self.missing_sources {
+            return Err(ProtocolError::InvalidMessage);
+        }
+        Ok(())
+    }
+}
+
 /// Exactly one application terminal, with typed failures distinct from transport loss.
 #[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(tag = "status", rename_all = "snake_case", deny_unknown_fields)]
@@ -336,6 +612,11 @@ pub enum QueryOutcome {
         items: Vec<SearchItem>,
         /// Explicit output completeness.
         stop: StopReason,
+    },
+    /// Raw execution completed with explicit scan and presentation completeness.
+    RawExact {
+        /// Pinned source-based result, independent of prepared points.
+        result: RawExactResult,
     },
     /// The request was cancelled before terminal output committed.
     Cancelled,
@@ -363,6 +644,9 @@ impl<'de> Deserialize<'de> for QueryOutcome {
                 items: Vec<SearchItem>,
                 stop: StopReason,
             },
+            RawExact {
+                result: RawExactResult,
+            },
             Cancelled(EmptyOutcome),
             Failed {
                 code: FailureCode,
@@ -378,6 +662,7 @@ impl<'de> Deserialize<'de> for QueryOutcome {
                 items,
                 stop,
             }),
+            DecodedOutcome::RawExact { result } => Ok(Self::RawExact { result }),
             DecodedOutcome::Cancelled(_) => Ok(Self::Cancelled),
             DecodedOutcome::Failed { code } => Ok(Self::Failed { code }),
         }
@@ -421,18 +706,21 @@ impl Terminal {
                 item.validate(*generation)?;
             }
         }
+        if let QueryOutcome::RawExact { result } = &self.outcome {
+            result.validate(requested_limit)?;
+        }
         Ok(())
     }
 }
 
-fn deserialize_items<'de, D: Deserializer<'de>>(
+fn deserialize_items<'de, D: Deserializer<'de>, T: Deserialize<'de>>(
     deserializer: D,
-) -> Result<Vec<SearchItem>, D::Error> {
-    struct Items;
-    impl<'de> de::Visitor<'de> for Items {
-        type Value = Vec<SearchItem>;
+) -> Result<Vec<T>, D::Error> {
+    struct Items<T>(std::marker::PhantomData<T>);
+    impl<'de, T: Deserialize<'de>> de::Visitor<'de> for Items<T> {
+        type Value = Vec<T>;
         fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-            f.write_str("at most 64 ranked query items")
+            f.write_str("at most 64 query items")
         }
         fn visit_seq<A: de::SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
             let mut items = Vec::new();
@@ -451,7 +739,7 @@ fn deserialize_items<'de, D: Deserializer<'de>>(
             Ok(items)
         }
     }
-    deserializer.deserialize_seq(Items)
+    deserializer.deserialize_seq(Items(std::marker::PhantomData))
 }
 
 fn lower_hex(value: &str, length: usize) -> bool {

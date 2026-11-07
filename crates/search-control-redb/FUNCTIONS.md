@@ -90,6 +90,15 @@ read_generation_source supplies the fixed decoder binding for publication page h
 
 These tables remain ordinary user data: the root format, persistent-savepoint protection and unfinished-root empty probe are unchanged. The [daemon publisher](../../bins/eliot-searchd/src/published_corpus.rs) owns actual backend readiness/canary, snapshot installation and output. The retained [publication recipe](../search-index-qdrant/search-publication/FUNCTIONS.md) owns later convergence/view-lifetime rules.
 
+## Raw Exact inventory
+
+PublishedView::source_inventory reads the complete committed generation_sources inventory from the same pinned
+native RO transaction, including Empty and PreparationGap sources without points. It validates captured source/
+preparation bindings and generation counts; current unpublished source rows never replace this inventory.
+The raw consumer selects from these captured Source ObjectRefs, not generation_evidence hits or latest current
+preparation. An unknown requested SourceId fails; it does not widen selection. No source/preparation/publication
+write, live-file fallback or Qdrant request is performed by this read-only Exact path.
+
 ## Guarded engine recovery
 
 Native read-only inspection reports NeedsRepair without repairing. The actual writable-open capability caller

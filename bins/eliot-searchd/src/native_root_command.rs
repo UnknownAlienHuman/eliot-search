@@ -529,9 +529,6 @@ pub fn run(invocation: RootInvocation, started: Instant) -> ExitCode {
             || emit_source_error("INDEX_ARGUMENT_REQUIRED"),
             |request| index_command(&data_root, index_path.as_deref(), &request, deadline),
         ),
-        RootCommand::Search => search_endpoint.map_or_else(
-            || emit_source_error("QUERY_ENDPOINT_REQUIRED"),
-            |endpoint| crate::framed_search::run(&data_root, &endpoint),
-        ),
+        RootCommand::Search => crate::framed_search::run(&data_root, search_endpoint.as_deref()),
     }
 }

@@ -5,7 +5,7 @@
 
 mod child;
 
-use search_provider_protocol::{ProtocolError, SearchRequest, Terminal};
+use search_provider_protocol::{ProtocolError, RawExactRequest, SearchRequest, Terminal};
 use std::ffi::OsString;
 use std::path::Path;
 use std::sync::atomic::AtomicBool;
@@ -141,7 +141,31 @@ impl QueryClient {
         self.runtime.block_on(child::query(
             executable,
             args,
-            request,
+            child::Request::Search(request),
+            deadline,
+            cancelled,
+            self.cancel_on_ctrl_c,
+        ))
+    }
+
+    /// Owns one raw literal query child using the same serviced stdio and reap path.
+    ///
+    /// The complete terminal is validated against the literal, source selection and
+    /// item limit before return. Raw source bytes remain in their hex representation.
+    pub fn raw_exact_owned_child(
+        &mut self,
+        executable: &Path,
+        args: &[OsString],
+        request: RawExactRequest,
+        deadline: Instant,
+        cancelled: &AtomicBool,
+    ) -> Result<QueryCompletion, ClientError> {
+        synchronous()?;
+        request.validate()?;
+        self.runtime.block_on(child::query(
+            executable,
+            args,
+            child::Request::RawExact(request),
             deadline,
             cancelled,
             self.cancel_on_ctrl_c,
