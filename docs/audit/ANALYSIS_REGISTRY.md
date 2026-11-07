@@ -14,9 +14,10 @@ consumer now repeats saved-selection Index with bounded owned-child I/O, cancell
 sleep. [Guarded writable open](../../crates/search-runtime/search-runtime-owner/FUNCTIONS.md#guarded-writable-open)
 permits validated CONTROL engine recovery for Index; search remains read-only.
 
-Remaining qualification includes unknown Insert-header recovery, commit/install interruption, stale/ABA work,
-pinned-view lifetime and whole-generation cleanup. Prior S1 guard evidence may be reused only at its actual
-scope. A concurrent view framework is not the default prerequisite: query and writer retain the existing
+Remaining qualification includes commit/install interruption, pinned-view lifetime, whole-generation cleanup
+and resource qualification against the [predeclared Stage 3A corpus profile](../implementation/TEST_CUTOVER.md#stage-3a--convergence-and-resources);
+the persisted unknown Insert(1) recovery and ABA cases below cover stale/ABA at their actual process-boundary scope.
+Prior S1 guard evidence may be reused only at its actual scope. A concurrent view framework is not the default prerequisite: query and writer retain the existing
 exclusive root guard through output. Do not invent a replacement for the deleted task queue.
 
 After R1 acceptance, deliver X1 literal Exact plus same-session Continue/Expand/expiry, then M1 stopped-root
@@ -38,7 +39,7 @@ DONE below is the named delivered scope, not completion of the product.
 | P1 / DONE, Windows debug scope | S1 | Materializer/unitizer, shared writer, CONTROL and actual prepare-source child | Complete artifact/current outcome with actual stored text/ranges, empty/Gap and guarded CAS; source d2ccb596 scopes below. |
 | Q1 / DONE, Windows debug scope | P1 | Actual daemon publisher, CONTROL and concrete bridge | Full corpus → exact backend/readback/canary → guarded current/evidence → validated PublishedView; source 3c33d831. |
 | U1 / DONE, Windows debug scope | Q1 | CONTROL resolver, daemon/CLI, protocol/client | Read-only verified full retained units/citations; c843 targeted final-pin scope and earlier evidence below. |
-| R1 / PARTIAL, scoped Windows debug | U1 | CLI/daemon index helpers, source CONTROL and publication | Durable selection, scoped/bare refresh and foreground watch work; remaining Stage 3A recovery/convergence/lifetime qualification is next. |
+| R1 / PARTIAL, scoped Windows debug | U1 | CLI/daemon index helpers, source CONTROL and publication | Durable selection, scoped/bare refresh and foreground watch work; persisted unknown Insert(1) recovery and ABA verified at actual scope below; commit/install, pinned-view and resource qualification remain NOT_RUN. |
 | X1 / WAIT | R1 | Exact/query window and client owners | Retained exact denominator, same-session paging/expansion and expiry. |
 | M1 / WAIT | X1 | Retention and future stopped-root maintenance caller | Conservative collection/archive/import preserving originals. |
 | O1 / DEFERRED | Connected baseline + actual need | [Selected depth](../product/AGENT_ANALYSIS_FRAMEWORK.md#optional-depth) | Add only an actual source-backed consumer; remove unused scaffolds. |
@@ -143,6 +144,22 @@ Native records and exact binary provenance remain under
 C:\Development\Rust\targets\task-r1-selection-native\run-20261106-v1: logs/selection-*.exit.json and
 bin/ec9fb/pins.json. Executed flow: initialize-data-root → index PATH → a new process's bare index → search.
 The older explicit-index and recovery evidence below retains its original scope.
+
+R1 native qualification, Windows debug (main/fef pins, run-20261107-v1):
+
+- Persisted unknown Insert(1) came from real RPC success followed by worker PID 120288 killed (-1) BEFORE
+  finish_dispatch, leaving header created=true, uploaded_pages=1, oprevision 3. Fresh bare Index PID 59424
+  exited 0 as generation 3. Explicit identical saved-page replay followed by Index preserved the old header
+  plus 1 source / 2 page / 2 evidence rows exactly; the old collection stayed unserved. Search PID 105776
+  exited 0 with exact 40000-byte text. This is a process-boundary interruption, distinct from wire-level ACK
+  loss or original RPC delay, which remain NOT_RUN.
+- Actual ABA: retain/prepare A -> B -> A kept the same Source and Prepared digests while revisions advanced
+  1 -> 2 -> 3. Bare Index PID 67464 exited 2 with PUBLICATION_STALE; next Index PID 77228 exited 0 as
+  generation 3 without reusing generation 2, and search returned exact 31-byte text.
+- Records are external at C:\Development\Rust\targets\task-r1-qualification-native\run-20261107-v1;
+  all 27 command / 13 daemon PIDs were absent, Qdrant PID 107368 stopped (-1) and operator exited 0 at
+  07:31:41 UTC. Commit/install interruption, pinned-view lifetime and resource measurement remain NOT_RUN.
+  The 128 MiB / 1000-file corpus profile is only predeclared and unmeasured; R1 stays PARTIAL.
 
 R1 evidence scopes, Windows debug / Rust 1.98.0:
 

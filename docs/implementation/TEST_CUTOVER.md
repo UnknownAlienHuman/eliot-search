@@ -29,9 +29,28 @@ Restart/reopen; edit/removal; partial inventory; stale acquisition/preparation a
 fixed-input generation; commit/install interruption; old pinned view; whole-generation cleanup. Confirm scope
 filters and IDF use the intended population and never widen an unknown/empty selection.
 
-Before the measurement run, state corpus sizes and numeric latency, throughput, RAM/CPU/handles, retained disk,
-read-snapshot and cleanup-backlog limits. Measure the actual pipeline. No corpus class is claimed supported merely
-because a small example works. Resource limits are product measurements, not an agent approval bureaucracy.
+#### Predeclared Stage 3A corpus qualification profile (NOT measured)
+
+This profile is predeclared before benchmarking and does not itself claim a supported corpus.
+Measurement and benchmarking remain NOT_RUN until explicitly executed against this profile.
+
+**Corpus class `ordinary-repo-1`:** exactly 1000 unique UTF-8 code/text/JSON files totalling exactly 128 MiB;
+exactly one 8 MiB boundary file and every other file at most 256 KiB. Content derives from representative
+project source/docs/JSON with deterministic unique markers, never identical duplicate bodies. Qdrant 1.20
+text index residency is explicit **Pinned** for this class.
+
+**Acceptance limits (pre-measurement proposals, parent-approved):**
+Full Index <=120 s (the existing single-operation budget; no new allowance), noop <=60 s; sequential search
+p95 <=500 ms / max 2000 ms and at least 2 queries/s; full throughput at least 1.1 MiB/s and 8.4 files/s.
+Product combined CLI+daemon average CPU <=8.0 core-equivalents, Qdrant <=16.0; whole-machine utilization
+<=80% average on 32 logical cores is an environment-validity condition, not product-regression proof.
+Working set / handles: product combined <=4 GiB / 512, Qdrant <=8 GiB / 1024. Disk for Source/Prepared/CONTROL
+<=2x corpus + 1 GiB. Stable known cleanup backlog is 0 beyond the current generation after 10 min; no partial
+generation is visible. Retained caps remain the existing source caps; no application/model quota changes.
+
+Resource counters use actual available peaks where possible and are reported as sampled maxima; an unknown peak
+is UNKNOWN, never verified. Only failed declared Stage 3A budgets justify implementing/testing
+[source-local deltas](#stage-3b--only-when-needed).
 
 ## Stage 3B — only when needed
 
