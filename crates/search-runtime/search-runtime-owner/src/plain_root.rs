@@ -1210,7 +1210,7 @@ pub fn open_plain(
     }
 }
 
-/// Opens an existing application root for Index with guarded CONTROL crash recovery.
+/// Opens an existing application root with guarded CONTROL crash recovery.
 ///
 /// The stable root lock is held before any writable engine open and is retained in the result.
 /// Read-only root/query entrypoints continue to use [`open_plain`].
@@ -1218,7 +1218,7 @@ pub fn open_plain(
 /// # Errors
 /// Refuses unknown, incomplete, unsupported or corrupt root layouts before recovery;
 /// propagates normal engine, cancellation, deadline, schema and I/O failures.
-pub fn open_plain_for_index(
+pub fn open_plain_with_recovery(
     path: &Path,
     deadline: Instant,
     cancellation: &Arc<AtomicBool>,

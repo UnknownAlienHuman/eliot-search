@@ -19,7 +19,7 @@ use search_control_redb::current_source::{
 use search_revision_store::store_object;
 use search_runtime_owner::{
     PlainRootError, PlainRootGuard, PlainRootStatus, discard_incomplete_plain, initialize_plain,
-    inspect_plain, open_plain, open_plain_for_index,
+    inspect_plain, open_plain, open_plain_with_recovery,
 };
 use search_safe_reader::{MAX_SOURCE_FILE_BYTES, SourceReadError, acquire_file};
 use search_source_registry::{CurrentSourceRecord, ObjectKind};
@@ -409,7 +409,7 @@ fn index_command(
     request: &crate::app::PublicationRequest,
     deadline: Instant,
 ) -> ExitCode {
-    let root = match open_plain_for_index(data_root, deadline, &CANCELLED) {
+    let root = match open_plain_with_recovery(data_root, deadline, &CANCELLED) {
         Ok(root) => root,
         Err(error) => return emit_error(error),
     };
