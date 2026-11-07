@@ -1,6 +1,6 @@
 # Code entrypoints and change map
 
-Current binaries expose root operations, index [PATH], retain-file, prepare-source, publish-prepared, foreground watch, read-only search, Raw/DecodedUtf8 Exact and same-session windows. Native binary and library
+Current binaries expose root operations, index [PATH], retain-file, prepare-source, publish-prepared, foreground watch, read-only search, Raw/DecodedUtf8 Exact same-session windows and stopped-root collect-objects. Native binary and library
 cases have distinct exact-source scopes in the [registry](../audit/ANALYSIS_REGISTRY.md#evidence-status).
 U1 targeted Windows debug acceptance is at c843171, with earlier transport/budget and initial-publication scopes kept separate.
 The [owner map](README.md#owners) defines responsibilities; a row does not require keeping a crate.
@@ -24,6 +24,7 @@ routes are removed. Check the real binary; package names and retained workspace 
                               → bounded root response validation → output
       watch                   → repeated owned saved-selection Index → cleanup → cancellable interval
       index [PATH]            → same owned child → closed refreshed result → output
+      collect-objects         → same owned child → closed marked/verified/deleted/preserved summary
       retain-file --file PATH → same owned child → bounded retained-source response validation → output
       prepare-source          → same owned child → parsed source ID/unit-bound stored-unit validation → output
       publish-prepared        → same owned child → closed generation-state validation → output
@@ -40,6 +41,9 @@ routes are removed. Check the real binary; package names and retained workspace 
       index                   → open current root once → scoped admission or reload all selections
                               → bounded unique file union + small scope metadata → typed retain/prepare
                               → verify scan → guarded scoped removal → publish → refreshed result
+      collect-objects         → open_plain_with_recovery/exclusive root → one CONTROL snapshot/ObjectMarks
+                              → Prepared binding/embedded Source closure + all Source verification
+                              → one streaming final-object sweep → factual summary
       retain-file             → open current root → source-row capture → safe read → object readback
                               → current-source CAS in search-control-redb → factual result
       prepare-source          → open current root → preserve settings → read-only preparation capture
@@ -65,6 +69,7 @@ routes are removed. Check the real binary; package names and retained workspace 
 | discard-incomplete-data-root | --discard-incomplete-data-root | discard_incomplete_plain |
 | watch [--interval-ms N] --qdrant-url URL | owned --index --index-owner-stdio child, no PATH | app/watch.rs → one bounded iteration → observed cleanup → after-completion sleep |
 | index [PATH] --qdrant-url URL | --index [--index-path PATH] with matching settings | open_plain_with_recovery → capture_selections/admit_selection → unique scoped/union scan → retain/prepare/remove_current_sources/publish |
+| collect-objects [ROOT] | --collect-objects with root settings | collect_objects::run → ObjectMarks::build → inspect_prepared_utf8/Source verification → proven-unmarked sweep |
 | retain-file --file PATH | --retain-file --source-file PATH | open_plain → acquire_file → store_object/read_object → commit_current_source |
 | prepare-source --source-id UUID [--unit N] | --prepare-source --source-id UUID [--unit N] | open_plain → prepared_source::run → retained read/prepare/store/decode → commit_preparation |
 | publish-prepared --qdrant-url URL | --publish-prepared with matching settings | open_plain → published_corpus::run → compact references/Prepared hydration/backend/current/view → generation state |
@@ -110,6 +115,7 @@ Rows marked future identify integration owners, not installed commands or comple
 | Exact UTF-8 and complete artifact/unit ranges | [Materializer](../../crates/search-prep/search-materializer/FUNCTIONS.md), [Unitizer](../../crates/search-prep/search-unitizer/FUNCTIONS.md) |
 | Concrete Qdrant operations | [Bridge](../../crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md), [lexical policy](../../crates/search-lexical/FUNCTIONS.md) |
 | Corpus publication/current/view | [Daemon publisher](../../bins/eliot-searchd/src/published_corpus.rs), [CONTROL](../../crates/search-control-redb/src/publication.rs), [RO graph validator](../../crates/search-control-redb/src/publication/verify.rs), [policy](../../crates/search-index-qdrant/search-publication/FUNCTIONS.md) |
+| Stopped-root object collection | [Handler](../../bins/eliot-searchd/src/collect_objects.rs), [CONTROL marks](../../crates/search-control-redb/src/object_marks.rs), [object leaf checks](../../crates/search-source/search-revision-store/src/collect.rs), [owner](../../crates/search-runtime/search-retention/FUNCTIONS.md) |
 | Returned evidence and retained units | [Query worker](../../bins/eliot-searchd/src/verified_query.rs), [CONTROL resolver](../../crates/search-control-redb/src/publication.rs), [evidence rule](../../crates/search-query/search-candidate-validator/FUNCTIONS.md) |
 | Serviced framed child and presentation | [Daemon I/O](../../bins/eliot-searchd/src/framed_search.rs), [client](../../crates/search-provider-client/FUNCTIONS.md), [protocol](../../crates/search-provider-protocol/FUNCTIONS.md), [CLI](../../bins/eliot-search/FUNCTIONS.md) |
 | Raw/DecodedUtf8 and same-session windows | [Raw](../../bins/eliot-searchd/src/raw_exact.rs), [Decoded](../../bins/eliot-searchd/src/decoded_exact.rs), [session I/O](../../bins/eliot-searchd/src/framed_search/session.rs), [window](../../bins/eliot-searchd/src/framed_search/window.rs), [owning window recipe](../../crates/search-query/search-continuation/FUNCTIONS.md) |
@@ -125,7 +131,8 @@ Do not restore deleted daemon implementations or unconsumed APIs because an olde
 
 That read-only query → pinned published evidence → verified retained text/citation → CLI path is connected.
 Scoped index, bare selection reload and foreground watch now use those helpers; R1's accepted scopes remain
-in the registry. X1 selected Windows/Release qualification is DONE; M1 collect-objects implementation is next.
+in the registry. X1 selected Windows/Release qualification is DONE; M1 collector is connected/PARTIAL.
+Archive/import are the next actual M1 consumers, not implemented by the collector.
 Entry points and root exclusion are unchanged; no concurrent view framework is added by this documentation.
 Confirmed absence and inaccessible inventory stay distinct.
 Build the actual owners and delete displaced code with its callers. Root-only command checks, helper-native
