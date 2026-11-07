@@ -413,10 +413,7 @@ fn parse(arguments: &[OsString]) -> Result<Parsed, &'static str> {
     let mut index = 1;
     while index < arguments.len() {
         let argument = &arguments[index];
-        if is_help_flag(argument) || is_version_flag(argument) {
-            return Err("USAGE_ERROR");
-        }
-        if is_daemon_root_flag(argument) {
+        if is_help_flag(argument) || is_version_flag(argument) || is_daemon_root_flag(argument) {
             return Err("USAGE_ERROR");
         }
         if argument == OsStr::new("--daemon") {
