@@ -2,7 +2,8 @@
 
 The old continuation crate/stores/manifest/exclusive fixtures remain removed. The real CLI/SDK/daemon window
 consumer is qualified for the selected Windows/Release X1 scope on main 59061070, using source-equivalent
-473447af binaries. X1 is DONE in that scope; M1 implementation is READY, not delivered. V1 remains unfinished.
+473447af binaries. The [registry](../../../docs/audit/ANALYSIS_REGISTRY.md#work-register) owns current stage
+status; this window qualification does not establish completion of M1 or V1.
 
 ## Current consumer and usage
 
@@ -87,5 +88,6 @@ These scopes do not qualify the whole project, other platforms or an installed f
 
 The current prepared-representation producer is saved UTF-8 identity. New extracted/parser/nonidentity routes
 are not selected gates before M1, and historical Markdown/JATS are not restored. Unavailable representations
-remain explicit. Next implement collect-objects under the [stopped-root owner rule](../../search-runtime/search-retention/FUNCTIONS.md#stopped-root-local-object-collection);
-M1 readiness does not mean collection/archive/import already exist.
+remain explicit. The [stopped-root owner](../../search-runtime/search-retention/FUNCTIONS.md#stopped-root-local-object-collection)
+now has the delivered collector slice; its checks and remaining archive/import work stay in that recipe and
+the registry. Window qualification is not a claim that archive/import or the whole product is complete.

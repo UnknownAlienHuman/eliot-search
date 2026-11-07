@@ -10,7 +10,9 @@ The current binaries expose four root operations, explicit file/tree index, reta
 prepare-source, publish-prepared, foreground watch and framed read-only Search/Raw/DecodedUtf8 Exact. The connected path reaches source/current row, complete preparation/current outcome,
 Qdrant generation/current evidence/view and verified retained units/citations. Publication returns generation
 state/counts; Search and Raw/DecodedUtf8 Exact are read-only query operations. Their exact native scopes belong in the registry;
-R1 convergence, Exact/windows and later product stages remain unfinished.
+Same-session Continue/Expand/expiry and stopped-root collect-objects are connected too. The
+[registry](../audit/ANALYSIS_REGISTRY.md#work-register) owns their exact qualification scopes and remaining work;
+connected commands do not imply an installed baseline or completion of the product.
 
 ```text
 selected source → stable acquired bytes → immutable ObjectRef/current SourceRecord
@@ -102,7 +104,7 @@ Q1 consumes saved units into a fresh vectorless Qdrant 1.20.0 collection, verifi
 
 U1 search pins committed metadata without a corpus scan, calls the concrete backend and resolves only returned evidence/CapturedSource in the same snapshot. It verifies actual Source/Prepared length/BLAKE3, captured decoder binding and all unit byte/line/boundary facts before emitting the full unit and citation. It never substitutes newer preparation or live paths. Query/Cancel and one terminal use the serviced owned child with an 8 MiB total frame cap and whole-card OutputLimit. Search writes neither CONTROL nor collections.
 
-Retention, preparation and publication retain their root-owned argv child. Search uses the connected framed child with one joinable synchronous backend worker; no temporary route or session framework is required. Live paging/windows arrive in Stage 4. Inventory/refresh and restart convergence are next; encryption/permission platforms are outside local scope. Missing returned retained objects produce explicit gaps; corrupt evidence produces no card. U1 does not complete the product.
+Retention, preparation and publication retain their root-owned argv child. Search uses the connected framed child with one joinable synchronous backend worker; no temporary route or session framework is required. The connected session window is described in Stage 4 and explicit/bare Index plus watch in Stage 3A; encryption/permission platforms are outside local scope. Missing returned retained objects produce explicit gaps; corrupt evidence produces no card. U1 does not complete the product.
 <a id="3a-fresh-generation-convergence"></a>
 ### 3A. Fresh-generation convergence
 
@@ -199,7 +201,7 @@ The current root-owned child serializes these operations. Later concurrent sessi
 a short lock; Continue/Expand retain that original view/order. Do not introduce a view manager or lock before
 an actual concurrent consumer needs one. No writer/view/window mutex or mutable shared borrow spans I/O.
 Retired-generation cleanup must preserve every live view/window and unresolved target obligation; last guard
-drop performs no deletion. Future window cursor changes follow complete terminal output.
+drop performs no deletion. Window cursor changes follow complete terminal output.
 
 ## Slice completion
 

@@ -1,10 +1,9 @@
 # Configuration
 
-Source-removal observations below describe the refactor branch. Main retains legacy configuration with its
-consumers until a separate source cut; these files are not current replacement settings.
-
-The typed replacement is selected, not yet connected. Add fields with the owners that actually consume them.
-Do not implement a registry of future settings or present legacy examples as a working configuration.
+The actual daemon bootstrap consumes bounded typed data_root settings from file/environment/CLI; the
+legacy configuration Rust catalogue was removed with its consumers. [The settings recipe](../../crates/search-config/FUNCTIONS.md)
+retains precedence/validation rules, not a Cargo package to restore. Add fields only with actual consumers;
+legacy examples are not supported settings.
 
 | Question | Owning section |
 |---|---|

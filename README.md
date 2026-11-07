@@ -24,7 +24,8 @@ reload all stored selections, followed by `search`. Explicit PATH refreshes only
 the deduplicated union. Foreground `watch` repeats saved-selection Index with no overlapping children;
 its default after-completion interval is 30 seconds. Search stays read-only. R1's functional and ordinary-repo-1
 optimized RELEASE fixed-input scopes are accepted; DEBUG query performance and universal/replacement peaks
-are not claimed. Next is Exact/windows, then maintenance and installed-release qualification.
+are not claimed. Raw/DecodedUtf8 Exact, same-session windows and the collector are connected; current M1 work
+and qualification limits live in the work register. Source presence does not qualify archive/import or release.
 Confirmed deletion excludes a source from new generations while preserving retained objects and pinned views.
 Do not build optional systems first or restore the retired source/qualification frameworks.
 

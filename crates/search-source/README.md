@@ -74,8 +74,9 @@ for new generations; admission/kind, retained objects and pinned evidence remain
 but present file is not removal. Outside rows remain; inaccessible/partial inventory cannot confirm absence.
 Unrelated legacy unprepared rows still fail full publication rather than being prepared or omitted implicitly.
 Admission/reload and foreground watch are implemented. Watch accepts no PATH and refreshes these saved
-selections in one owned Index child at a time, with cleanup before the next interval. R1 remains partial:
-remaining recovery/convergence/lifetime qualification is required before later product stages.
+selections in one owned Index child at a time, with cleanup before the next interval. R1 acceptance and
+unclaimed recovery/convergence/lifetime boundaries belong to the exact scopes in the
+[work register](../../docs/audit/ANALYSIS_REGISTRY.md#evidence-status); do not infer universal qualification.
 
 ## Ownership
 
