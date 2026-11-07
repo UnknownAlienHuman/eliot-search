@@ -12,8 +12,9 @@ It matches UTF-8 literal bytes over undecoded input without Qdrant or latest/liv
 raw ranges/hex and separate scan/presentation accounting. Retained DecodedUtf8 also works through
 [decoded_exact.rs](../../bins/eliot-searchd/src/decoded_exact.rs): saved Prepared UTF-8 plus verified Source,
 identity byte map, both refs/ranges and exact text. It neither decodes/materializes input on demand nor
-normalizes/reprepares it. X1 is PARTIAL: Continue/Expand/expiry and held-output windows are next;
-extracted has no real producer/implemented route, and arbitrary non-UTF-8 needles remain unsupported.
+normalizes/reprepares it. The connected [session/window consumer](search-continuation/FUNCTIONS.md) retains
+that original view/order for Continue/Expand and fixed expiry; qualification scope is recorded in the registry.
+Extracted has no real producer/implemented route, and arbitrary non-UTF-8 needles remain unsupported.
 There is no authentication/grant/revocation system in
 [the local product](../../docs/architecture/LOCAL_SCOPE.md).
 

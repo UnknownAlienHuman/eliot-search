@@ -68,8 +68,9 @@ Matching spans the full representation across stored unit boundaries. No Qdrant 
 
 The literal/source selection/output bounds remain 4096 UTF-8 bytes, at most 64 items and 8 MiB total framing.
 PrepGap or missing input/artifact produces an explicit representation gap; corruption fails. Output cuts do
-not stop the scan, and gaps prevent complete negative. X1 remains PARTIAL: session/windows are not delivered;
-there is no extracted producer/route or arbitrary non-UTF-8 needle syntax.
+not stop the scan, and gaps prevent complete negative. The connected session command uses the
+[window owner](../../crates/search-query/search-continuation/FUNCTIONS.md); its qualification is scoped there.
+There is no extracted producer/route or arbitrary non-UTF-8 needle syntax.
 
 ## Retained result
 

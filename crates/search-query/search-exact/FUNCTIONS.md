@@ -2,7 +2,8 @@
 
 The disconnected Exact Rust package, proof/spine APIs, manifest and exclusive fixtures are removed.
 The current Search command is ranked text retrieval; it does not claim exhaustive exact matching.
-RAW and retained DecodedUtf8 are connected through the actual CLI and daemon; X1 session/windows are not complete.
+RAW and retained DecodedUtf8 are connected through the actual CLI/daemon and the
+[same-session window](../search-continuation/FUNCTIONS.md). The registry owns current delivery/qualification status.
 
 ## Implemented raw slice
 
@@ -47,7 +48,8 @@ Existing 4096-byte UTF-8 literal, 64-item and 8 MiB total-frame bounds remain. O
 complete_negative requires every selected representation verified/scanned, zero matches and no representation gap.
 Empty Ready can complete negatively; an unavailable representation cannot.
 
-X1 remains PARTIAL: same-session Continue/Expand/expiry and held-output window qualification are next.
+Same-session Continue/Expand/expiry use the connected window owner and original representation. Its
+[verification scope](../search-continuation/FUNCTIONS.md#verification-scope) preserves the selected Windows/Release limits.
 Extracted has no current real producer or implemented route. Arbitrary non-UTF-8 needle input is not implemented.
 
 ## Input semantics are part of the request

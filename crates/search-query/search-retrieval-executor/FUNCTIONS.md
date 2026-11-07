@@ -1,9 +1,10 @@
 # Retrieval execution — one bounded query
 
 The disconnected Rust package/manifests/exclusive fixtures were retired in Q1. The daemon now owns actual
-publication nominations through Backend; this recipe remains policy for the next U1 search consumer.
+ranked retrieval/evidence through [verified_query.rs](../../../bins/eliot-searchd/src/verified_query.rs) and the
+concrete Backend. This recipe remains policy for that actual consumer.
 
-Replace the disconnected scheduler/ticket/leg framework with a direct handler in the query owner:
+The connected handler follows this semantic operation; it is not a restored scheduler/ticket/leg API:
 
 ```text
 execute_search(request, RequestContext, bridge) -> ordered nominations + gaps

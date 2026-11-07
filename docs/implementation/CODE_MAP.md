@@ -79,7 +79,8 @@ routes are removed. Check the real binary; package names and retained workspace 
 | session --data-root ROOT [--qdrant-url URL] | --session-stdio with SessionClientFrame/SessionReply | CLI search_command::run_session → OwnedQuerySession → framed_search/session + window |
 
 Read-only/root operator functions take (&Path, Instant, &AtomicBool); open_plain_with_recovery takes the shared
-Arc cancellation flag for maintained engine repair callbacks. Index alone uses that capability.
+Arc cancellation flag for maintained engine repair callbacks. Explicit writable owners such as Index and
+collect-objects use that capability; ordinary query/open remains non-repairing.
 Init/open return PlainRootGuard; inspection returns
 PlainRootInspection and discard returns unit. The daemon holds guards through terminal root output.
 Its original deadline/cancellation is passed to root/control effects.

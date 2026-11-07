@@ -47,7 +47,8 @@ still returns PUBLICATION_SOURCE_NOT_PREPARED if any current row lacks matching 
 Unchanged native identity plus ObjectRef preserves the logical source head and avoids a new collection.
 Search returns verified retained units and is read-only. ec9fb6f selection-reload source/native checks passed
 in the scopes recorded in the [registry](docs/audit/ANALYSIS_REGISTRY.md#resume); earlier cases retain their own
-binary scope. Foreground watch and R1's recorded functional/optimized RELEASE fixed-input scopes are accepted; X1 is next.
+binary scope. Later query/window and maintenance scopes are recorded in the registry; they are not pending
+merely because the older evidence above used another source revision.
 
 ## Watch admitted selections
 
@@ -65,7 +66,7 @@ Each child retains at most 64 KiB of stdout and stderr while continuing to drain
 stdin closes when its parent disappears, requesting cooperative Index cancellation. This is foreground work,
 not an OS service. Qdrant remains operator-owned. Search may run separately and remains read-only.
 
-Index alone uses guarded writable CONTROL crash recovery when NeedsRepair is observed. It validates a
+Explicit writable owners such as Index and collect-objects use guarded CONTROL crash recovery when NeedsRepair is observed. It validates a
 recovered owned temporary copy before writes to the unchanged original, then uses maintained redb recovery,
 clean close and inspection. Read-only open/query do not repair. Unsupported/corrupt or missing-format storage
 is refused without reset or copying candidate bytes back. See the [recovery owner](crates/search-runtime/search-runtime-owner/FUNCTIONS.md#guarded-writable-open)
@@ -195,7 +196,8 @@ scanned, zero matches and no missing input. The total frame remains 8 MiB.
 
 This RAW slice is qualified at its recorded source/native scope, not an R1 resource-profile rerun or all
 of X1. Retained DecodedUtf8 is available separately below. Extracted has no real producer/implemented route;
-arbitrary non-UTF-8 needles, Continue/Expand/expiry and held-daemon-output window qualification are not delivered. See the
+arbitrary non-UTF-8 needles remain unsupported. The connected session/window consumer and its selected
+qualification scope are recorded by the window owner and registry. See the
 [Exact recipe](crates/search-query/search-exact/FUNCTIONS.md#implemented-raw-slice) and
 [registry](docs/audit/ANALYSIS_REGISTRY.md#evidence-status).
 
@@ -212,8 +214,9 @@ across preparation-unit boundaries. Results contain both ObjectRefs, source/repr
 PreparationGap returns PREPARATION_GAP with no artifact ref. Missing Ready input/artifact returns an explicit
 gap retaining the selected PreparedRef; corruption is fatal. Gaps prevent complete negative. Output limits
 remain presentation cuts: UTF-8 literal <=4096 bytes, at most 64 whole items, 8 MiB total frame. Raw matching
-remains available when a Prepared representation is absent. X1 is still PARTIAL: same-session windows,
-Continue/Expand/expiry and held-daemon-output qualification are next; extracted has no real producer/route.
+remains available when a Prepared representation is absent. Same-session Continue/Expand/expiry are connected;
+see the [window owner](crates/search-query/search-continuation/FUNCTIONS.md#verification-scope) for their bounded
+Windows/Release qualification. Extracted still has no real producer/route.
 
 ## File, environment and CLI settings
 

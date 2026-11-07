@@ -3,8 +3,8 @@
 
 ## Selected implementation baseline
 
-Main still pins client 1.19.0. The selected scoring-text path targets one exact server/client 1.20.x patch, adopted
-with the real consumer. This page provides no verified ELIOT installation/config command or Windows support claim.
+The connected consumer uses the exact SDK/server 1.20.0 cut. Current Windows qualification is recorded in the
+[registry](../audit/ANALYSIS_REGISTRY.md#evidence-status); this navigation page is not an installed-baseline claim.
 [Bridge dependency cut](../../crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md#dependency-cut) owns the
 SDK/server choice and gRPC endpoint; [root Quickstart](../../QUICKSTART.md) owns executed product commands.
 
@@ -17,7 +17,8 @@ A pre-existing key is passed privately only when required. Client loopback selec
 listeners; deployment must keep them local. No remote/anonymous fallback on connection failure.
 
 The previous illustrative ELIOT TOML was not an implemented schema. Do not copy it into production settings.
-Add typed endpoint input only with its actual bridge consumer; config fields without consumers are rejected.
+The actual consumer accepts explicit --qdrant-url input; this does not make the old illustrative TOML schema valid.
+Configuration fields without consumers remain rejected.
 
 ## Windows evidence required for Qdrant 1.20
 
