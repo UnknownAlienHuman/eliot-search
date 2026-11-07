@@ -28,6 +28,7 @@ pub(super) struct RootCli {
     config_file: Option<PathBuf>,
     source_file: Option<PathBuf>,
     index_path: Option<PathBuf>,
+    index_owner_stdio: bool,
     source_id: Option<SourceId>,
     unit: Option<usize>,
     publication: Option<PublicationRequest>,
@@ -37,6 +38,42 @@ pub(super) struct RootCli {
 #[derive(Default)]
 struct ConfigLayer {
     data_root: Option<PathBuf>,
+}
+
+#[derive(Default)]
+struct IndexOptions {
+    path: Option<PathBuf>,
+    owner_stdio: bool,
+}
+
+impl IndexOptions {
+    fn take_option(
+        &mut self,
+        command: Option<RootCommand>,
+        arguments: &[OsString],
+        index: usize,
+    ) -> Result<Option<usize>, String> {
+        match arguments[index].to_str() {
+            Some("--index-path") => {
+                if self.path.is_some() || command != Some(RootCommand::Index) {
+                    return Err(invalid("index_path"));
+                }
+                let value = arguments
+                    .get(index + 1)
+                    .ok_or_else(|| invalid("index_path_value"))?;
+                self.path = Some(bounded_path(value, "index_path")?);
+                Ok(Some(2))
+            }
+            Some("--index-owner-stdio") => {
+                if self.owner_stdio || command != Some(RootCommand::Index) {
+                    return Err(invalid("index_owner_stdio"));
+                }
+                self.owner_stdio = true;
+                Ok(Some(1))
+            }
+            _ => Ok(None),
+        }
+    }
 }
 
 #[derive(Default, Deserialize)]
@@ -212,7 +249,7 @@ pub(super) fn parse(arguments: &[OsString]) -> Result<Parsed, String> {
     let mut data_root = None;
     let mut config_file = None;
     let mut source_file = None;
-    let mut index_path = None;
+    let mut index_options = IndexOptions::default();
     let mut source_id = None;
     let mut unit = None;
     let mut publication = PublicationOptions::default();
@@ -237,15 +274,8 @@ pub(super) fn parse(arguments: &[OsString]) -> Result<Parsed, String> {
         } else if argument == OsStr::new("--source-file") {
             select_path_option(&mut source_file, arguments, index, "source_file")?;
             index += 2;
-        } else if argument == OsStr::new("--index-path") {
-            if index_path.is_some() || command != Some(RootCommand::Index) {
-                return Err(invalid("index_path"));
-            }
-            let value = arguments
-                .get(index + 1)
-                .ok_or_else(|| invalid("index_path_value"))?;
-            index_path = Some(bounded_path(value, "index_path")?);
-            index += 2;
+        } else if let Some(consumed) = index_options.take_option(command, arguments, index)? {
+            index += consumed;
         } else if argument == OsStr::new("--source-id") {
             if source_id.is_some() {
                 return Err(invalid("source_id_duplicate"));
@@ -285,7 +315,8 @@ pub(super) fn parse(arguments: &[OsString]) -> Result<Parsed, String> {
         source_id.is_some(),
         unit.is_some(),
     )?;
-    if index_path.is_some() && command != RootCommand::Index {
+    if (index_options.path.is_some() || index_options.owner_stdio) && command != RootCommand::Index
+    {
         return Err(invalid("index_path"));
     }
     if data_root.is_some() && positional_root.is_some() {
@@ -296,7 +327,8 @@ pub(super) fn parse(arguments: &[OsString]) -> Result<Parsed, String> {
         data_root: data_root.or(positional_root),
         config_file,
         source_file,
-        index_path,
+        index_path: index_options.path,
+        index_owner_stdio: index_options.owner_stdio,
         source_id,
         unit,
         publication,
@@ -387,6 +419,7 @@ pub(super) fn resolve(cli: RootCli, startup_cwd: &Path) -> Result<RootInvocation
         index_path: cli
             .index_path
             .map(|path| resolve_layer_path(&path, startup_cwd)),
+        index_owner_stdio: cli.index_owner_stdio,
         source_id: cli.source_id,
         unit: cli.unit,
         publication: cli.publication,

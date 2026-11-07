@@ -1,5 +1,7 @@
 //! Root operations over one bounded, owned daemon child.
 
+mod watch;
+
 use search_source_registry::{MAX_PREPARATION_RESPONSE_BYTES, MAX_PUBLICATION_RESPONSE_BYTES};
 use std::env;
 use std::ffi::{OsStr, OsString};
@@ -64,6 +66,7 @@ impl RootCommand {
 enum Parsed {
     Help,
     Version,
+    Watch(watch::Request),
     Root {
         command: RootCommand,
         settings: Vec<OsString>,
@@ -104,6 +107,7 @@ struct ChildOutput {
     stderr: Captured,
 }
 
+#[derive(Clone, Copy)]
 enum ChildFailure {
     Start,
     StdoutUnavailable,
@@ -112,10 +116,14 @@ enum ChildFailure {
     Wait,
     Timeout,
     ResultUnknown,
+    Cancelled,
+    Signal,
+    Cleanup,
+    DaemonPath,
 }
 
 impl ChildFailure {
-    const fn code(&self) -> &'static str {
+    const fn code(self) -> &'static str {
         match self {
             Self::Start => "DAEMON_START_ERROR",
             Self::StdoutUnavailable => "DAEMON_STDOUT_UNAVAILABLE",
@@ -124,12 +132,17 @@ impl ChildFailure {
             Self::Wait => "DAEMON_WAIT_ERROR",
             Self::Timeout => "DAEMON_TIMEOUT",
             Self::ResultUnknown => "DAEMON_RESULT_UNKNOWN",
+            Self::Cancelled => "DAEMON_CANCELLED",
+            Self::Signal => "SIGNAL_UNAVAILABLE",
+            Self::Cleanup => "DAEMON_CLEANUP_UNRESOLVED",
+            Self::DaemonPath => "DAEMON_PATH_INVALID",
         }
     }
 
-    const fn exit_code(&self) -> i32 {
+    const fn exit_code(self) -> i32 {
         match self {
             Self::Timeout => 124,
+            Self::Cancelled => 130,
             _ => 2,
         }
     }
@@ -222,16 +235,19 @@ fn validate_path(value: &OsStr) -> Result<(), &'static str> {
     Ok(())
 }
 
-fn local_invocation(arguments: &[OsString]) -> Option<Parsed> {
+fn standalone_invocation(arguments: &[OsString]) -> Option<Result<Parsed, &'static str>> {
     if arguments.is_empty() {
-        return Some(Parsed::Help);
+        return Some(Ok(Parsed::Help));
+    }
+    if arguments[0] == OsStr::new("watch") {
+        return Some(watch::parse(arguments));
     }
     if arguments.len() == 1 && (is_help_flag(&arguments[0]) || is_help_command(&arguments[0])) {
-        return Some(Parsed::Help);
+        return Some(Ok(Parsed::Help));
     }
     if arguments.len() == 1 && (is_version_flag(&arguments[0]) || is_version_command(&arguments[0]))
     {
-        return Some(Parsed::Version);
+        return Some(Ok(Parsed::Version));
     }
     None
 }
@@ -394,8 +410,8 @@ impl PublicationRequest {
 }
 
 fn parse(arguments: &[OsString]) -> Result<Parsed, &'static str> {
-    if let Some(local) = local_invocation(arguments) {
-        return Ok(local);
+    if let Some(local) = standalone_invocation(arguments) {
+        return local;
     }
     let Some(root_command) = command(&arguments[0]) else {
         return Err("UNKNOWN_COMMAND");
@@ -867,6 +883,7 @@ fn print_help() {
         "  eliot-search prepare-source --source-id UUID [--unit N] [--data-root ROOT] [--config-file PATH] [--daemon PATH]\n",
         "  eliot-search publish-prepared --qdrant-url URL [--data-root ROOT] [--config-file PATH] [--daemon PATH]\n",
         "  eliot-search index [PATH] --qdrant-url URL [--data-root ROOT] [--config-file PATH] [--daemon PATH]\n",
+        "  eliot-search watch [--interval-ms N] --qdrant-url URL [--data-root ROOT] [--config-file PATH] [--daemon PATH]\n",
         "  eliot-search search --query TEXT [--limit N] --qdrant-url URL [--data-root ROOT] [--config-file PATH] [--daemon PATH]\n",
     ));
 }
@@ -882,6 +899,7 @@ pub fn run_main() -> i32 {
         Err(error) => return emit_error(error),
     };
     let (command, settings, explicit_daemon, preparation, publication) = match parsed {
+        Parsed::Watch(request) => return watch::run(request),
         Parsed::Root {
             command,
             settings,
