@@ -7,9 +7,9 @@ This page owns delivery order and cross-owner values. Use [code map](CODE_MAP.md
 ## Connected path
 
 The current binaries expose four root operations, explicit file/tree index, retain-file, retained-only
-prepare-source, publish-prepared, foreground watch and framed read-only Search/FIRST RAW Exact. The connected path reaches source/current row, complete preparation/current outcome,
+prepare-source, publish-prepared, foreground watch and framed read-only Search/Raw/DecodedUtf8 Exact. The connected path reaches source/current row, complete preparation/current outcome,
 Qdrant generation/current evidence/view and verified retained units/citations. Publication returns generation
-state/counts; Search and FIRST RAW Exact are read-only query operations. U1 Windows debug scopes belong in the registry;
+state/counts; Search and Raw/DecodedUtf8 Exact are read-only query operations. Their exact native scopes belong in the registry;
 R1 convergence, Exact/windows and later product stages remain unfinished.
 
 ```text
@@ -123,7 +123,7 @@ Persisted unknown Insert/ABA, postcommit/pre-view and held-query exclusion/clean
 native scopes; the resource run does not relabel them. Fixed-input RELEASE measurement passed the declared
 profile with sampled/OS-reported counters; complete unsampled product peaks and generation-replacement peak
 remain UNKNOWN/NOT_RUN. DEBUG query performance is not qualified. See the registry for exact boundaries.
-X1 is PARTIAL: FIRST RAW is connected; next DecodedUtf8 identity mapping and same-session Continue/Expand/expiry,
+X1 is PARTIAL: Raw and saved DecodedUtf8 identity matching are connected; next same-session windows/Continue/Expand/expiry,
 then M1 archive/import and V1 release checks.
 Search stays read-only; query and writer share exclusive root exclusion through flush, so a concurrent view
 manager is not the next prerequisite.
@@ -148,8 +148,11 @@ Owners #249/#275/#280/#332. FIRST RAW scans the selected committed PublishedView
 Empty/PreparationGap inputs, with literal UTF-8 bytes over undecoded retained objects and no Qdrant/live fallback.
 Source integrity precedes raw range/hex evidence. Missing input is a Gap, corruption fails, presentation limits
 do not end scanning and complete negative requires fully verified zero matches. The source/native scope does
-not complete X1: DecodedUtf8 can next use retained Prepared UTF-8 identity mapping; extracted has no current
-producer or implemented route. Continue/Expand/expiry and held-daemon-output qualification remain pending.
+not complete X1. DecodedUtf8 now verifies retained Source and SAVED Prepared UTF-8 against captured bindings,
+proves byte-identity mapping and emits both refs/ranges plus text. It scans full representation across units;
+no on-the-fly materialization, reprepare, normalization or live fallback occurs. PrepGap/missing representations
+are explicit gaps; corruption fails. Extracted still has no real producer or implemented route.
+Continue/Expand/expiry and held-daemon-output window qualification remain pending.
 Extend the same serviced framed
 connection with bounded QueryWindows; do not replace the one-shot transport. Continue pages stored order;
 Expand uses an emitted item's neighborhood. Complete terminal output precedes the prepared local cursor update;

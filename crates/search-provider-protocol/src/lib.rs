@@ -8,14 +8,15 @@ mod error;
 mod frame;
 
 pub use dto::{
-    ClientFrame, EvidenceMetadata, FailureCode, ObjectKindDto, ObjectRefDto, QueryOutcome,
+    ClientFrame, DecodedUtf8Gap, DecodedUtf8Item, DecodedUtf8Match, DecodedUtf8Request,
+    DecodedUtf8Result, EvidenceMetadata, FailureCode, ObjectKindDto, ObjectRefDto, QueryOutcome,
     RawExactGap, RawExactItem, RawExactMatch, RawExactRequest, RawExactResult, RawSourceRef,
     SearchGap, SearchHit, SearchItem, SearchRequest, StopReason, Terminal,
 };
 pub use error::ProtocolError;
 pub use frame::{
     FrameBuffer, decode_client_frame, decode_terminal_frame, encode_client_frame,
-    encode_terminal_frame, prepare_complete, prepare_raw_exact,
+    encode_terminal_frame, prepare_complete, prepare_decoded_utf8, prepare_raw_exact,
 };
 pub use search_contracts::MAX_FRAME_BYTES;
 

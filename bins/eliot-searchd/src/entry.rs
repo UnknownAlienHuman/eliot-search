@@ -3,6 +3,8 @@
 #![forbid(unsafe_code)]
 
 mod app;
+mod decoded_exact;
+mod exact_literal;
 mod framed_search;
 mod native_root_command;
 mod prepared_source;

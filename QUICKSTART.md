@@ -193,11 +193,27 @@ produce explicit gaps; corrupt bytes fail. --limit N allows 1..64 whole emitted 
 the scan. OutputLimit and scan_complete are separate; complete_negative needs every selected input verified/
 scanned, zero matches and no missing input. The total frame remains 8 MiB.
 
-This FIRST RAW slice is qualified at its recorded source/native scope, not an R1 resource-profile rerun or all
-of X1. DecodedUtf8 identity mapping is next. Extracted has no producer/implemented route; arbitrary non-UTF-8
-needles, Continue/Expand/expiry and held-daemon-output window qualification are not delivered. See the
+This RAW slice is qualified at its recorded source/native scope, not an R1 resource-profile rerun or all
+of X1. Retained DecodedUtf8 is available separately below. Extracted has no real producer/implemented route;
+arbitrary non-UTF-8 needles, Continue/Expand/expiry and held-daemon-output window qualification are not delivered. See the
 [Exact recipe](crates/search-query/search-exact/FUNCTIONS.md#implemented-raw-slice) and
 [registry](docs/audit/ANALYSIS_REGISTRY.md#evidence-status).
+
+## Exact over retained DecodedUtf8
+
+    .\target\release\eliot-search.exe exact --decoded-utf8 --literal "Café" --data-root "C:\example\data-root" --limit 10 --daemon .\target\release\eliot-searchd.exe
+
+Exactly one of --raw/--decoded-utf8 is required. This mode reads the actual SAVED Prepared UTF-8 artifact from
+the same pinned published inventory and verifies its Source plus captured settings/binding. It does not decode
+or materialize input on demand, normalize BOM/CRLF, reprepare missing artifacts or use live/backend fallback.
+The identity map is verified by full retained source/representation byte equality. Matching scans full text
+across preparation-unit boundaries. Results contain both ObjectRefs, source/representation byte ranges and text.
+
+PreparationGap returns PREPARATION_GAP with no artifact ref. Missing Ready input/artifact returns an explicit
+gap retaining the selected PreparedRef; corruption is fatal. Gaps prevent complete negative. Output limits
+remain presentation cuts: UTF-8 literal <=4096 bytes, at most 64 whole items, 8 MiB total frame. Raw matching
+remains available when a Prepared representation is absent. X1 is still PARTIAL: same-session windows,
+Continue/Expand/expiry and held-daemon-output qualification are next; extracted has no real producer/route.
 
 ## File, environment and CLI settings
 

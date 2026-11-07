@@ -2,7 +2,7 @@
 
 The disconnected Exact Rust package, proof/spine APIs, manifest and exclusive fixtures are removed.
 The current Search command is ranked text retrieval; it does not claim exhaustive exact matching.
-FIRST RAW is connected through the actual CLI and daemon; the remaining X1 modes/windows are not complete.
+RAW and retained DecodedUtf8 are connected through the actual CLI and daemon; X1 session/windows are not complete.
 
 ## Implemented raw slice
 
@@ -25,9 +25,30 @@ are separate facts. Missing Source objects are explicit SOURCE_OBJECT_MISSING ga
 complete_negative is true only when every selected source was verified/scanned with zero matches and no missing
 input. The shared total frame cap is 8 MiB; no range or matched bytes are clipped.
 
-DecodedUtf8 is next, using the existing retained UTF-8 Prepared representation and identity mapping. No decoded
-or extracted route is implemented here; extracted has no current producer after the old parsers were removed.
-Continue/Expand/expiry and held-output session/window qualification remain deferred. X1 is PARTIAL.
+## Retained DecodedUtf8 identity mode
+
+    eliot-search exact --decoded-utf8 --literal TEXT --data-root ROOT [--source-id UUID] [--limit N]
+
+Exactly one of --raw and --decoded-utf8 is accepted. [decoded_exact.rs](../../../bins/eliot-searchd/src/decoded_exact.rs)
+uses the selected committed inventory and its saved source/preparation/settings binding. For a Ready entry it
+verifies both retained Source and Prepared ObjectRefs, decodes the SAVED artifact and verifies that its entire
+UTF-8 representation bytes equal the retained Source. This proves the identity byte map; BOM and CRLF remain.
+It does not decode a live/raw source on demand, materialize, normalize, reprepare or contact Qdrant.
+
+The matcher scans the full saved representation, crossing unit descriptors as well as bounded scan blocks.
+Each match carries RawSourceRef/input, Prepared ObjectRef, representation_start/end, source_start/end and
+exact UTF-8 text. Source/representation byte ranges coincide only because this identity map was verified.
+PreparationGap yields PREPARATION_GAP with prepared=None. Missing Ready input/artifact yields SOURCE_OBJECT_MISSING
+or PREPARED_OBJECT_MISSING with Some(selected PreparedRef). Corruption is fatal, never a gap/negative fallback.
+Raw remains independent of Prepared availability.
+
+DecodedUtf8Result separates selected/scanned/gap sources, scanned bytes, total matches and the emitted prefix.
+Existing 4096-byte UTF-8 literal, 64-item and 8 MiB total-frame bounds remain. OutputLimit does not stop scanning;
+complete_negative requires every selected representation verified/scanned, zero matches and no representation gap.
+Empty Ready can complete negatively; an unavailable representation cannot.
+
+X1 remains PARTIAL: same-session Continue/Expand/expiry and held-output window qualification are next.
+Extracted has no current real producer or implemented route. Arbitrary non-UTF-8 needle input is not implemented.
 
 ## Input semantics are part of the request
 

@@ -127,7 +127,24 @@ RawSourceRef/revisions/ObjectRef/start/end/bytes_hex. Missing Source is a Gap; c
 The <=64 item prefix does not stop scanning; scan_complete/complete_negative use actual whole-inventory work.
 The literal is a nonempty UTF-8 String <=4096 bytes, not arbitrary non-UTF-8 needle input; framing remains 8 MiB.
 Raw Cancel and short remaining-duration cases use the production wire; they do not qualify future session
-held-output/window behavior. Decoded/extracted routes and Continue/Expand/expiry are not implemented.
+held-output/window behavior. The separate retained DecodedUtf8 operation is described below; extracted and
+Continue/Expand/expiry remain unimplemented.
+
+## Retained DecodedUtf8 execution
+
+The same worker dispatches DecodedUtf8Request to [decoded_exact.rs](src/decoded_exact.rs), without Qdrant.
+It uses the pinned committed source/preparation/settings inventory. PreparationGap produces PREPARATION_GAP
+with no PreparedRef. For Ready, it reads/verifies both Source and saved Prepared ObjectRefs, decodes the actual
+artifact and compares its full UTF-8 bytes with Source. Only that equality authorizes identity source ranges.
+No source decoding/materialization, normalization, reprepare, current/live fallback or artifact regeneration occurs.
+
+The matcher scans the entire borrowed saved representation across unit boundaries. Matches return both refs,
+source/representation byte ranges and exact text, preserving BOM/CRLF. Missing Ready Source/Prepared objects
+are explicit gaps retaining the selected PreparedRef; integrity failure is fatal. Missing Prepared does not
+prevent the separate Raw operation from reading verified Source bytes.
+Existing literal/item/frame bounds and original deadline/cancellation apply. Output prefix limits do not end
+representation scanning; any representation gap prevents complete negative. Session/window held-output,
+Continue/Expand/expiry and extracted producer/route remain outside this implemented slice.
 
 ## Verification state
 

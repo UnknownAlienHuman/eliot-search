@@ -1,8 +1,9 @@
 //! One concrete child and its serviced stdio; no detached timeout tasks.
 
 use search_provider_protocol::{
-    ClientFrame, FrameBuffer, MAX_FRAME_BYTES, MAX_REMAINING_MS, QUERY_REQUEST_ID, QueryOutcome,
-    RawExactRequest, SearchRequest, Terminal, decode_terminal_frame, encode_client_frame,
+    ClientFrame, DecodedUtf8Request, FrameBuffer, MAX_FRAME_BYTES, MAX_REMAINING_MS,
+    QUERY_REQUEST_ID, QueryOutcome, RawExactRequest, SearchRequest, Terminal,
+    decode_terminal_frame, encode_client_frame,
 };
 use std::ffi::OsString;
 use std::future::{Future, poll_fn};
@@ -26,6 +27,7 @@ const CLEANUP_ALLOWANCE: Duration = Duration::from_secs(2);
 pub enum Request {
     Search(SearchRequest),
     RawExact(RawExactRequest),
+    DecodedUtf8(DecodedUtf8Request),
 }
 
 pub async fn query(
@@ -170,6 +172,17 @@ async fn exchange(
                 limit,
             )
         }
+        Request::DecodedUtf8(request) => {
+            let limit = request.limit;
+            (
+                ClientFrame::DecodedUtf8 {
+                    request_id: QUERY_REQUEST_ID,
+                    remaining_ms: 1,
+                    request,
+                },
+                limit,
+            )
+        }
     };
     let mut stdin = Some(stdin);
     let mut incoming = FrameBuffer::new(MAX_FRAME_BYTES)?;
@@ -219,7 +232,9 @@ async fn exchange(
             }
             if matches!(
                 terminal.outcome,
-                QueryOutcome::Complete { .. } | QueryOutcome::RawExact { .. }
+                QueryOutcome::Complete { .. }
+                    | QueryOutcome::RawExact { .. }
+                    | QueryOutcome::DecodedUtf8 { .. }
             ) && !status.success()
             {
                 return Err(ClientError::ChildExit);
@@ -255,6 +270,9 @@ async fn exchange(
             }
             | ClientFrame::RawExact {
                 remaining_ms: wire, ..
+            }
+            | ClientFrame::DecodedUtf8 {
+                remaining_ms: wire, ..
             } = &mut query
             {
                 *wire = remaining_ms;
@@ -284,6 +302,9 @@ async fn exchange(
                             (ClientFrame::Query { .. }, QueryOutcome::Complete { .. })
                             | (_, QueryOutcome::Cancelled | QueryOutcome::Failed { .. }) => {}
                             (ClientFrame::RawExact { request, .. }, QueryOutcome::RawExact { result }) => {
+                                result.validate_request(request)?;
+                            }
+                            (ClientFrame::DecodedUtf8 { request, .. }, QueryOutcome::DecodedUtf8 { result }) => {
                                 result.validate_request(request)?;
                             }
                             _ => return Err(ClientError::Protocol(search_provider_protocol::ProtocolError::InvalidMessage)),
