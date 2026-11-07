@@ -201,8 +201,10 @@ fn scan_index_path(
     let mut files = Vec::new();
     if is_directory {
         let excluded_root = data_root.to_path_buf();
+        let cwd = std::env::current_dir().map_err(|_| "INDEX_SCAN_INCOMPLETE")?;
         let mut builder = WalkBuilder::new(index_path);
         builder
+            .current_dir(cwd)
             .standard_filters(true)
             .follow_links(false)
             .filter_entry(move |entry| {
