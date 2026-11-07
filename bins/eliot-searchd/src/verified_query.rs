@@ -39,6 +39,7 @@ impl QueryFailure {
             PlainRootError::InvalidPath => Self::Code("ROOT_INVALID_PATH"),
             PlainRootError::Unsupported => Self::Code("ROOT_UNSUPPORTED"),
             PlainRootError::Corrupt => Self::Code("ROOT_CORRUPT"),
+            PlainRootError::NeedsRepair => Self::Code("ROOT_NEEDS_REPAIR"),
             PlainRootError::Archive => Self::Code("ROOT_ARCHIVE"),
             PlainRootError::IncompleteImport => Self::Code("ROOT_INCOMPLETE_IMPORT"),
             PlainRootError::WrongState => Self::Code("ROOT_WRONG_STATE"),

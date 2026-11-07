@@ -7,6 +7,7 @@ use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, LazyLock};
 use std::time::{Duration, Instant};
 
 use ignore::WalkBuilder;
@@ -18,14 +19,14 @@ use search_control_redb::current_source::{
 use search_revision_store::store_object;
 use search_runtime_owner::{
     PlainRootError, PlainRootGuard, PlainRootStatus, discard_incomplete_plain, initialize_plain,
-    inspect_plain, open_plain,
+    inspect_plain, open_plain, open_plain_for_index,
 };
 use search_safe_reader::{MAX_SOURCE_FILE_BYTES, SourceReadError, acquire_file};
 use search_source_registry::{CurrentSourceRecord, ObjectKind};
 
 use crate::app::{RootCommand, RootInvocation};
 
-static CANCELLED: AtomicBool = AtomicBool::new(false);
+static CANCELLED: LazyLock<Arc<AtomicBool>> = LazyLock::new(|| Arc::new(AtomicBool::new(false)));
 
 fn install_owner_lifeline() -> Result<(), &'static str> {
     std::thread::Builder::new()
@@ -408,7 +409,7 @@ fn index_command(
     request: &crate::app::PublicationRequest,
     deadline: Instant,
 ) -> ExitCode {
-    let root = match open_plain(data_root, deadline, &CANCELLED) {
+    let root = match open_plain_for_index(data_root, deadline, &CANCELLED) {
         Ok(root) => root,
         Err(error) => return emit_error(error),
     };
