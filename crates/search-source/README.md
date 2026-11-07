@@ -43,14 +43,22 @@ PreparationSettings affects output identity; fail-only execution ceilings do not
 
 ## Prepared corpus publication
 
-    eliot-search publish-prepared --qdrant-url http://127.0.0.1:6334 --query "identifier" --data-root "C:\example\root"
+    eliot-search publish-prepared --qdrant-url http://127.0.0.1:6334 --data-root "C:\example\root"
+    eliot-search search --query "identifier" --qdrant-url http://127.0.0.1:6334 --data-root "C:\example\root"
 
 The operator starts the selected local Qdrant 1.20.0 service. Q1 captures all retained sources and matching
 preparations, publishes actual saved unit text, verifies the backend and checked canary, and installs current
 plus a complete validated evidence snapshot. A source/settings/outcome mutation advances the shared non-reset
-wanted guard atomically. Optional query output contains real point/evidence metadata, not retained excerpts.
-See [publication](../search-index-qdrant/search-publication/FUNCTIONS.md#current-q1-consumer).
-U1 retained search/citations, Git acquisition, inventory and reconciliation remain later work.
+wanted guard atomically. Reference pages contain no text; publication hydrates each source's saved Prepared
+object across adjacent pages per pass and returns generation state/counts, without user-query options.
+The separate read-only search command verifies returned evidence and full units against Source/Prepared objects
+from the same published snapshot; absent original paths or newer preparation do not replace that binding.
+See [publication](../search-index-qdrant/search-publication/FUNCTIONS.md#current-q1-consumer) and
+[evidence](../search-query/search-candidate-validator/FUNCTIONS.md).
+
+R1 next connects direct file/repository index and refresh using these existing owners. Confirmed filesystem
+deletion excludes the registered source from new generations without waiting for unregister. Retained objects
+and already pinned generations remain intact. Inaccessible/partial inventory is not confirmed removal.
 
 ## Ownership
 

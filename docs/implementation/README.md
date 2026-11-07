@@ -6,10 +6,11 @@ This page owns delivery order and cross-owner values. Use [code map](CODE_MAP.md
 
 ## Connected path
 
-The current binaries expose four root operations, retain-file and retained-only prepare-source. Stage 2 connects
-the source/current row, stored preparation/current outcome and Qdrant generation/current evidence/view.
-publish-prepared returns real SDK nominations and range metadata. Framed read-only retained-excerpt search
-and later stages remain future work; exact native scopes belong in the registry.
+The current binaries expose four root operations, retain-file, retained-only prepare-source, publish-prepared
+and framed read-only search. The connected path reaches source/current row, complete preparation/current outcome,
+Qdrant generation/current evidence/view and verified retained units/citations. Publication returns generation
+state/counts; search is the sole user query route. U1 Windows debug scopes belong in the registry;
+R1 convergence, Exact/windows and later product stages remain unfinished.
 
 ```text
 selected source → stable acquired bytes → immutable ObjectRef/current SourceRecord
@@ -97,11 +98,17 @@ Coordinator #264. S1 connects one explicit local file → one stable native-hand
 
 P1 connects prepare-source --source-id UUID [--unit N] through the existing owned child. It reads verified retained input without reopening the live path, creates exact UTF-8 text and bounded ranges, stores the complete artifact through the shared writer, decodes its stored bytes, then installs a guarded current outcome and returns one complete stored unit. Empty and Gap are explicit. CONTROL preserves selected settings and compares source/registration/input/settings and expected outcome with non-reset revisions. [Owner rules](../../crates/search-control-redb/FUNCTIONS.md#current-preparation) and the [registry](../audit/ANALYSIS_REGISTRY.md#evidence-status) distinguish implementation from exact native/gate scopes.
 
-Q1 now consumes actual saved text/units into a fresh vectorless Qdrant 1.20.0 collection, verifies exact schema/payload/count and an independent checked TextQuery canary, commits current/evidence/predecessor cleanup and opens the complete validated PublishedView. Empty/Gap sources remain in inventory. Optional user queries return backend nominations plus snapshot range metadata. U1 must turn those into verified retained text/citations through a read-only command. Use the operator-started local server and the [observed Windows storage guidance](../../crates/search-runtime/search-runtime-owner/FUNCTIONS.md#operator-qdrant-storage). A fresh unpublished root is buildable, not a successful empty search.
+Q1 consumes saved units into a fresh vectorless Qdrant 1.20.0 collection, verifies exact schema/payload/count and an independent checked Unicode/code TextQuery canary, then commits current/evidence/predecessor cleanup and validates the matching publication snapshot. Empty/Gap sources remain in inventory. CONTROL pages contain fixed ObjectRefs/ranges/IDs and request-byte metadata, not text; each upload/readback pass retains one verified Prepared object/decoded view across adjacent pages of a source. Publication returns state/counts only. Use the operator-started local server and [observed Windows storage guidance](../../crates/search-runtime/search-runtime-owner/FUNCTIONS.md#operator-qdrant-storage). A fresh unpublished root is buildable, not a successful empty search.
 
-Retention, preparation and publication use the existing root-owned one-shot child, with no temporary protocol or automatic preparation route inside retain-file. Live paging/windows arrive in Stage 4. Broad inventory, watchers, point mutation and cleanup remain later scope; encryption/permission platforms are outside local scope. Missing or corrupt retained evidence is not a card. S1/P1 do not complete Stage 2 or the product.
+U1 search pins committed metadata without a corpus scan, calls the concrete backend and resolves only returned evidence/CapturedSource in the same snapshot. It verifies actual Source/Prepared length/BLAKE3, captured decoder binding and all unit byte/line/boundary facts before emitting the full unit and citation. It never substitutes newer preparation or live paths. Query/Cancel and one terminal use the serviced owned child with an 8 MiB total frame cap and whole-card OutputLimit. Search writes neither CONTROL nor collections.
+
+Retention, preparation and publication retain their root-owned argv child. Search uses the connected framed child with one joinable synchronous backend worker; no temporary route or session framework is required. Live paging/windows arrive in Stage 4. Inventory/refresh and restart convergence are next; encryption/permission platforms are outside local scope. Missing returned retained objects produce explicit gaps; corrupt evidence produces no card. U1 does not complete the product.
 <a id="3a-fresh-generation-convergence"></a>
 ### 3A. Fresh-generation convergence
+
+R1 first connects direct file/repository index and refresh to the existing source/preparation/publication helpers,
+without manual SourceId assembly or a new service/database. Confirmed filesystem deletion excludes a source from
+new generations while retained objects and pinned views remain; partial/inaccessible inventory is not removal.
 
 Owners #270/#271/#331/#261/#300/#303. Add restart, inventory, stale-work/ABA guards, lost-wakeup repair and complete
 desired-versus-published comparison. Fixed input → fresh complete collection → matching metadata commit → view install.
@@ -134,16 +141,16 @@ consumers. No encryption or restricted-user phase. Qdrant Edge, if studied later
 <a id="publication-and-retrieval"></a>
 ## Lifetime and lock order
 
-PlainRootGuard covers the current one-shot operations and published snapshot through output. The ordering below
-also applies to future retained query views/sessions when U1 and later window owners are connected.
+PlainRootGuard covers current operations and the published query snapshot through complete output flush.
+Publication performs object/backend I/O outside redb writers, commits bounded metadata and completely validates
+its matching snapshot before reporting visibility. No final transaction copies the corpus. Ordinary search
+pins that committed snapshot and verifies only returned evidence/objects; it does not run acceptance again.
 
-Root guard precedes and outlives stores. Publication serializes selection, performs object/backend I/O outside
-redb writers, commits bounded metadata, opens/verifies its snapshot, then installs under a short view lock.
-Do not start the next publication before install/recovery completes. No final transaction copies the corpus.
-New Search/Exact clones current under the short lock and releases it before work. Continue/Expand keep their
-existing view. No writer/view/window mutex or mutable map borrow spans I/O; owned guards may remain live.
-For future published views, last view-guard drop wakes cleanup but performs no deletion. One session owner
-prepares then applies cursor changes.
+The current root-owned child serializes these operations. Later concurrent sessions may clone their view under
+a short lock; Continue/Expand retain that original view/order. Do not introduce a view manager or lock before
+an actual concurrent consumer needs one. No writer/view/window mutex or mutable shared borrow spans I/O.
+Retired-generation cleanup must preserve every live view/window and unresolved target obligation; last guard
+drop performs no deletion. Future window cursor changes follow complete terminal output.
 
 ## Slice completion
 

@@ -1,6 +1,6 @@
-# Daemon — root, retained file, preparation and publication
+# Daemon — retained input, publication and read-only search
 
-The daemon owns native invocation, bootstrap settings, root dispatch and factual output. Retention, preparation and publish-prepared use the existing root-owned CLI child.
+The daemon owns native invocation, bootstrap settings, root dispatch and factual output. Retention, preparation and publish-prepared use the existing root-owned CLI child; --search-stdio services one framed query with one joinable synchronous worker.
 
 ## retain-file path
 
@@ -33,19 +33,51 @@ No operation executes input or implicitly starts a network/model/Qdrant service.
 
 ## publish-prepared path
 
-    eliot-searchd --publish-prepared --qdrant-url URL [--query TEXT] [--limit N] [ROOT] [--data-root ROOT] [--config-file PATH]
+    eliot-searchd --publish-prepared --qdrant-url URL [ROOT] [--data-root ROOT] [--config-file PATH]
 
-[published_corpus.rs](src/published_corpus.rs) is the concrete serialized publisher and query-nomination consumer. It holds PlainRootGuard and the original 120-second deadline/cancellation through output:
+[published_corpus.rs](src/published_corpus.rs) holds PlainRootGuard and the original 120-second deadline/cancellation:
 
-1. Capture every current retained source and matching selected preparation, including empty/Gap. Refuse absent/stale preparation instead of omitting a source.
-2. Persist fixed source inputs, full upload text/pages and point/range evidence in bounded CONTROL transactions. Read Prepared objects through the shared verified reader and borrowed decoder; never reopen live locators.
-3. Use the [bridge](../../crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md) for the exact vectorless generation, index, InsertOnly/wait, complete point/payload/count/schema readback and independent saved-point TextQuery canary.
-4. Compare/commit current pointer, predecessor cleanup and pending clear atomically; then open the matching complete native RO snapshot. No database writer spans object/backend I/O.
-5. Resolve optional SDK hits through that snapshot and return metadata only. Publication success is not an excerpt/citation result.
+1. Capture every current source and matching preparation, including empty/Gap; refuse absent/stale preparation.
+2. Persist captured source metadata, compact reference pages and matching evidence in bounded CONTROL writes.
+   Hydrate actual upload/readback text from immutable Prepared objects with the captured decoder binding.
+   Each pass retains one verified buffer/decoded view across adjacent pages of that source and releases it on
+   source change or pass end. Check all unit/range facts and the exact SDK encoded request bytes.
+3. Build/verify the vectorless generation through the bridge: InsertOnly/wait, full schema/point/payload/count
+   readback and independent source-backed singleton TextQuery canary.
+4. Compare/commit current, predecessor cleanup and pending clear atomically; open the completely validated
+   matching native RO snapshot before reporting generation state/counts. No writer spans object/backend I/O.
 
-The query is at most 4096 bytes, default/max hits 10/64, and output at most 135168 bytes. A known zero-point generation has explicit complete inventory/schema/count checks. Nonzero populations require a whole saved ASCII-word candidate and exact singleton ID/source/positive-score canary; no known candidate or unexpected empty response refuses acceptance. Optional user queries run independently and may return zero.
+Publication accepts no --query/--limit and returns no user hits. Canary candidates are bounded complete
+Unicode alphanumeric/underscore identifiers containing an alphanumeric character, including code/compact JSON.
+Exact expected ID/source and finite positive score are required. Empty responses never prove tokenlessness.
+Only source-backed absence of alphanumeric characters throughout the actual corpus permits the tokenless case;
+no bounded known candidate in otherwise searchable text refuses readiness. True zero-point generations require
+complete inventory/evidence/schema and exact count zero, without a sentinel.
 
-The operator owns the loopback Qdrant service/storage. The optional existing ELIOT_QDRANT_API_KEY is consumed without logging. Unknown mutations retain an unserved pending target; do not clear them from a matching readback or reset the failed root. See [CONTROL](../../crates/search-control-redb/FUNCTIONS.md#publication-state-and-snapshot) for whole-graph validation and guards, and [root guidance](../../crates/search-runtime/search-runtime-owner/FUNCTIONS.md#operator-qdrant-storage) for the observed Windows storage constraint.
+The operator owns loopback Qdrant/storage. Existing ELIOT_QDRANT_API_KEY is consumed without logging.
+Unknown mutations retain pending targets unserved. See [CONTROL](../../crates/search-control-redb/FUNCTIONS.md#publication-state-and-snapshot)
+and [operator storage guidance](../../crates/search-runtime/search-runtime-owner/FUNCTIONS.md#operator-qdrant-storage).
+
+## Read-only search path
+
+    eliot-searchd --search-stdio --qdrant-url URL [ROOT] [--data-root ROOT] [--config-file PATH]
+
+[framed_search.rs](src/framed_search.rs) services Query/Cancel while one joinable synchronous worker runs
+[verified_query.rs](src/verified_query.rs) outside the I/O runtime. The worker opens the root and pin_published,
+which does bounded committed-header/table checks without a complete generation scan. It queries the exact
+committed collection, preserves backend order and point-resolves only returned evidence plus CapturedSource
+from that same native RO snapshot.
+
+Group returned points by captured binding. Verify both Source and Prepared ObjectRefs by actual length/BLAKE3,
+decode with the captured source/settings and compare source/prepared bytes plus every selected unit's ordinal,
+byte/line range and boundary facts. Emit the exact full UTF-8 unit and citation. A missing returned Source or
+Prepared object is an explicit item Gap; corruption/routing/range mismatch is a typed failure. Unreturned source
+bodies are not read. A newer current preparation does not replace the pinned capture.
+
+Search never writes CONTROL/collections, publishes, prepares, reconciles or opens live source paths.
+Root/view stay held through complete terminal flush; the worker is joined before teardown.
+The [protocol](../../crates/search-provider-protocol/FUNCTIONS.md) admits one correlated terminal and caps total
+framing at 8 MiB with whole-card OutputLimit. Do not add detached timeout workers or a session framework.
 
 ## Verification state
 

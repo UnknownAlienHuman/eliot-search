@@ -10,25 +10,29 @@ with [CONTROL publication.rs](../../search-control-redb/src/publication.rs), rea
 This directory retains the canonical policy; it has no restored Cargo/src crate or legacy admission machine.
 
 The one-shot owner captures all current retained/prepared outcomes and non-reset guards, stores complete
-source inputs/upload text/evidence, builds through the concrete bridge, verifies exact schema/points/count,
+captured source metadata, compact reference pages and evidence, builds through the concrete bridge, verifies exact schema/points/count,
 then commits current/predecessor cleanup/pending clear and opens the matching complete RO snapshot.
 Source/Prepared objects remain immutable; original source locators are never reopened.
 
-Readiness is independent of optional user query. A deterministic whole ASCII-alphabetic word from a real saved
-unit drives a singleton HasId TextQuery with global IDF and limit one. Exact expected ID/source and finite
-positive score are mandatory. No known bounded candidate across a nonzero corpus means readiness unproven,
-not an inferred tokenless corpus. A genuine zero-point generation instead verifies complete inventory/evidence,
-schema and count zero, with no sentinel point. The user query may legitimately yield no nominations.
+Readiness is independent of user search. A bounded complete Unicode alphanumeric/underscore identifier
+containing an alphanumeric character, selected from an actual retained unit, drives a singleton HasId TextQuery
+with global IDF and limit one. Exact expected ID/source and finite positive score are mandatory. A corpus is
+tokenless only when every actual retained unit independently contains no alphanumeric character under the
+canonical Code tokenizer facts; an empty RPC result never establishes this. If text has tokens but no bounded
+known candidate, readiness is unproven. A genuine zero-point generation instead verifies complete
+inventory/evidence/schema and count zero, with no sentinel.
 
-Full graph validation checks every source/page/evidence binding in one RO snapshot before acceptance and on
-view open. Missing/malformed unqueried evidence refuses publication too. Unknown mutations retain pending
+Full graph validation checks every source/page/evidence binding in one RO snapshot before publication/recovery
+acceptance. Missing/malformed unqueried evidence refuses publication too. Ordinary read-only search instead
+pins the committed snapshot and verifies returned-hit evidence and retained objects; it performs no full graph scan. Unknown mutations retain pending
 targets unserved; standalone readback never clears them. The current synchronous root owner has no concurrent
 query windows; cleanup occurs before its view opens, with exact whole-collection ownership/absence checks.
 The broader convergence, retained-view and conditional incremental rules below remain obligations for their stages.
 
 Windows debug SOURCE/native acceptance is recorded at 3c33d831 in the existing
-[registry](../../../docs/audit/ANALYSIS_REGISTRY.md#evidence-status). Q1 returns routing/evidence metadata;
-retained excerpt/citation emission remains U1.
+[registry](../../../docs/audit/ANALYSIS_REGISTRY.md#evidence-status). Current publication returns generation
+state/counts only; --query/--limit and the metadata-hit route are removed. The separate search command returns
+verified retained units/citations. Its c843171 qualification and earlier scopes are recorded separately there.
 
 <a id="reconcile-desired-and-published-state"></a>
 ## Desired state
@@ -53,7 +57,10 @@ published input remain different facts. Changes arriving during a fixed build be
 [Control](../../search-control-redb/FUNCTIONS.md#restartable-generation-input-capture) owns complete capture and
 staging evidence tables. Before backend effects, persist one bounded PendingGenerationBuild referencing exact
 source/prepared objects/outcomes, physical profile, never-reused collection name and complete uploadable pages.
-Each page contains actual retrieval text/payload and fixed point IDs with finite byte/count limits.
+Each page contains fixed point IDs, Source/Prepared ObjectRefs, unit/ranges and measured request-byte metadata,
+with finite byte/count limits. Actual retrieval text is hydrated from the immutable Prepared artifact with the
+saved source/settings binding, never reparsed or persisted as a second corpus. Each upload/readback pass keeps
+one verified artifact and decoded view across adjacent pages of that source, and checks exact SDK request bytes.
 
 An in-memory read transaction is not a durable manifest. Interrupted incomplete capture discards the metadata-only
 target; complete capture never substitutes newer live rows. Oversize input refuses or produces an explicit selected
@@ -113,9 +120,11 @@ incremental profile or use custom source shards as an unmeasured ranking/publica
 
 ## Commit/install gap and restart
 
-Durable current precedes installation. Startup verifies exact current collection/profile and complete evidence,
-opens the matching snapshot and installs it before admitting queries. Missing/corrupt/conflicting bindings refuse
-serving, not empty success. An empty valid generation still has explicit schema and complete inventory.
+Durable current precedes publication/recovery acceptance. That boundary verifies the exact current
+collection/profile and complete evidence, opens the matching snapshot and reports visibility. Ordinary one-shot
+search pins that committed snapshot with bounded metadata checks, then validates returned bindings/objects.
+Missing/corrupt/conflicting returned bindings refuse a result, not empty success. A valid empty generation was
+accepted with explicit schema and complete inventory; a fresh unpublished root is a different state.
 
 A restart resolves pending/cleanup and reconciles current inputs; importing a backup is a separate fresh-destination
 operation. Copied pending records must not mutate the original installation's backend.

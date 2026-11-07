@@ -6,9 +6,9 @@ No application encryption, key management, pairing or multi-user access platform
 
 **Status: retained-file → stored preparation → Qdrant publication → read-only search is connected.**
 Search returns full retained units and citations after verifying the published snapshot's source and prepared
-objects. Publication returns generation state; user queries use `search`. Final U1 native qualification and the
-current simplification checks remain recorded separately in the work register; the full product and installed
-baseline remain open.
+objects. Publication returns generation state; user queries use `search`. U1 source review and targeted Windows
+debug native qualification passed at c843171; earlier transport/budget evidence has its own scope in the work
+register. The full product and installed baseline remain open.
 
 | Need | Start here |
 |---|---|
@@ -19,8 +19,8 @@ baseline remain open.
 | Find a specific rule | [Documentation index](docs/README.md) |
 | Run | [Quickstart](QUICKSTART.md), with exact qualification scopes in the work register |
 
-Next finish U1 native acceptance, then connect file/repository index and refresh to the existing helpers and
-verify restart/inventory convergence.
+Next connect file/repository index and refresh to the existing helpers, then verify restart/inventory convergence.
+Confirmed deletion excludes a source from new generations while preserving retained objects and pinned views.
 Do not build optional systems first or restore the retired source/qualification frameworks.
 
 ## License
