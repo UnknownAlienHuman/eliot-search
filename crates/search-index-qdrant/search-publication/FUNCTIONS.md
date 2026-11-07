@@ -5,7 +5,7 @@ installation and finite cleanup obligations. It owns no reader/parser/query wind
 
 ## Current Q1 consumer
 
-The index PATH command and direct publish-prepared operation share [daemon published_corpus.rs](../../../bins/eliot-searchd/src/published_corpus.rs)
+The index [PATH] command and direct publish-prepared operation share [daemon published_corpus.rs](../../../bins/eliot-searchd/src/published_corpus.rs)
 with [CONTROL publication.rs](../../search-control-redb/src/publication.rs), called by both operations.
 This directory retains the canonical policy; it has no restored Cargo/src crate or legacy admission machine.
 
@@ -39,14 +39,17 @@ verified retained units/citations. Its c843171 qualification and earlier scopes 
 ## Desired state
 
 Compare both the selected current source/preparation snapshot and published inventory; a success-only scan misses
-removed or newly failed sources. Use bounded ordered reads. Explicit index refresh is connected. Durable admission/writable-startup reload and an actual periodic trigger
-remain unfinished; periodic policy is required, not an implemented interval or resident service. Repeated identical outcomes are no-ops.
+removed or newly failed sources. Use bounded ordered reads. Scoped index admits/refreshes only its PATH;
+bare index reloads the union of durable selections. Publication still checks all current source rows: unrelated
+legacy unprepared rows return PUBLICATION_SOURCE_NOT_PREPARED, never implicit preparation or omission.
+The foreground periodic trigger/lifetime/interval remains unimplemented. Repeated identical outcomes are no-ops.
 
 | Observation | Desired outcome |
 |---|---|
 | Complete usable preparation, including zero units | Publish exact captured input and its gaps. |
 | Selected terminal unsupported/failure | Gap-only outcome; never relabel old evidence as the failed revision. |
-| Confirmed removal/exclusion after complete inventory | Omit membership in the new view even without a new prepared artifact. |
+| Confirmed filesystem absence in refreshed admitted scopes | Omit current membership from new generations; keep admission/kind and retained/pinned evidence. |
+| Ignored but still-present source, or inaccessible/partial observation | Do not infer deletion; do not silently remove its current row. |
 | Running/incomplete/unavailable observation | Do not infer removal or empty success; retain prior served data explicitly labelled prior/pending where applicable. |
 | Exact desired/published match | No new generation. |
 

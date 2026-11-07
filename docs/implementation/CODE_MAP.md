@@ -1,6 +1,6 @@
 # Code entrypoints and change map
 
-Current binaries expose root operations, index PATH, retain-file, prepare-source, publish-prepared and read-only search. Native binary and library
+Current binaries expose root operations, index [PATH], retain-file, prepare-source, publish-prepared and read-only search. Native binary and library
 cases have distinct exact-source scopes in the [registry](../audit/ANALYSIS_REGISTRY.md#evidence-status).
 U1 targeted Windows debug acceptance is at c843171, with earlier transport/budget and initial-publication scopes kept separate.
 The [owner map](README.md#owners) defines responsibilities; a row does not require keeping a crate.
@@ -22,7 +22,7 @@ routes are removed. Check the real binary; package names and retained workspace 
       standalone help/version → local output, no daemon
       root subcommands        → owned eliot-searchd child with matching --operation and settings
                               → bounded root response validation → output
-      index PATH              → same owned child → closed refreshed result → output
+      index [PATH]            → same owned child → closed refreshed result → output
       retain-file --file PATH → same owned child → bounded retained-source response validation → output
       prepare-source          → same owned child → parsed source ID/unit-bound stored-unit validation → output
       publish-prepared        → same owned child → closed generation-state validation → output
@@ -32,7 +32,8 @@ routes are removed. Check the real binary; package names and retained workspace 
       standalone help/version → local output, no config/root acquisition
       root command            → capture startup cwd → bootstrap::resolve → typed RootInvocation
                               → native_root_command::run → search-runtime-owner
-      index                   → open current root once → complete ignore-aware scan → typed retain/prepare
+      index                   → open current root once → scoped admission or reload all selections
+                              → bounded unique file union + small scope metadata → typed retain/prepare
                               → verify scan → guarded scoped removal → publish → refreshed result
       retain-file             → open current root → source-row capture → safe read → object readback
                               → current-source CAS in search-control-redb → factual result
@@ -52,7 +53,7 @@ routes are removed. Check the real binary; package names and retained workspace 
 | initialize-data-root | --initialize-data-root | initialize_plain |
 | check-existing-root-owner | --check-existing-root-owner | open_plain |
 | discard-incomplete-data-root | --discard-incomplete-data-root | discard_incomplete_plain |
-| index PATH --qdrant-url URL | --index --index-path PATH with matching settings | open_plain → native_root_command::index_sources → retain/prepare/remove_current_sources/publish |
+| index [PATH] --qdrant-url URL | --index [--index-path PATH] with matching settings | open_plain → capture_selections/admit_selection → unique scoped/union scan → retain/prepare/remove_current_sources/publish |
 | retain-file --file PATH | --retain-file --source-file PATH | open_plain → acquire_file → store_object/read_object → commit_current_source |
 | prepare-source --source-id UUID [--unit N] | --prepare-source --source-id UUID [--unit N] | open_plain → prepared_source::run → retained read/prepare/store/decode → commit_preparation |
 | publish-prepared --qdrant-url URL | --publish-prepared with matching settings | open_plain → published_corpus::run → compact references/Prepared hydration/backend/current/view → generation state |
@@ -107,7 +108,7 @@ Do not restore deleted daemon implementations or unconsumed APIs because an olde
 ## Keep the implementation small
 
 That read-only query → pinned published evidence → verified retained text/citation → CLI path is connected.
-Explicit index/refresh now uses those helpers. Next R1 persists admission and reloads it at writable startup;
-actual periodic triggering remains absent. Confirmed removal and inaccessible inventory stay distinct.
+Scoped index and bare selection reload now use those helpers. Next R1 connects an actual foreground periodic
+refresh consumer; no trigger/lifetime/interval exists. Confirmed absence and inaccessible inventory stay distinct.
 Build the actual owners and delete displaced code with its callers. Root-only command checks, helper-native
 probes and retained workspace libraries do not qualify that pipeline or an installed baseline.

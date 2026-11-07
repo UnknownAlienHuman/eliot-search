@@ -19,9 +19,10 @@ register. The full product and installed baseline remain open.
 | Find a specific rule | [Documentation index](docs/README.md) |
 | Run | [Quickstart](QUICKSTART.md), with exact qualification scopes in the work register |
 
-Use `index PATH` on an initialized root, then `search`; repeating index refreshes that explicit scope.
-R1 remains partial: next persist file/tree admission and reload it at writable-index startup. Periodic refresh
-is required policy, but no resident trigger or interval is implemented.
+Use `index PATH` on an initialized root to admit and refresh that file/tree, then `index` in a new process to
+reload all stored selections, followed by `search`. Explicit PATH refreshes only that scope; bare index uses
+the deduplicated union. R1 remains partial: the next foreground periodic-refresh consumer, lifetime and interval
+are not implemented. Search stays read-only.
 Confirmed deletion excludes a source from new generations while preserving retained objects and pinned views.
 Do not build optional systems first or restore the retired source/qualification frameworks.
 

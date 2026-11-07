@@ -4,7 +4,7 @@ The daemon owns native invocation, bootstrap settings, root dispatch and factual
 
 ## Index and refresh path
 
-    eliot-searchd --index --index-path PATH --qdrant-url URL [--data-root ROOT] [--config-file PATH]
+    eliot-searchd --index [--index-path PATH] --qdrant-url URL [--data-root ROOT] [--config-file PATH]
 
 [native_root_command.rs](src/native_root_command.rs) opens the existing current root once; initialization is
 explicit. index_sources carries that same guard and original 120-second deadline through scan, typed retain/
@@ -13,14 +13,21 @@ the root between stages.
 
 The pinned ignore 0.4.34 walk uses captured CWD, strict ignore-file I/O, standard filters, no link following,
 and explicit .git/data-root exclusion. Reparse/link and incomplete/malformed-ignore observations refuse the
-refresh; a second matching scan precedes removals. Only confirmed in-scope deletion or complete-scan exclusion
-removes captured current membership; outside source rows remain. Retained objects/published evidence are kept.
+refresh; a second matching scan precedes removals. Only confirmed in-scope filesystem absence removes current
+membership; an ignored but present file is not removed. Outside source rows and retained/published evidence remain.
 An unchanged NativeFileKey/ObjectRef preserves the logical source head; a key change is a real update even
 when content is identical. Typed preparation preserves matching outcomes/settings before publication.
 
-Repeat index PATH for explicit refresh. Durable file/tree admission and writable-startup reload are next;
-no resident periodic trigger/interval exists. Query and writer share exclusive root exclusion through output,
-so a concurrent view manager is not required for this next step.
+index PATH persists an AdmittedSelection and refreshes only that scope. Bare index calls capture_selections
+at writable startup, unions every admitted File/Tree and deduplicates native locators. Explicit File admission
+survives a containing Tree's ignore rules. Both scan passes own bounded union maps and small root/kind/missing
+metadata per selection, not complete file-list copies per scope. This bound is source-reviewed, not a native
+performance qualification.
+
+Admission/kind remain after absence/re-add. No admission returns INDEX_SELECTION_REQUIRED; legacy source rows
+are not promoted, implicitly prepared or omitted from complete publication checks. R1 next connects an actual
+foreground periodic consumer; its trigger/lifetime/interval are not implemented. Query and writer share root
+exclusion through output, so a concurrent view manager is not the next prerequisite.
 
 ## retain-file path
 

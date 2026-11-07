@@ -293,7 +293,7 @@ const fn validate_request_selection(
         command,
         RootCommand::PublishPrepared | RootCommand::Index | RootCommand::Search
     ) != publication.endpoint.is_some()
-        || (matches!(command, RootCommand::Index) != index_path)
+        || (index_path && !matches!(command, RootCommand::Index))
         || (publication.limit.is_some() && publication.query.is_none())
         || (matches!(command, RootCommand::Search) && publication.query.is_none())
     {
@@ -866,7 +866,7 @@ fn print_help() {
         "  eliot-search retain-file --file PATH [ROOT] [--data-root ROOT] [--config-file PATH] [--daemon PATH]\n",
         "  eliot-search prepare-source --source-id UUID [--unit N] [--data-root ROOT] [--config-file PATH] [--daemon PATH]\n",
         "  eliot-search publish-prepared --qdrant-url URL [--data-root ROOT] [--config-file PATH] [--daemon PATH]\n",
-        "  eliot-search index PATH --qdrant-url URL [--data-root ROOT] [--config-file PATH] [--daemon PATH]\n",
+        "  eliot-search index [PATH] --qdrant-url URL [--data-root ROOT] [--config-file PATH] [--daemon PATH]\n",
         "  eliot-search search --query TEXT [--limit N] --qdrant-url URL [--data-root ROOT] [--config-file PATH] [--daemon PATH]\n",
     ));
 }

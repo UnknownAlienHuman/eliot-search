@@ -285,8 +285,8 @@ pub(super) fn parse(arguments: &[OsString]) -> Result<Parsed, String> {
         source_id.is_some(),
         unit.is_some(),
     )?;
-    if (command == RootCommand::Index) != index_path.is_some() {
-        return Err(invalid("index_path_required"));
+    if index_path.is_some() && command != RootCommand::Index {
+        return Err(invalid("index_path"));
     }
     if data_root.is_some() && positional_root.is_some() {
         return Err(invalid("data_root_duplicate"));

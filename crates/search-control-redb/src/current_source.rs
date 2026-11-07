@@ -19,6 +19,7 @@ use search_source_registry::{
     CurrentSourceRecord, MAX_SOURCE_OBJECT_BYTES, NativeFileKey, ObjectKind, ObjectRef,
     SOURCE_OBJECT_FORMAT_VERSION,
 };
+use serde::{Deserialize, Serialize};
 
 const META_TABLE_NAME: &str = "plain_control_meta";
 const SOURCE_STATE_NAME: &str = "source_state";
@@ -30,6 +31,7 @@ pub(super) const NAMESPACE_KEY: &str = "source_namespace_id";
 pub(super) const PREPARATION_TABLE_NAME: &str = "current_preparations";
 const WANTED_REVISION_KEY: &str = "wanted_corpus_revision";
 const MAX_LOCATOR_BYTES: usize = 32 * 1024;
+const SELECTION_PREFIX: &str = "admitted_selection:";
 /// Maximum current sources accepted by one bounded inventory or publication.
 pub const MAX_CURRENT_SOURCES: usize = 4096;
 const MAX_CURRENT_SOURCE_BYTES: usize = 16 * 1024 * 1024;
@@ -96,6 +98,225 @@ pub struct SourceCapture {
     expected_namespace: Option<SourceNamespaceId>,
     expected_row_revision: Option<u64>,
     expected_registration_revision: Option<u64>,
+}
+
+/// The explicitly admitted filesystem scope, independent of observed source rows.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SelectionKind {
+    /// One explicitly selected file, including files ignored by a tree walk.
+    File,
+    /// One tree using the existing ignore-aware, no-follow scan.
+    Tree,
+}
+
+/// One durable desired selection. Its kind survives filesystem absence.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AdmittedSelection {
+    /// Absolute native locator of the admitted file or tree.
+    pub path: PathBuf,
+    /// Explicitly admitted scope kind.
+    pub kind: SelectionKind,
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct StoredSelection {
+    version: u8,
+    locator: Vec<u8>,
+    kind: SelectionKind,
+}
+
+fn selection_key(locator: &[u8]) -> String {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let mut key = String::with_capacity(SELECTION_PREFIX.len() + locator.len() * 2);
+    key.push_str(SELECTION_PREFIX);
+    for byte in locator {
+        key.push(char::from(HEX[usize::from(byte >> 4)]));
+        key.push(char::from(HEX[usize::from(byte & 15)]));
+    }
+    key
+}
+
+fn decode_selection(key: &str, bytes: &[u8]) -> Result<AdmittedSelection, SourceControlError> {
+    let stored: StoredSelection =
+        serde_json::from_slice(bytes).map_err(|_| SourceControlError::Corrupt)?;
+    if stored.version != 1 || selection_key(&stored.locator) != key {
+        return Err(SourceControlError::Corrupt);
+    }
+    Ok(AdmittedSelection {
+        path: source_path_from_locator(&stored.locator)?,
+        kind: stored.kind,
+    })
+}
+
+fn read_source_schema(transaction: &ReadTransaction) -> Result<bool, SourceControlError> {
+    let names = transaction
+        .list_tables()
+        .map_err(|_| SourceControlError::Database)?
+        .map(|table| table.name().to_owned())
+        .collect::<Vec<_>>();
+    let has_multimap = transaction
+        .list_multimap_tables()
+        .map_err(|_| SourceControlError::Database)?
+        .next()
+        .is_some();
+    catalogue_names(names, has_multimap)
+}
+
+/// Reloads desired selections from the existing source-state table.
+/// Legacy roots with no admission records return an empty selection set.
+///
+/// # Errors
+/// Refuses unsupported/corrupt source state, bounded-inventory overflow,
+/// cancellation, deadline expiry, and database failures without writing.
+pub fn capture_selections(
+    control_path: &Path,
+    deadline: Instant,
+    cancellation: &AtomicBool,
+) -> Result<Vec<AdmittedSelection>, SourceControlError> {
+    check(deadline, cancellation)?;
+    let database =
+        ReadOnlyDatabase::open(control_path).map_err(|_| SourceControlError::Database)?;
+    let transaction = database
+        .begin_read()
+        .map_err(|_| SourceControlError::Database)?;
+    if !read_source_schema(&transaction)? {
+        return Ok(Vec::new());
+    }
+    read_namespace(&transaction)?.ok_or(SourceControlError::Corrupt)?;
+    let state = transaction
+        .open_table(SOURCE_STATE)
+        .map_err(|_| SourceControlError::Corrupt)?;
+    let mut selections = Vec::new();
+    let mut charged = 0_usize;
+    for item in state.iter().map_err(|_| SourceControlError::Database)? {
+        check(deadline, cancellation)?;
+        let (key, value) = item.map_err(|_| SourceControlError::Database)?;
+        if !key.value().starts_with(SELECTION_PREFIX) {
+            continue;
+        }
+        charged = charged
+            .checked_add(key.value().len() + value.value().len())
+            .ok_or(SourceControlError::InventoryLimit)?;
+        if selections.len() >= MAX_CURRENT_SOURCES || charged > MAX_CURRENT_SOURCE_BYTES {
+            return Err(SourceControlError::InventoryLimit);
+        }
+        selections.push(decode_selection(key.value(), value.value())?);
+    }
+    check(deadline, cancellation)?;
+    Ok(selections)
+}
+
+fn ensure_admission_schema(transaction: &WriteTransaction) -> Result<(), SourceControlError> {
+    let names = transaction
+        .list_tables()
+        .map_err(|_| SourceControlError::Database)?
+        .map(|table| table.name().to_owned())
+        .collect::<Vec<_>>();
+    let has_multimap = transaction
+        .list_multimap_tables()
+        .map_err(|_| SourceControlError::Database)?
+        .next()
+        .is_some();
+    let exists = catalogue_names(names, has_multimap)?;
+    let mut state = transaction
+        .open_table(SOURCE_STATE)
+        .map_err(|_| SourceControlError::Database)?;
+    if exists {
+        let version = state
+            .get(SCHEMA_VERSION_KEY)
+            .map_err(|_| SourceControlError::Database)?;
+        let namespace = state
+            .get(NAMESPACE_KEY)
+            .map_err(|_| SourceControlError::Database)?;
+        if version.is_none_or(|value| value.value() != SOURCE_SCHEMA_VERSION)
+            || namespace.is_none_or(|value| value.value().len() != 16)
+        {
+            return Err(SourceControlError::Corrupt);
+        }
+    } else {
+        state
+            .insert(SCHEMA_VERSION_KEY, SOURCE_SCHEMA_VERSION)
+            .map_err(|_| SourceControlError::Database)?;
+        state
+            .insert(NAMESPACE_KEY, random_id()?.as_slice())
+            .map_err(|_| SourceControlError::Database)?;
+        transaction
+            .open_table(SOURCE_ROWS)
+            .map_err(|_| SourceControlError::Database)?;
+        transaction
+            .open_table(SOURCE_LOCATORS)
+            .map_err(|_| SourceControlError::Database)?;
+    }
+    Ok(())
+}
+
+/// Persists an explicitly validated file/tree admission without creating source identities.
+/// Identical admission is a logical no-op; filesystem deletion never clears admission.
+///
+/// # Errors
+/// Refuses invalid locators, corrupt/unsupported state, inventory bounds,
+/// cancellation, deadline expiry, and database failures.
+pub fn admit_selection(
+    control_path: &Path,
+    selection: &AdmittedSelection,
+    deadline: Instant,
+    cancellation: &AtomicBool,
+) -> Result<(), SourceControlError> {
+    check(deadline, cancellation)?;
+    let locator = source_locator_bytes(&selection.path)?;
+    let key = selection_key(&locator);
+    let bytes = serde_json::to_vec(&StoredSelection {
+        version: 1,
+        locator,
+        kind: selection.kind,
+    })
+    .map_err(|_| SourceControlError::Corrupt)?;
+    let database = Database::open(control_path).map_err(|_| SourceControlError::Database)?;
+    let transaction = database
+        .begin_write()
+        .map_err(|_| SourceControlError::Database)?;
+    ensure_admission_schema(&transaction)?;
+    let mut state = transaction
+        .open_table(SOURCE_STATE)
+        .map_err(|_| SourceControlError::Database)?;
+    if let Some(existing) = state
+        .get(key.as_str())
+        .map_err(|_| SourceControlError::Database)?
+        && decode_selection(&key, existing.value())? == *selection
+    {
+        return Ok(());
+    }
+    let mut count = 1_usize;
+    let mut charged = key.len() + bytes.len();
+    for item in state.iter().map_err(|_| SourceControlError::Database)? {
+        check(deadline, cancellation)?;
+        let (stored_key, value) = item.map_err(|_| SourceControlError::Database)?;
+        if stored_key.value().starts_with(SELECTION_PREFIX) && stored_key.value() != key {
+            count += 1;
+            charged = charged
+                .checked_add(stored_key.value().len() + value.value().len())
+                .ok_or(SourceControlError::InventoryLimit)?;
+        }
+        if count > MAX_CURRENT_SOURCES || charged > MAX_CURRENT_SOURCE_BYTES {
+            return Err(SourceControlError::InventoryLimit);
+        }
+    }
+    state
+        .insert(key.as_str(), bytes.as_slice())
+        .map_err(|_| SourceControlError::Database)?;
+    drop(state);
+    check(deadline, cancellation)?;
+    if transaction.commit().is_ok() {
+        return Ok(());
+    }
+    drop(database);
+    if capture_selections(control_path, deadline, cancellation)?.contains(selection) {
+        Ok(())
+    } else {
+        Err(SourceControlError::Database)
+    }
 }
 
 fn check(deadline: Instant, cancellation: &AtomicBool) -> Result<(), SourceControlError> {
@@ -569,17 +790,7 @@ pub fn capture_current_sources(
     let transaction = database
         .begin_read()
         .map_err(|_| SourceControlError::Database)?;
-    let names = transaction
-        .list_tables()
-        .map_err(|_| SourceControlError::Database)?
-        .map(|table| table.name().to_owned())
-        .collect::<Vec<_>>();
-    let has_multimap = transaction
-        .list_multimap_tables()
-        .map_err(|_| SourceControlError::Database)?
-        .next()
-        .is_some();
-    if !catalogue_names(names, has_multimap)? {
+    if !read_source_schema(&transaction)? {
         return Ok(Vec::new());
     }
 

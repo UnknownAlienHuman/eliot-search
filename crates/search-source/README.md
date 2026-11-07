@@ -9,11 +9,14 @@ explicit file selection → read-only source-row capture → one bounded same-ha
 The normal operator route uses an already-initialized root and an operator-owned local Qdrant endpoint:
 
     eliot-search index "C:\example\repo" --data-root "C:\example\root" --qdrant-url http://127.0.0.1:6334
+    eliot-search index --data-root "C:\example\root" --qdrant-url http://127.0.0.1:6334
     eliot-search search --query "identifier" --data-root "C:\example\root" --qdrant-url http://127.0.0.1:6334
 
-Index accepts a file or ignore-aware tree and repeats as explicit refresh. It uses typed retain/preparation/
-publication helpers under one guard/deadline, without manual UUID assembly. .git/data-root paths are excluded;
-links and incomplete observations refuse refresh. The lower-level commands remain available:
+index PATH admits and refreshes only that File/Tree. A new process's bare index reloads all admissions and
+refreshes their unique union; explicit File wins over Tree ignores. It uses typed retain/preparation/publication
+helpers under one guard/deadline, without UUID assembly. Tree walks exclude .git/data-root paths; links and
+incomplete observations refuse refresh. No admissions means INDEX_SELECTION_REQUIRED; old retain-file rows
+are not promoted. The lower-level commands remain available:
 
 The actual retained-file commands, using an already-current root, are:
 
@@ -66,10 +69,11 @@ See [publication](../search-index-qdrant/search-publication/FUNCTIONS.md#current
 [evidence](../search-query/search-candidate-validator/FUNCTIONS.md).
 
 R1 explicit index/refresh now uses these owners. Identical native key/ObjectRef preserves the logical head;
-a changed key updates it even for identical bytes. Confirmed in-scope deletion/exclusion removes current
-membership for new generations, while retained objects and pinned evidence remain. Outside rows are unchanged;
-inaccessible/partial inventory is not confirmed removal. R1 remains partial: next persist file/tree admission
-and reload it at writable-index startup; no resident periodic trigger/interval is implemented.
+a changed key updates it even for identical bytes. Only confirmed in-scope absence removes current membership
+for new generations; admission/kind, retained objects and pinned evidence remain for later re-add. An ignored
+but present file is not removal. Outside rows remain; inaccessible/partial inventory cannot confirm absence.
+Unrelated legacy unprepared rows still fail full publication rather than being prepared or omitted implicitly.
+Admission/reload are implemented; R1 next needs the actual foreground periodic consumer/lifetime/interval.
 
 ## Ownership
 
