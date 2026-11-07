@@ -6,28 +6,28 @@ is source-reviewed with changed-owner check/strict Clippy/build gates passed. Th
 FULL_RELEASE_PASS on its stated sampling/evidence basis; this is not DEBUG query, universal peak,
 replacement-workload, platform or whole-product qualification. FIRST RAW at source
 6ced33494e8fb602c0c52ef16fa5d4401cdb8217 retains its source/native scope. Retained DecodedUtf8 at
-c9a5f1c101e8e0828f913edd6c5769499454716f has source/gates and scoped native PASS. Window candidate source
-473447afb4f494eb877d3b51f429c9ad1190821f adds the connected session path with source/gates PASS and only the
-Raw runtime scopes below. X1 remains PARTIAL. This candidate checkpoint uses main handoff 9dc2ed98; it does
-not claim the pushed session branch is already merged into main.
+c9a5f1c101e8e0828f913edd6c5769499454716f retains its source/native scope. Final Sol incremental X1 PASS on
+source-equivalent 473447af/main 5906107080c0c567721afb66d6a2f947f488eaca closes the selected Windows/Release
+window gates below. Executed binaries retain their 473447af build provenance; no fresh 590 rebuild is claimed.
+X1 is DONE in that scope; M1 is READY for implementation. Whole-project/installed final-head qualification
+remains NOT_RUN.
 
 <a id="resume"></a>
 <a id="resume-after-interruption"></a>
 ## Next task
 
-**X1 next: qualify the session-window candidate at source 473447af.** CLI session, OwnedQuerySession and
-daemon --session-stdio are connected for Search/Raw/DecodedUtf8; the current policy is owned once by the
-[window recipe](../../crates/search-query/search-continuation/FUNCTIONS.md#current-consumer-and-usage).
-The [Exact](../../crates/search-query/search-exact/FUNCTIONS.md) and
-[selection](../../crates/search-query/search-access/FUNCTIONS.md) rules keep the committed published inventory
-and original representation. Continue pages only the bounded original prefix; Expand accepts only emitted
-locators. Fixed Open TTL includes work and never renews; cursor commitment follows complete frame flush.
+**M1 next: implement collect-objects.** Follow the existing
+[stopped-root collection rule](../../crates/search-runtime/search-retention/FUNCTIONS.md#stopped-root-local-object-collection)
+with a real CLI/daemon consumer: stop readers/writers, hold the same exclusive root guard (Busy refuses),
+open one supported consistent metadata snapshot and mark all current/preparation/published/pending/unresolved
+references before any sweep. Unknown/corrupt/unreadable/incomplete marks authorize no deletion. Sweep only
+known store-owned current-format objects absent from the complete mark; preserve originals/foreign data.
 
-Only two Raw runtime scopes are currently qualified. Held-output deferred Cancel, ranked/Decoded session,
-TTL/EOF/Busy release and paging-boundary qualification remain pending/NOT_RUN, not inferred from SOURCE PASS.
-No new extracted/parser/nonidentity producer is a selected gate before M1. The current real prepared-representation producer is saved
-UTF-8 identity; extracted has no implemented route and arbitrary non-UTF-8 needle input remains unsupported.
-After X1 acceptance, M1 stopped-root archive/import precedes V1 relevance/scale/installed release qualification.
+X1 selected Windows/Release qualification is complete; do not turn SDK-only unread or exact pre-exit release
+timing into additional gates. They remain NOT_PROVEN/UNKNOWN. New extracted/parser/nonidentity routes are not
+selected prerequisites before M1; only saved UTF-8 identity is the current prepared-representation producer.
+M1 READY means work can start, not that collection/archive/import are implemented. V1/installed final-head
+qualification remains NOT_RUN.
 
 R1's persisted unknown Insert/ABA, postcommit/pre-view interruption and fef held-view exclusion/cleanup are
 separately pinned native evidence. The 9e RELEASE resource run does not relabel those cases. Complete unsampled
@@ -53,8 +53,8 @@ DONE below is the named delivered scope, not completion of the product.
 | Q1 / DONE, Windows debug scope | P1 | Actual daemon publisher, CONTROL and concrete bridge | Full corpus → exact backend/readback/canary → guarded current/evidence → validated PublishedView; source 3c33d831. |
 | U1 / DONE, Windows debug scope | Q1 | CONTROL resolver, daemon/CLI, protocol/client | Read-only verified full retained units/citations; c843 targeted final-pin scope and earlier evidence below. |
 | R1 / ACCEPTED, recorded functional + RELEASE fixed-input scopes | U1 | CLI/daemon index helpers, source CONTROL and publication | Recorded owner gates include unknown Insert/ABA, postcommit boundary, held-query exclusion/cleanup and ordinary-repo-1 RELEASE fixed-input resource PASS; stronger unclaimed boundaries remain below. |
-| X1 / PARTIAL, session candidate | R1 | CLI/OwnedQuerySession/daemon window owner | Window code connected; two Raw native scopes passed; remaining mode/lifetime/backpressure/paging qualification is pending. |
-| M1 / WAIT | X1 | Retention and future stopped-root maintenance caller | Conservative collection/archive/import preserving originals. |
+| X1 / DONE, Windows/Release selected scope | R1 | CLI/OwnedQuerySession/daemon window owner | Final Sol PASS: Raw/Decoded/ranked, lifetime/held-output/selection and real 63+1 frame cut at recorded scopes. |
+| M1 / READY, implementation pending | X1 | Stopped-root maintenance owner and actual CLI/daemon consumer | Implement collect-objects complete-mark/guarded sweep first, then archive/import preserving originals. |
 | O1 / DEFERRED | Connected baseline + actual need | [Selected depth](../product/AGENT_ANALYSIS_FRAMEWORK.md#optional-depth) | Add only an actual source-backed consumer; remove unused scaffolds. |
 | V1 / WAIT | X1/M1 shipped paths | [Qualification](../implementation/TEST_CUTOVER.md), #215 | Measured relevance/scale/platform/release and installed-baseline evidence. |
 
@@ -100,25 +100,37 @@ hydration reuse. No application encryption, grants, OS-secret platform or second
 <a id="execution-evidence"></a>
 ## Verification and known blockers
 
-### Session-window candidate evidence, source 473447af
+### Session-window qualification, Windows/Release
 
-- Source audit Sol SOURCE PASS; focused locked check/strict Clippy and RELEASE builds exited 0. Entry path:
-  CLI session -> OwnedQuerySession -> daemon --session-stdio, using actual SessionClientFrame/SessionReply.
-  Source implementation is not a blanket runtime result or a claim that current main already contains it.
-- Public Raw flow Open -> client refusal -> valid Expand -> Continue -> Close passed: CLI PID 103172 exit 2,
-  daemon 13692 exit 0, both output EOF and OS absence observed. origin:"client" identifies a local refusal:
-  no corresponding daemon command is written, healthy continuation remains usable and aggregate CLI exit is 2.
-- Direct-server guard plus two late Cancels, three pages and Close passed: helper PID 104060/daemon 23456
-  both exited 0, replies 1..6 arrived exactly once, CONTROL and 16 objects remained unchanged.
-- The first held-output setup did not establish backpressure: the complete 677-byte page queued and no
-  deferred Cancel was sent. Cleanup/unchanged objects are not a passing held-output case; larger setup is pending.
-  A separate fresh UTF-8 fixture hit Qdrant CreateFieldIndex Internal Gridstore os3, with exact cause and
-  index-terminal observer race unknown. Decoded SESSION was not started. These are pending setup/NOT_RUN,
-  not Window FAIL/readiness or a newly established source defect.
-- Held-output deferred Cancel, ranked/Decoded windows, TTL/EOF, Busy release and paging bounds remain
-  unqualified until the native results arrive. X1 PARTIAL, M1 WAIT, V1 unfinished. Do not promote lifecycle
-  source policy, earlier one-shot tests or these two Raw runs into those cases. No parser/extracted/nonidentity
-  route is newly selected as a prerequisite; saved UTF-8 identity is the only current representation producer.
+- Final Sol incremental X1 PASS covers source-equivalent 473447af/main 59061070; source/check/strict
+  Clippy/RELEASE build results retain their original provenance. Native execution used the equivalent
+  473447af binaries, not a relabelled fresh main build.
+- Raw public Open -> client refusal -> valid Expand -> Continue -> Close passed (CLI 103172 exit 2,
+  daemon 13692 exit 0, both EOF/OS gone). origin:"client" remained a local refusal with no daemon command;
+  the healthy session stayed usable. Direct-server guard/two late Cancels/three pages/Close passed
+  (helper 104060/daemon 23456 exit 0), replies 1..6 once, CONTROL/16 objects unchanged.
+- Decoded retained stable Source/Prepared refs and original bytes after live-input mutation. Ranked generation
+  2 continued/expanded offline, rejected concurrent Index as Busy and reopened after Close. Public lifecycle
+  A/B/C covered TTL/no renewal, EOF and early TTL. Calibrated held deferred Cancel and held-expiry finite partial
+  exit 2 passed; partial expiry is not claimed as a successfully delivered complete page.
+- Selection []/unknown UUID and Gap handling produced no false negative; stored 64-prefix end was checked.
+  The final v4 real 4 MiB UTF-8 file/64 hard-64 KiB-line case produced 63 whole items -> cursor 63 -> last one
+  -> cursor 64. All 64 texts/ranges were exact at 65536 bytes each. Actual framed bytes were
+  8300716/132042/50, each <=8388608. Sol independently verified raw stdout/hash and the original-order mapping;
+  Raw/Decoded bounds plus prior ranked/selection/lifecycle leave no mandatory selected X1 gap.
+- Session actors had actual wait, both EOF and OS absence; query CONTROL/objects were unchanged. Exact
+  pre-exit worker/root release timing remains UNKNOWN. SDK-only unread is NOT_PROVEN, not a separate gate.
+  Setup init/one-shot daemon observer remains UNKNOWN where actual observation was absent.
+- The first 677-byte held setup was not backpressure proof and sent no deferred Cancel; that trial is not
+  relabelled PASS. The v1 UTF-8 fixture Gridstore os3 cause remains UNKNOWN. Later short-path PASS proves the
+  tested consumer, not the cause; the earlier index-terminal observer race remains UNKNOWN.
+- Evidence roots remain C:\Development\Rust\targets\task-x1-window-native\run-20261107-v1 (public lifecycle
+  A/B/C, held-io-deferred, held-io-expiry, public-selection) and
+  C:\Development\Rust\targets\task-x1-window-decoded-native\run-20261107-v2-shortpath, with v3-ranked and
+  v4-framecut results. No reports/artifacts were rewritten.
+- X1 DONE / M1 READY is only the selected Windows/Release boundary. M1 implementation is unfinished;
+  V1/installed final head and whole project are not qualified. Existing stronger R1 NOT_RUN limits remain;
+  extracted/parser/nonidentity producers are not newly selected X1 gates.
 
 ### Retained DecodedUtf8 evidence, source c9a5f1c1
 
@@ -143,7 +155,7 @@ hydration reuse. No application encryption, grants, OS-secret platform or second
   both EOF. Helpers 14436/61104 exited 0; no race-induced false negative, survivor or Qdrant process remained.
   Typed Failed is the expected error outcome, not successful query evidence. Prior Raw helpers/wire artifacts
   were unchanged. Existing records remain under C:\Development\Rust\targets\task-x1-decoded-native.
-- X1 remains PARTIAL. Held-daemon-output window qualification, Continue/Expand/expiry, an extracted producer/
+- At the c9a5f1c1 checkpoint, X1 remained PARTIAL. Held-daemon-output window qualification, Continue/Expand/expiry, an extracted producer/
   route and arbitrary non-UTF-8 needle input are not delivered. No installed-release or whole-product claim.
 
 ### FIRST RAW evidence, source 6ced3349

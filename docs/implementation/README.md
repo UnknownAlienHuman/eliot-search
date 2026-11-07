@@ -123,9 +123,8 @@ Persisted unknown Insert/ABA, postcommit/pre-view and held-query exclusion/clean
 native scopes; the resource run does not relabel them. Fixed-input RELEASE measurement passed the declared
 profile with sampled/OS-reported counters; complete unsampled product peaks and generation-replacement peak
 remain UNKNOWN/NOT_RUN. DEBUG query performance is not qualified. See the registry for exact boundaries.
-X1 is PARTIAL: Raw/DecodedUtf8 are qualified at their named scopes; same-session window code is connected,
-with limited Raw runtime proof and remaining qualification. M1 archive/import and V1 release checks follow
-X1 acceptance.
+X1 is DONE in its selected Windows/Release scope; M1 collect-objects implementation is READY, not delivered.
+Archive/import and V1 relevance/scale/installed-release work remain unfinished.
 Search stays read-only; query and writer share exclusive root exclusion through flush, so a concurrent view
 manager is not the next prerequisite.
 
@@ -148,28 +147,36 @@ If every declared class passes 3A, leave 3B absent; do not weaken corpus require
 Owners #249/#275/#280/#332. FIRST RAW scans the selected committed PublishedView Source inventory, including
 Empty/PreparationGap inputs, with literal UTF-8 bytes over undecoded retained objects and no Qdrant/live fallback.
 Source integrity precedes raw range/hex evidence. Missing input is a Gap, corruption fails, presentation limits
-do not end scanning and complete negative requires fully verified zero matches. The source/native scope does
-not complete X1. DecodedUtf8 now verifies retained Source and SAVED Prepared UTF-8 against captured bindings,
+do not end scanning and complete negative requires fully verified zero matches. Those one-shot proofs alone do not establish session qualification. DecodedUtf8 now verifies retained Source and SAVED Prepared UTF-8 against captured bindings,
 proves byte-identity mapping and emits both refs/ranges plus text. It scans full representation across units;
 no on-the-fly materialization, reprepare, normalization or live fallback occurs. PrepGap/missing representations
 are explicit gaps; corruption fails. Extracted still has no real producer or implemented route.
-The candidate CLI session -> OwnedQuerySession -> daemon --session-stdio opens one Search/Raw/DecodedUtf8
+The CLI session -> OwnedQuerySession -> daemon --session-stdio opens one Search/Raw/DecodedUtf8
 window and retains at most the original 64-entry final-order prefix; Exact total matches remain separate.
 Open/Continue pages are 1..64 (default 16). TTL starts at accepted Open including work, defaults/caps at
 120000 ms and never renews. Expand requires emitted locators and explicit before/after bytes, with 65536 total
 bytes including the original span, original representation and valid UTF-8 boundaries. Complete daemon frame
 flush commits cursor progress; expiry/EOF cancels, joins and releases through the owned client reap path.
 
-These are source-reviewed implemented policies, not blanket runtime qualification. Actual current proof is
-limited to the public Raw client-refusal/Expand/Continue/Close flow and the direct server guard/late-Cancel/
-three-page/Close case. Held-output deferred Cancel, ranked/Decoded windows, TTL/EOF/Busy release and paging bounds
-remain pending. No new extracted/parser/nonidentity route is a selected gate before M1: saved UTF-8 identity
-is the current producer and unavailable representations remain explicit. Historical parsers are not restored.
+Final Sol incremental X1 gate PASS now covers the selected Windows/Release public consumer on main 59061070
+with source-equivalent 473447af binaries: Raw/Decoded/ranked windows, original refs/bytes, TTL/no-renewal/EOF,
+held deferred Cancel/finite partial expiry, selection/gaps, Busy release and bounded paging. The real 63+1
+frame cut committed cursor 63 then 64; all 64 texts/ranges were byte-exact and every frame fit the 8 MiB cap.
+Query CONTROL/objects were preserved and session wait/both EOF/OS absence observed.
+
+Exact pre-exit release timing remains UNKNOWN, SDK-only unread NOT_PROVEN is not a separate selected gate,
+and old Gridstore cause/setup observers retain their recorded UNKNOWN scope. No new extracted/parser/
+nonidentity producer is a selected gate before M1; saved UTF-8 identity is the current producer.
+Whole-project V1/installed final-head qualification remains NOT_RUN.
 See the [window owner](../../crates/search-query/search-continuation/FUNCTIONS.md).
 
 ### 5. Maintenance and selected product depth
 
-Owners #302/#244/#281/#227/#335; optional #219/#239/#248/#334/#336. Add stopped-root collection/archive/import,
+M1 is READY for concrete implementation, not complete. First implement collect-objects through the existing
+[stopped-root collection recipe](../../crates/search-runtime/search-retention/FUNCTIONS.md#stopped-root-local-object-collection):
+exclusive root guard, one supported consistent metadata snapshot, complete typed-reference mark before sweep,
+and no deletion on incomplete/corrupt/unknown input. Busy refuses rather than killing another process.
+Owners #302/#244/#281/#227/#335; optional #219/#239/#248/#334/#336. Then add archive/import,
 then selected source-backed orientation/comparison/Git/document capabilities. Optional donors join existing
 consumers. No encryption or restricted-user phase. Qdrant Edge, if studied later, is a replacement experiment.
 

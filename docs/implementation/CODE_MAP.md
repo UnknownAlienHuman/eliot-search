@@ -1,6 +1,6 @@
 # Code entrypoints and change map
 
-Current binaries expose root operations, index [PATH], retain-file, prepare-source, publish-prepared, foreground watch, read-only search, Raw/DecodedUtf8 Exact and the session-window candidate. Native binary and library
+Current binaries expose root operations, index [PATH], retain-file, prepare-source, publish-prepared, foreground watch, read-only search, Raw/DecodedUtf8 Exact and same-session windows. Native binary and library
 cases have distinct exact-source scopes in the [registry](../audit/ANALYSIS_REGISTRY.md#evidence-status).
 U1 targeted Windows debug acceptance is at c843171, with earlier transport/budget and initial-publication scopes kept separate.
 The [owner map](README.md#owners) defines responsibilities; a row does not require keeping a crate.
@@ -112,7 +112,7 @@ Rows marked future identify integration owners, not installed commands or comple
 | Corpus publication/current/view | [Daemon publisher](../../bins/eliot-searchd/src/published_corpus.rs), [CONTROL](../../crates/search-control-redb/src/publication.rs), [RO graph validator](../../crates/search-control-redb/src/publication/verify.rs), [policy](../../crates/search-index-qdrant/search-publication/FUNCTIONS.md) |
 | Returned evidence and retained units | [Query worker](../../bins/eliot-searchd/src/verified_query.rs), [CONTROL resolver](../../crates/search-control-redb/src/publication.rs), [evidence rule](../../crates/search-query/search-candidate-validator/FUNCTIONS.md) |
 | Serviced framed child and presentation | [Daemon I/O](../../bins/eliot-searchd/src/framed_search.rs), [client](../../crates/search-provider-client/FUNCTIONS.md), [protocol](../../crates/search-provider-protocol/FUNCTIONS.md), [CLI](../../bins/eliot-search/FUNCTIONS.md) |
-| Raw/DecodedUtf8 and candidate windows | [Raw](../../bins/eliot-searchd/src/raw_exact.rs), [Decoded](../../bins/eliot-searchd/src/decoded_exact.rs), [session I/O](../../bins/eliot-searchd/src/framed_search/session.rs), [window](../../bins/eliot-searchd/src/framed_search/window.rs), [owning window recipe](../../crates/search-query/search-continuation/FUNCTIONS.md) |
+| Raw/DecodedUtf8 and same-session windows | [Raw](../../bins/eliot-searchd/src/raw_exact.rs), [Decoded](../../bins/eliot-searchd/src/decoded_exact.rs), [session I/O](../../bins/eliot-searchd/src/framed_search/session.rs), [window](../../bins/eliot-searchd/src/framed_search/window.rs), [owning window recipe](../../crates/search-query/search-continuation/FUNCTIONS.md) |
 
 The old projection-planner/publication source, manifests and exclusive fixtures were retired in P1 with their
 VerifiedUnitSet consumers. Their FUNCTIONS.md and AGENTS.md remain canonical Q1 recipes at the existing paths;
@@ -125,9 +125,8 @@ Do not restore deleted daemon implementations or unconsumed APIs because an olde
 
 That read-only query → pinned published evidence → verified retained text/citation → CLI path is connected.
 Scoped index, bare selection reload and foreground watch now use those helpers; R1's accepted scopes remain
-in the registry. X1 Raw/DecodedUtf8 and session-window code are connected but PARTIAL; remaining window
-runtime qualification is next, without
-a new concurrent view framework by default.
+in the registry. X1 selected Windows/Release qualification is DONE; M1 collect-objects implementation is next.
+Entry points and root exclusion are unchanged; no concurrent view framework is added by this documentation.
 Confirmed absence and inaccessible inventory stay distinct.
 Build the actual owners and delete displaced code with its callers. Root-only command checks, helper-native
 probes and retained workspace libraries do not qualify that pipeline or an installed baseline.
