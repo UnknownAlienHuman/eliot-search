@@ -8,8 +8,8 @@ use std::time::Instant;
 
 use search_control_redb::current_preparation::PreparationOutcome;
 use search_control_redb::publication::{
-    self as control, CapturedSource, Generation, PendingGeneration, PendingOperation,
-    PointEvidence, PublicationError, PublishedView, UploadPage, UploadPoint,
+    self as control, CaptureStaging, CapturedSource, Generation, PendingGeneration,
+    PendingOperation, PointEvidence, PublicationError, PublishedView, UploadPage, UploadPoint,
 };
 use search_qdrant_bridge::{
     Backend, BackendError, BackendLimits, MAX_HITS, MAX_PAGE_BYTES, MAX_PAGE_POINTS,
@@ -178,7 +178,7 @@ fn visit_pages(
 }
 
 fn stage_complete_page(
-    path: &Path,
+    staging: &CaptureStaging,
     pending: &PendingGeneration,
     page: UploadPage,
     prepared: &PreparedUtf8<'_>,
@@ -226,7 +226,8 @@ fn stage_complete_page(
                 u64::try_from(wire.map_err(BackendError::code)?)
                     .map_err(|_| "PUBLICATION_LIMIT")?,
             );
-            control::stage_page(path, pending, &page, deadline, cancel)
+            staging
+                .stage_page(pending, &page, deadline, cancel)
                 .map_err(PublicationError::code)?;
         }
     }
@@ -234,28 +235,22 @@ fn stage_complete_page(
 }
 fn stage_source(
     root: &PlainRootGuard,
+    staging: &CaptureStaging,
     pending: &PendingGeneration,
     captured: &CapturedSource,
     next_point: &mut u64,
     deadline: Instant,
     cancel: &AtomicBool,
 ) -> Result<(), &'static str> {
-    let path = root.control_path();
     let outcome = captured
         .preparation
         .outcome
         .as_ref()
         .ok_or("PUBLICATION_SOURCE_NOT_PREPARED")?;
     match outcome.result {
-        PreparationOutcome::Gap { .. } => control::finish_source(
-            &path,
-            pending,
-            captured.source.source_id,
-            0,
-            deadline,
-            cancel,
-        )
-        .map_err(PublicationError::code),
+        PreparationOutcome::Gap { .. } => staging
+            .finish_source(pending, captured.source.source_id, 0, deadline, cancel)
+            .map_err(PublicationError::code),
         PreparationOutcome::Ready { artifact } => {
             let stored = read_object(root, artifact, 64 * 1024 * 1024, deadline, cancel)
                 .map_err(ObjectStoreError::code)?;
@@ -310,21 +305,21 @@ fn stage_source(
                             request_bytes: None,
                         },
                     );
-                    stage_complete_page(&path, pending, full, &view, deadline, cancel)?;
+                    stage_complete_page(staging, pending, full, &view, deadline, cancel)?;
                 }
             }
             if !page.points.is_empty() {
-                stage_complete_page(&path, pending, page, &view, deadline, cancel)?;
+                stage_complete_page(staging, pending, page, &view, deadline, cancel)?;
             }
-            control::finish_source(
-                &path,
-                pending,
-                captured.source.source_id,
-                u64::try_from(view.units().len()).map_err(|_| "PUBLICATION_LIMIT")?,
-                deadline,
-                cancel,
-            )
-            .map_err(PublicationError::code)
+            staging
+                .finish_source(
+                    pending,
+                    captured.source.source_id,
+                    u64::try_from(view.units().len()).map_err(|_| "PUBLICATION_LIMIT")?,
+                    deadline,
+                    cancel,
+                )
+                .map_err(PublicationError::code)
         }
     }
 }
@@ -527,6 +522,39 @@ fn cleanup(
     }
     Ok(())
 }
+fn stage_capture(
+    root: &PlainRootGuard,
+    pending: &PendingGeneration,
+    sources: &[CapturedSource],
+    deadline: Instant,
+    cancel: &AtomicBool,
+) -> Result<PendingGeneration, &'static str> {
+    let staging = CaptureStaging::open(&root.control_path(), deadline, cancel)
+        .map_err(PublicationError::code)?;
+    let captured = (|| {
+        let mut next_point = 0;
+        for source in sources {
+            stage_source(
+                root,
+                &staging,
+                pending,
+                source,
+                &mut next_point,
+                deadline,
+                cancel,
+            )?;
+        }
+        staging
+            .complete_capture(pending, deadline, cancel)
+            .map_err(PublicationError::code)
+    })();
+    // Always close, including object/decode/staging failures, before returning.
+    staging
+        .close(deadline, cancel)
+        .map_err(PublicationError::code)?;
+    captured
+}
+
 fn prepare_view(
     root: &PlainRootGuard,
     backend: &Backend,
@@ -568,12 +596,7 @@ fn prepare_view(
         } else {
             let pending = control::start_build(&path, &capture, deadline, cancel)
                 .map_err(PublicationError::code)?;
-            let mut next_point = 0;
-            for source in &capture.sources {
-                stage_source(root, &pending, source, &mut next_point, deadline, cancel)?;
-            }
-            control::complete_capture(&path, &pending, deadline, cancel)
-                .map_err(PublicationError::code)?
+            stage_capture(root, &pending, &capture.sources, deadline, cancel)?
         };
         let pending = upload(backend, root, pending, deadline, cancel)?;
         verify_generation(backend, root, &pending.generation, deadline, cancel)?;

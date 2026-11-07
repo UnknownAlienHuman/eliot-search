@@ -394,6 +394,18 @@ fn edit<T>(
 ) -> Result<T> {
     check(deadline, cancel)?;
     let db = Database::open(path).map_err(|_| PublicationError::Database)?;
+    let result = edit_database(&db, deadline, cancel, write);
+    drop(db);
+    result
+}
+
+fn edit_database<T>(
+    db: &Database,
+    deadline: Instant,
+    cancel: &AtomicBool,
+    write: impl FnOnce(&WriteTransaction, &mut State) -> Result<T>,
+) -> Result<T> {
+    check(deadline, cancel)?;
     let tx = db.begin_write().map_err(|_| PublicationError::Database)?;
     let existed = tx
         .list_tables()
@@ -426,7 +438,6 @@ fn edit<T>(
         .map_err(|_| PublicationError::Database)?;
     check(deadline, cancel)?;
     let committed = tx.commit();
-    drop(db);
     if committed.is_err() {
         return Err(PublicationError::Database);
     }
@@ -707,164 +718,202 @@ pub fn upload_page_bytes(page: &UploadPage) -> Result<usize> {
     codec::page_size(page)
 }
 
-/// Persists fixed retained-unit references and matching evidence in one bounded transaction.
+/// One database owner for the pending generation's bounded capture transactions.
 ///
-/// # Errors
-/// Rejects changed/captured-complete builds, duplicate IDs, invalid source bindings and limits.
-pub fn stage_page(
-    path: &Path,
-    pending: &PendingGeneration,
-    page: &UploadPage,
-    deadline: Instant,
-    cancel: &AtomicBool,
-) -> Result<()> {
-    let bytes = codec::encode_page(page)?;
-    edit(path, deadline, cancel, |tx, state| {
-        let p = pending_mut(state, pending)?;
-        if p.capture_complete || p.in_flight.is_some() {
-            return Err(PublicationError::Stale);
-        }
-        p.staged_bytes = p
-            .staged_bytes
-            .checked_add(bytes.len() as u64)
-            .filter(|n| *n <= MAX_STAGED_BYTES)
-            .ok_or(PublicationError::Limit)?;
-        let mut evidence = tx
-            .open_table(EVIDENCE)
-            .map_err(|_| PublicationError::Database)?;
-        let mut sources = tx
-            .open_table(SOURCES)
-            .map_err(|_| PublicationError::Database)?;
-        for point in &page.points {
-            check(deadline, cancel)?;
-            let index = p.generation.point_count;
-            if point.id[..8] != p.generation.sequence.to_be_bytes()
-                || point.id[8..] != index.to_be_bytes()
-            {
-                return Err(PublicationError::Corrupt);
+/// Object decoding and request measurement run between transactions. The owner
+/// must be closed before backend mutations or native read-only views are opened.
+pub struct CaptureStaging {
+    database: Database,
+}
+
+impl CaptureStaging {
+    /// Opens the existing CONTROL database for capture staging under root exclusion.
+    ///
+    /// # Errors
+    /// Returns database, cancellation or original-deadline failures.
+    pub fn open(path: &Path, deadline: Instant, cancel: &AtomicBool) -> Result<Self> {
+        check(deadline, cancel)?;
+        let database = Database::open(path).map_err(|_| PublicationError::Database)?;
+        check(deadline, cancel)?;
+        Ok(Self { database })
+    }
+
+    /// Persists fixed retained-unit references and matching evidence in one bounded transaction.
+    ///
+    /// # Errors
+    /// Rejects changed/captured-complete builds, duplicate IDs, invalid source bindings and limits.
+    pub fn stage_page(
+        &self,
+        pending: &PendingGeneration,
+        page: &UploadPage,
+        deadline: Instant,
+        cancel: &AtomicBool,
+    ) -> Result<()> {
+        let bytes = codec::encode_page(page)?;
+        edit_database(&self.database, deadline, cancel, |tx, state| {
+            let p = pending_mut(state, pending)?;
+            if p.capture_complete || p.in_flight.is_some() {
+                return Err(PublicationError::Stale);
             }
-            let source_key = key(p.generation.sequence, point.evidence.source_id.as_bytes());
+            p.staged_bytes = p
+                .staged_bytes
+                .checked_add(bytes.len() as u64)
+                .filter(|n| *n <= MAX_STAGED_BYTES)
+                .ok_or(PublicationError::Limit)?;
+            let mut evidence = tx
+                .open_table(EVIDENCE)
+                .map_err(|_| PublicationError::Database)?;
+            let mut sources = tx
+                .open_table(SOURCES)
+                .map_err(|_| PublicationError::Database)?;
+            for point in &page.points {
+                check(deadline, cancel)?;
+                let index = p.generation.point_count;
+                if point.id[..8] != p.generation.sequence.to_be_bytes()
+                    || point.id[8..] != index.to_be_bytes()
+                {
+                    return Err(PublicationError::Corrupt);
+                }
+                let source_key = key(p.generation.sequence, point.evidence.source_id.as_bytes());
+                let mut entry = {
+                    let value = sources
+                        .get(source_key.as_slice())
+                        .map_err(|_| PublicationError::Database)?
+                        .ok_or(PublicationError::Corrupt)?;
+                    codec::decode_source(value.value())?
+                };
+                let c = &entry.captured;
+                if entry.complete
+                    || point.evidence.source_namespace_id != c.source.source_namespace_id
+                    || point.evidence.input != c.source.object_ref
+                    || point.evidence.unit != entry.staged_units
+                    || !matches!(c.preparation.outcome.as_ref().map(|o| o.result), Some(PreparationOutcome::Ready { artifact }) if artifact == point.evidence.prepared)
+                {
+                    return Err(PublicationError::Corrupt);
+                }
+                entry.staged_units = entry
+                    .staged_units
+                    .checked_add(1)
+                    .ok_or(PublicationError::Limit)?;
+                let encoded_source = codec::encode_source(&entry)?;
+                sources
+                    .insert(source_key.as_slice(), encoded_source.as_slice())
+                    .map_err(|_| PublicationError::Database)?;
+                let evidence_key = key(p.generation.sequence, &point.id);
+                if evidence
+                    .get(evidence_key.as_slice())
+                    .map_err(|_| PublicationError::Database)?
+                    .is_some()
+                {
+                    return Err(PublicationError::Corrupt);
+                }
+                let encoded = codec::encode_evidence(&point.evidence);
+                evidence
+                    .insert(evidence_key.as_slice(), encoded.as_slice())
+                    .map_err(|_| PublicationError::Database)?;
+                p.generation.point_count = index
+                    .checked_add(1)
+                    .filter(|n| *n <= MAX_POINTS)
+                    .ok_or(PublicationError::Limit)?;
+            }
+            let page_key = key(
+                p.generation.sequence,
+                &p.generation.page_count.to_be_bytes(),
+            );
+            tx.open_table(PAGES)
+                .map_err(|_| PublicationError::Database)?
+                .insert(page_key.as_slice(), bytes.as_slice())
+                .map_err(|_| PublicationError::Database)?;
+            p.generation.page_count = p
+                .generation
+                .page_count
+                .checked_add(1)
+                .ok_or(PublicationError::Limit)?;
+            Ok(())
+        })
+    }
+
+    /// Completes one captured source after all its decoded units have been staged.
+    ///
+    /// # Errors
+    /// Rejects duplicate completion, wrong unit counts or changed builds.
+    pub fn finish_source(
+        &self,
+        pending: &PendingGeneration,
+        id: SourceId,
+        units: u64,
+        deadline: Instant,
+        cancel: &AtomicBool,
+    ) -> Result<()> {
+        edit_database(&self.database, deadline, cancel, |tx, state| {
+            let p = pending_mut(state, pending)?;
+            if p.capture_complete {
+                return Err(PublicationError::Stale);
+            }
+            let source_key = key(p.generation.sequence, id.as_bytes());
+            let mut table = tx
+                .open_table(SOURCES)
+                .map_err(|_| PublicationError::Database)?;
             let mut entry = {
-                let value = sources
+                let value = table
                     .get(source_key.as_slice())
                     .map_err(|_| PublicationError::Database)?
                     .ok_or(PublicationError::Corrupt)?;
                 codec::decode_source(value.value())?
             };
-            let c = &entry.captured;
-            if entry.complete
-                || point.evidence.source_namespace_id != c.source.source_namespace_id
-                || point.evidence.input != c.source.object_ref
-                || point.evidence.unit != entry.staged_units
-                || !matches!(c.preparation.outcome.as_ref().map(|o| o.result), Some(PreparationOutcome::Ready { artifact }) if artifact == point.evidence.prepared)
-            {
+            if entry.complete || entry.staged_units != units {
                 return Err(PublicationError::Corrupt);
             }
-            entry.staged_units = entry
-                .staged_units
+            entry.complete = true;
+            let bytes = codec::encode_source(&entry)?;
+            table
+                .insert(source_key.as_slice(), bytes.as_slice())
+                .map_err(|_| PublicationError::Database)?;
+            p.completed_sources = p
+                .completed_sources
                 .checked_add(1)
                 .ok_or(PublicationError::Limit)?;
-            let encoded_source = codec::encode_source(&entry)?;
-            sources
-                .insert(source_key.as_slice(), encoded_source.as_slice())
-                .map_err(|_| PublicationError::Database)?;
-            let evidence_key = key(p.generation.sequence, &point.id);
-            if evidence
-                .get(evidence_key.as_slice())
-                .map_err(|_| PublicationError::Database)?
-                .is_some()
-            {
+            Ok(())
+        })
+    }
+
+    /// Seals complete durable inputs before any backend mutation.
+    ///
+    /// # Errors
+    /// Rejects incomplete sources, changed corpus/current guards or a changed pending build.
+    pub fn complete_capture(
+        &self,
+        pending: &PendingGeneration,
+        deadline: Instant,
+        cancel: &AtomicBool,
+    ) -> Result<PendingGeneration> {
+        edit_database(&self.database, deadline, cancel, |tx, state| {
+            let p = pending_mut(state, pending)?;
+            check_wanted(tx, p.source_namespace, p.generation.wanted_revision)?;
+            if p.completed_sources != p.generation.source_count {
                 return Err(PublicationError::Corrupt);
             }
-            let encoded = codec::encode_evidence(&point.evidence);
-            evidence
-                .insert(evidence_key.as_slice(), encoded.as_slice())
-                .map_err(|_| PublicationError::Database)?;
-            p.generation.point_count = index
-                .checked_add(1)
-                .filter(|n| *n <= MAX_POINTS)
-                .ok_or(PublicationError::Limit)?;
-        }
-        let page_key = key(
-            p.generation.sequence,
-            &p.generation.page_count.to_be_bytes(),
-        );
-        tx.open_table(PAGES)
-            .map_err(|_| PublicationError::Database)?
-            .insert(page_key.as_slice(), bytes.as_slice())
-            .map_err(|_| PublicationError::Database)?;
-        p.generation.page_count = p
-            .generation
-            .page_count
-            .checked_add(1)
-            .ok_or(PublicationError::Limit)?;
-        Ok(())
-    })
-}
+            p.capture_complete = true;
+            Ok(p.clone())
+        })
+    }
 
-/// Completes one captured source after all its decoded units have been staged.
-///
-/// # Errors
-/// Rejects duplicate completion, wrong unit counts or changed builds.
-pub fn finish_source(
-    path: &Path,
-    pending: &PendingGeneration,
-    id: SourceId,
-    units: u64,
-    deadline: Instant,
-    cancel: &AtomicBool,
-) -> Result<()> {
-    edit(path, deadline, cancel, |tx, state| {
-        let p = pending_mut(state, pending)?;
-        if p.capture_complete {
-            return Err(PublicationError::Stale);
-        }
-        let source_key = key(p.generation.sequence, id.as_bytes());
-        let mut table = tx
-            .open_table(SOURCES)
-            .map_err(|_| PublicationError::Database)?;
-        let mut entry = {
-            let value = table
-                .get(source_key.as_slice())
-                .map_err(|_| PublicationError::Database)?
-                .ok_or(PublicationError::Corrupt)?;
-            codec::decode_source(value.value())?
-        };
-        if entry.complete || entry.staged_units != units {
-            return Err(PublicationError::Corrupt);
-        }
-        entry.complete = true;
-        let bytes = codec::encode_source(&entry)?;
-        table
-            .insert(source_key.as_slice(), bytes.as_slice())
-            .map_err(|_| PublicationError::Database)?;
-        p.completed_sources = p
-            .completed_sources
-            .checked_add(1)
-            .ok_or(PublicationError::Limit)?;
-        Ok(())
-    })
-}
-
-/// Seals complete durable inputs before any backend mutation.
-///
-/// # Errors
-/// Rejects incomplete sources, changed corpus/current guards or a changed pending build.
-pub fn complete_capture(
-    path: &Path,
-    pending: &PendingGeneration,
-    deadline: Instant,
-    cancel: &AtomicBool,
-) -> Result<PendingGeneration> {
-    edit(path, deadline, cancel, |tx, state| {
-        let p = pending_mut(state, pending)?;
-        check_wanted(tx, p.source_namespace, p.generation.wanted_revision)?;
-        if p.completed_sources != p.generation.source_count {
-            return Err(PublicationError::Corrupt);
-        }
-        p.capture_complete = true;
-        Ok(p.clone())
-    })
+    /// Closes capture storage before any external mutation or read-only view open.
+    ///
+    /// # Errors
+    /// Propagates close failure, cancellation or the original deadline. Close is
+    /// attempted even when cancellation or deadline expiry has already occurred.
+    pub fn close(self, deadline: Instant, cancel: &AtomicBool) -> Result<()> {
+        let before = check(deadline, cancel);
+        let closed = self
+            .database
+            .close()
+            .map_err(|_| PublicationError::Database);
+        let after = check(deadline, cancel);
+        before?;
+        after?;
+        closed
+    }
 }
 
 /// Loads the exact persisted pending build without writes.
