@@ -507,6 +507,9 @@ fn cleanup(
         control::retired_generations(path, deadline, cancel).map_err(PublicationError::code)?
     {
         check(deadline, cancel)?;
+        if retired.unresolved_build.is_some() {
+            continue;
+        }
         if retired.remote_owned {
             let collection = retired.generation.collection();
             backend
@@ -531,21 +534,32 @@ fn prepare_view(
     cancel: &AtomicBool,
 ) -> Result<PublishedView, &'static str> {
     let path = root.control_path();
-    let capture =
+    let mut capture =
         control::capture_corpus(&path, deadline, cancel).map_err(PublicationError::code)?;
-    if let Some(pending) = &capture.pending {
-        if pending.in_flight.is_some() {
+    let mut superseded_unknown_create = false;
+    if let Some(pending) = capture.pending.clone() {
+        if matches!(
+            pending.in_flight.as_ref(),
+            Some(PendingOperation::Create | PendingOperation::Insert(_))
+        ) {
+            control::supersede_unknown_build(&path, &pending, deadline, cancel)
+                .map_err(PublicationError::code)?;
+            superseded_unknown_create = true;
+            capture =
+                control::capture_corpus(&path, deadline, cancel).map_err(PublicationError::code)?;
+        } else if pending.in_flight.is_some() {
             return Err("PUBLICATION_EFFECT_UNRESOLVED");
         }
-        if !pending.capture_complete || !capture.pending_matches() {
-            control::abandon_build(&path, pending, deadline, cancel)
-                .map_err(PublicationError::code)?;
-            return Err("PUBLICATION_STALE");
-        }
+    }
+    if let Some(pending) = &capture.pending
+        && (!pending.capture_complete || !capture.pending_matches())
+    {
+        control::abandon_build(&path, pending, deadline, cancel).map_err(PublicationError::code)?;
+        return Err("PUBLICATION_STALE");
     }
     cleanup(backend, &path, deadline, cancel)?;
     let generation;
-    if capture.pending.is_none() && capture.current_matches() {
+    if capture.pending.is_none() && capture.current_matches() && !superseded_unknown_create {
         generation = capture.current.ok_or("PUBLICATION_NOT_PUBLISHED")?;
         verify_generation(backend, root, &generation, deadline, cancel)?;
     } else {
@@ -590,6 +604,32 @@ pub fn api_key() -> Result<Option<String>, &'static str> {
     }
     Ok(Some(value))
 }
+
+/// Publishes and opens the validated view under an already-held root guard.
+pub fn publish(
+    root: &PlainRootGuard,
+    request: &PublicationRequest,
+    deadline: Instant,
+    cancel: &AtomicBool,
+) -> Result<PublishedView, &'static str> {
+    let key = api_key()?;
+    let backend = Backend::connect(
+        &request.endpoint,
+        key.as_deref(),
+        BackendLimits {
+            max_batch_points: MAX_PAGE_POINTS,
+            max_request_bytes: MAX_REQUEST_BYTES,
+            max_response_bytes: MAX_RESPONSE_BYTES,
+            max_query_bytes: MAX_QUERY_BYTES,
+            max_hits: MAX_HITS,
+        },
+        deadline,
+        cancel,
+    )
+    .map_err(BackendError::code)?;
+    prepare_view(root, &backend, deadline, cancel)
+}
+
 pub fn run(
     path: &Path,
     request: &PublicationRequest,
@@ -598,22 +638,7 @@ pub fn run(
 ) -> ExitCode {
     let result = (|| {
         let root = open_plain(path, deadline, cancel).map_err(PlainRootError::code)?;
-        let key = api_key()?;
-        let backend = Backend::connect(
-            &request.endpoint,
-            key.as_deref(),
-            BackendLimits {
-                max_batch_points: MAX_PAGE_POINTS,
-                max_request_bytes: MAX_REQUEST_BYTES,
-                max_response_bytes: MAX_RESPONSE_BYTES,
-                max_query_bytes: MAX_QUERY_BYTES,
-                max_hits: MAX_HITS,
-            },
-            deadline,
-            cancel,
-        )
-        .map_err(BackendError::code)?;
-        let view = prepare_view(&root, &backend, deadline, cancel)?;
+        let view = publish(&root, request, deadline, cancel)?;
         let result = response(&view);
         let bytes = serde_json::to_vec(&result).map_err(|_| "PUBLICATION_RESPONSE_INVALID")?;
         if bytes.len() >= MAX_PUBLICATION_RESPONSE_BYTES {

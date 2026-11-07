@@ -27,6 +27,7 @@ pub(super) struct RootCli {
     data_root: Option<PathBuf>,
     config_file: Option<PathBuf>,
     source_file: Option<PathBuf>,
+    index_path: Option<PathBuf>,
     source_id: Option<SourceId>,
     unit: Option<usize>,
     publication: Option<PublicationRequest>,
@@ -44,7 +45,7 @@ struct ConfigFile {
     data_root: Option<String>,
 }
 
-fn invalid(kind: &'static str) -> String {
+fn invalid(kind: &str) -> String {
     format!("BOOTSTRAP_SETTINGS_INVALID:{kind}")
 }
 
@@ -73,6 +74,7 @@ fn is_command(value: &OsStr) -> Option<RootCommand> {
         "--retain-file" => Some(RootCommand::RetainFile),
         "--prepare-source" => Some(RootCommand::PrepareSource),
         "--publish-prepared" => Some(RootCommand::PublishPrepared),
+        "--index" => Some(RootCommand::Index),
         "--search-stdio" => Some(RootCommand::Search),
         _ => None,
     }
@@ -94,13 +96,27 @@ fn bounded_path(value: &OsStr, kind: &'static str) -> Result<PathBuf, String> {
 fn option_value<'a>(
     arguments: &'a [OsString],
     index: usize,
-    kind: &'static str,
+    kind: &str,
 ) -> Result<&'a OsString, String> {
     let value = arguments.get(index + 1).ok_or_else(|| invalid(kind))?;
     if is_help_flag(value) || is_version_flag(value) || is_command(value).is_some() {
         return Err(invalid("conflicting_command"));
     }
     Ok(value)
+}
+
+fn select_path_option(
+    selected: &mut Option<PathBuf>,
+    arguments: &[OsString],
+    index: usize,
+    kind: &'static str,
+) -> Result<(), String> {
+    if selected.is_some() {
+        return Err(invalid(&format!("{kind}_duplicate")));
+    }
+    let value = option_value(arguments, index, &format!("{kind}_value"))?;
+    *selected = Some(bounded_path(value, kind)?);
+    Ok(())
 }
 
 fn unit_index(value: &OsStr) -> Result<usize, String> {
@@ -143,7 +159,9 @@ impl PublicationOptions {
             }
             return Ok((None, self.endpoint));
         }
-        if (command == RootCommand::PublishPrepared) != self.endpoint.is_some() {
+        if matches!(command, RootCommand::PublishPrepared | RootCommand::Index)
+            != self.endpoint.is_some()
+        {
             return Err(invalid("publication_selection"));
         }
         Ok((
@@ -194,6 +212,7 @@ pub(super) fn parse(arguments: &[OsString]) -> Result<Parsed, String> {
     let mut data_root = None;
     let mut config_file = None;
     let mut source_file = None;
+    let mut index_path = None;
     let mut source_id = None;
     let mut unit = None;
     let mut publication = PublicationOptions::default();
@@ -210,25 +229,22 @@ pub(super) fn parse(arguments: &[OsString]) -> Result<Parsed, String> {
             }
             index += 1;
         } else if argument == OsStr::new("--data-root") {
-            if data_root.is_some() {
-                return Err(invalid("data_root_duplicate"));
-            }
-            let value = option_value(arguments, index, "data_root_value")?;
-            data_root = Some(bounded_path(value, "data_root")?);
+            select_path_option(&mut data_root, arguments, index, "data_root")?;
             index += 2;
         } else if argument == OsStr::new("--config-file") {
-            if config_file.is_some() {
-                return Err(invalid("config_file_duplicate"));
-            }
-            let value = option_value(arguments, index, "config_file_value")?;
-            config_file = Some(bounded_path(value, "config_file")?);
+            select_path_option(&mut config_file, arguments, index, "config_file")?;
             index += 2;
         } else if argument == OsStr::new("--source-file") {
-            if source_file.is_some() {
-                return Err(invalid("source_file_duplicate"));
+            select_path_option(&mut source_file, arguments, index, "source_file")?;
+            index += 2;
+        } else if argument == OsStr::new("--index-path") {
+            if index_path.is_some() || command != Some(RootCommand::Index) {
+                return Err(invalid("index_path"));
             }
-            let value = option_value(arguments, index, "source_file_value")?;
-            source_file = Some(bounded_path(value, "source_file")?);
+            let value = arguments
+                .get(index + 1)
+                .ok_or_else(|| invalid("index_path_value"))?;
+            index_path = Some(bounded_path(value, "index_path")?);
             index += 2;
         } else if argument == OsStr::new("--source-id") {
             if source_id.is_some() {
@@ -269,6 +285,9 @@ pub(super) fn parse(arguments: &[OsString]) -> Result<Parsed, String> {
         source_id.is_some(),
         unit.is_some(),
     )?;
+    if (command == RootCommand::Index) != index_path.is_some() {
+        return Err(invalid("index_path_required"));
+    }
     if data_root.is_some() && positional_root.is_some() {
         return Err(invalid("data_root_duplicate"));
     }
@@ -277,6 +296,7 @@ pub(super) fn parse(arguments: &[OsString]) -> Result<Parsed, String> {
         data_root: data_root.or(positional_root),
         config_file,
         source_file,
+        index_path,
         source_id,
         unit,
         publication,
@@ -363,6 +383,9 @@ pub(super) fn resolve(cli: RootCli, startup_cwd: &Path) -> Result<RootInvocation
         data_root,
         source_file: cli
             .source_file
+            .map(|path| resolve_layer_path(&path, startup_cwd)),
+        index_path: cli
+            .index_path
             .map(|path| resolve_layer_path(&path, startup_cwd)),
         source_id: cli.source_id,
         unit: cli.unit,

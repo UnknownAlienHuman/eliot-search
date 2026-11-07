@@ -4,7 +4,7 @@ Local search for codebases and documents: ranked locations, retained-source exce
 One OS account, plain local storage, same-host Qdrant and an owned CLI/daemon connection.
 No application encryption, key management, pairing or multi-user access platform.
 
-**Status: retained-file → stored preparation → Qdrant publication → read-only search is connected.**
+**Status: explicit file/tree index → Qdrant publication → verified retained search is connected.**
 Search returns full retained units and citations after verifying the published snapshot's source and prepared
 objects. Publication returns generation state; user queries use `search`. U1 source review and targeted Windows
 debug native qualification passed at c843171; earlier transport/budget evidence has its own scope in the work
@@ -19,7 +19,9 @@ register. The full product and installed baseline remain open.
 | Find a specific rule | [Documentation index](docs/README.md) |
 | Run | [Quickstart](QUICKSTART.md), with exact qualification scopes in the work register |
 
-Next connect file/repository index and refresh to the existing helpers, then verify restart/inventory convergence.
+Use `index PATH` on an initialized root, then `search`; repeating index refreshes that explicit scope.
+R1 remains partial: next persist file/tree admission and reload it at writable-index startup. Periodic refresh
+is required policy, but no resident trigger or interval is implemented.
 Confirmed deletion excludes a source from new generations while preserving retained objects and pinned views.
 Do not build optional systems first or restore the retired source/qualification frameworks.
 

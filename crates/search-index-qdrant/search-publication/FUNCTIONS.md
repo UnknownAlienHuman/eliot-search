@@ -5,8 +5,8 @@ installation and finite cleanup obligations. It owns no reader/parser/query wind
 
 ## Current Q1 consumer
 
-The current implementation is [daemon published_corpus.rs](../../../bins/eliot-searchd/src/published_corpus.rs)
-with [CONTROL publication.rs](../../search-control-redb/src/publication.rs), reached by publish-prepared.
+The index PATH command and direct publish-prepared operation share [daemon published_corpus.rs](../../../bins/eliot-searchd/src/published_corpus.rs)
+with [CONTROL publication.rs](../../search-control-redb/src/publication.rs), called by both operations.
 This directory retains the canonical policy; it has no restored Cargo/src crate or legacy admission machine.
 
 The one-shot owner captures all current retained/prepared outcomes and non-reset guards, stores complete
@@ -24,8 +24,9 @@ inventory/evidence/schema and count zero, with no sentinel.
 
 Full graph validation checks every source/page/evidence binding in one RO snapshot before publication/recovery
 acceptance. Missing/malformed unqueried evidence refuses publication too. Ordinary read-only search instead
-pins the committed snapshot and verifies returned-hit evidence and retained objects; it performs no full graph scan. Unknown mutations retain pending
-targets unserved; standalone readback never clears them. The current synchronous root owner has no concurrent
+pins the committed snapshot and verifies returned-hit evidence and retained objects; it performs no full graph scan. Unknown mutations keep their targets unserved. The full pending header and saved rows may move atomically to
+an unresolved retired obligation, releasing only the active slot for a fresh never-reused successor. Cleanup
+skips that obligation even if an old worker later creates/inserts into its target; readback never settles it. The current synchronous root owner has no concurrent
 query windows; cleanup occurs before its view opens, with exact whole-collection ownership/absence checks.
 The broader convergence, retained-view and conditional incremental rules below remain obligations for their stages.
 
@@ -38,8 +39,8 @@ verified retained units/citations. Its c843171 qualification and earlier scopes 
 ## Desired state
 
 Compare both the selected current source/preparation snapshot and published inventory; a success-only scan misses
-removed or newly failed sources. Use bounded ordered reads. Startup/explicit/periodic reconciliation repairs lost
-queue hints. Repeated identical outcomes are no-ops.
+removed or newly failed sources. Use bounded ordered reads. Explicit index refresh is connected. Durable admission/writable-startup reload and an actual periodic trigger
+remain unfinished; periodic policy is required, not an implemented interval or resident service. Repeated identical outcomes are no-ops.
 
 | Observation | Desired outcome |
 |---|---|
@@ -90,8 +91,10 @@ An attempt uses one absolute execution deadline/cancellation. A lost response, t
 restart is not rollback or remote termination. Exact readback observes state; it does not settle every earlier
 possibly dispatched writer. Preserve bounded unresolved progress with the pending build, not a separate ledger.
 
-A completed mutation followed by failed readback retries observation first. Do not publish or clean a target while
-an unresolved attempt could still change the required state. Identical InsertOnly input does not authorize full
+A completed mutation followed by failed readback retries observation first. Do not serve or clean the uncertain
+target while an unresolved attempt could still change it. The concrete supersede_unknown_build operation
+preserves the full old header/source/page/evidence and permits a different fresh successor under the existing
+guards; it neither settles the old writer nor authorizes cleanup of its target. Identical InsertOnly input does not authorize full
 upsert, changing pending pages or treating matching readback as universal completion proof.
 
 <a id="small-conservative-recovery-boundary"></a>

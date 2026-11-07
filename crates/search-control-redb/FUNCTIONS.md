@@ -12,11 +12,17 @@ current_source adds three ordinary current tables on the first successful retain
 
 ReadOnlyDatabase::open and a read transaction capture the namespace, locator binding, row revision, and registration revision before file I/O. The native read-only open cannot repair or create the control database. No table is written during capture; an absent source schema only produces an in-memory capture for the later CAS. Unknown or partial table layouts are refused before source acquisition.
 
-After the immutable object has been published and read back, commit_current_source opens one short write transaction in this same control.redb. It atomically compares the captured namespace and registration/source row revisions with the current locator mapping, then advances row_revision and writes the new ObjectRef and NativeFileKey. A stale or corrupt row is an error; the old object remains untouched and the new object may remain unreferenced.
+After the immutable object has been published and read back, commit_current_source opens one short write transaction in this same control.redb. It atomically compares the captured namespace and registration/source row revisions with the current locator mapping, then advances row_revision and writes the new ObjectRef and NativeFileKey for a changed head. Identical ObjectRef plus NativeFileKey returns the existing logical row without advancing its revisions/wanted guard; a key change remains an update even with the same bytes. A stale or corrupt row is an error; the old object remains untouched and the new object may remain unreferenced.
 
 Source capture/observation uses ReadOnlyDatabase; commit_current_source owns the source write. An uncertain commit is observed through native read-only current-row reads, without repair or writes. Source-row decoding rejects ObjectKind::Prepared.
 
 Current source tables are ordinary Current-root user data. They do not change the initialization format marker. The existing unfinished-root emptiness probe still recognizes only its original empty states; any additional table or persistent savepoint remains nonempty and ineligible for discard. Regular source operations do not call the empty probe.
+
+capture_current_sources reads the current inventory natively read-only for explicit refresh.
+remove_current_sources compares the captured full source rows/namespace/locator bindings, atomically removes
+their current source/locator/preparation entries and advances the wanted-corpus guard. It does not delete
+immutable objects or saved generation source/page/evidence rows. Only the complete-scan owner selects confirmed
+in-scope deletion/exclusion; incomplete observations cannot authorize removal.
 
 ## Current preparation
 
@@ -43,11 +49,11 @@ Preparation rows are ordinary Current-root user data. They do not change the roo
 | generation_sources | Exact captured source/preparation rows, including explicit Gaps and completed source dimensions. |
 | generation_pages | Fixed point/ObjectRef/unit/range descriptors, page boundaries and measured SDK request bytes; no unit text. |
 | generation_evidence | Generation/point ID to source/input/prepared/unit/byte-line evidence. |
-| retired_generations | Exact predecessor or abandoned target with proven remote-ownership flag and cleanup obligation. |
+| retired_generations | Exact predecessor/abandoned target, ownership flag and any full unresolved pending-build header; cleanup obligation remains. |
 
 capture_corpus uses one native RO snapshot and bounded owned source metadata. Every retained source needs a matching preparation; no success-only scan. Source commits and actual settings/outcome changes advance wanted_corpus_revision in their existing transactions; identical settings/outcome no-ops do not. An old missing counter is baseline zero without capture writes. Publication's own staging writes do not advance this guard.
 
-start_build compares captured namespace/wanted revision, current value/revision, pending absence and non-reset generation sequence. It reserves a never-reused sequence under the persisted random publication namespace. Captured source metadata and reference pages/evidence are staged in bounded transactions before remote mutations; complete_capture seals all sources. New ELSUPG02 pages encode 20 header bytes plus 176 bytes per point. Legacy ELSUPG01 pages remain read-only compatible: redundant text is framing-checked and discarded, never used as upload truth or rewritten during a read. Per-dispatch operation_revision rejects late callbacks for a newer attempt. Unknown dispatch remains pending and unserved.
+start_build compares captured namespace/wanted revision, current value/revision, pending absence and non-reset generation sequence. It reserves a never-reused sequence under the persisted random publication namespace. Captured source metadata and reference pages/evidence are staged in bounded transactions before remote mutations; complete_capture seals all sources. New ELSUPG02 pages encode 20 header bytes plus 176 bytes per point. Legacy ELSUPG01 pages remain read-only compatible: redundant text is framing-checked and discarded, never used as upload truth or rewritten during a read. Per-dispatch operation_revision rejects late callbacks for a newer attempt. Unknown dispatch remains unserved. supersede_unknown_build atomically checks the exact pending/current/source guards, stores its full unresolved build header in retired_generations, preserves all source/page/evidence rows and generation identity, then releases only the active pending slot for a never-reused successor. This is not settlement: cleanup refuses unresolved retired builds, including late old Create/Insert effects.
 
 commit_generation compares the full expected pending record, current predecessor/revision and wanted guard; it switches current, records predecessor cleanup and clears pending in one short transaction. It does not copy generation rows. Object/backend I/O occurs outside writers; uncertain pointer commit is observed read-only.
 

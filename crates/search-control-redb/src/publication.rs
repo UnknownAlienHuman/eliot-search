@@ -299,7 +299,7 @@ const fn source_error(error: crate::current_source::SourceControlError) -> Publi
         E::Stale => PublicationError::Stale,
         E::Deadline => PublicationError::Deadline,
         E::Cancelled => PublicationError::Cancelled,
-        E::RevisionExhausted => PublicationError::Limit,
+        E::RevisionExhausted | E::InventoryLimit => PublicationError::Limit,
         E::RandomUnavailable => PublicationError::Random,
         E::Corrupt | E::InvalidLocator | E::UnsupportedPlatform => PublicationError::Corrupt,
     }
@@ -1081,6 +1081,7 @@ pub fn commit_generation(
             let retired = RetiredGeneration {
                 generation: old.clone(),
                 remote_owned: true,
+                unresolved_build: None,
             };
             let bytes = serde_json::to_vec(&retired).map_err(|_| PublicationError::Corrupt)?;
             tx.open_table(RETIRED)
@@ -1133,6 +1134,7 @@ pub fn abandon_build(
         let retired = RetiredGeneration {
             generation: p.generation,
             remote_owned: p.created,
+            unresolved_build: None,
         };
         let bytes = serde_json::to_vec(&retired).map_err(|_| PublicationError::Corrupt)?;
         tx.open_table(RETIRED)
@@ -1147,7 +1149,72 @@ pub fn abandon_build(
     })
 }
 
-/// One exact retired generation with ownership proven by terminal creation.
+/// Releases only the active pending slot for an exact unresolved build attempt.
+///
+/// The full pending header is retained as a retired obligation; its source/page/evidence
+/// rows and the never-reused generation sequence are left unchanged.
+///
+/// # Errors
+/// Refuses a changed pending header, invalid or settled operation, and a full
+/// retired-obligation bound.
+pub fn supersede_unknown_build(
+    path: &Path,
+    expected: &PendingGeneration,
+    deadline: Instant,
+    cancel: &AtomicBool,
+) -> Result<()> {
+    edit(path, deadline, cancel, |tx, state| {
+        let pending = pending_mut(state, expected)?.clone();
+        if &pending != expected {
+            return Err(PublicationError::Stale);
+        }
+        if !pending.capture_complete
+            || pending.operation_revision == 0
+            || !match pending.in_flight {
+                Some(PendingOperation::Create) => !pending.created && pending.uploaded_pages == 0,
+                Some(PendingOperation::Insert(page)) => {
+                    pending.created
+                        && page == pending.uploaded_pages
+                        && page < pending.generation.page_count
+                }
+                None => false,
+            }
+        {
+            return Err(PublicationError::Unresolved);
+        }
+
+        let retired = RetiredGeneration {
+            generation: pending.generation.clone(),
+            remote_owned: pending.created,
+            unresolved_build: Some(pending),
+        };
+        let bytes = serde_json::to_vec(&retired).map_err(|_| PublicationError::Corrupt)?;
+        if bytes.len() > 4096 {
+            return Err(PublicationError::Limit);
+        }
+        let mut table = tx
+            .open_table(RETIRED)
+            .map_err(|_| PublicationError::Database)?;
+        if table.len().map_err(|_| PublicationError::Database)? >= MAX_RETIRED {
+            return Err(PublicationError::Limit);
+        }
+        let key = retired.generation.sequence.to_be_bytes();
+        if table
+            .get(key.as_slice())
+            .map_err(|_| PublicationError::Database)?
+            .is_some()
+        {
+            return Err(PublicationError::Corrupt);
+        }
+        table
+            .insert(key.as_slice(), bytes.as_slice())
+            .map_err(|_| PublicationError::Database)?;
+        state.pending = None;
+        Ok(())
+    })
+}
+
+/// One exact retired generation with ownership and unresolved build state preserved.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RetiredGeneration {
@@ -1155,6 +1222,13 @@ pub struct RetiredGeneration {
     pub generation: Generation,
     /// Whether this application received terminal creation success.
     pub remote_owned: bool,
+    /// Exact unresolved build header; cleanup must retain this row and all generation data.
+    #[serde(
+        default,
+        alias = "unresolved_create",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub unresolved_build: Option<PendingGeneration>,
 }
 
 /// Reads bounded whole-generation obligations before the caller opens any view.
@@ -1201,6 +1275,25 @@ pub fn retired_generations(
             {
                 return Err(PublicationError::Corrupt);
             }
+            if let Some(pending) = &retired.unresolved_build
+                && (retired.remote_owned != pending.created
+                    || pending.generation != *g
+                    || !pending.capture_complete
+                    || pending.operation_revision == 0
+                    || !match pending.in_flight {
+                        Some(PendingOperation::Create) => {
+                            !pending.created && pending.uploaded_pages == 0
+                        }
+                        Some(PendingOperation::Insert(page)) => {
+                            pending.created
+                                && page == pending.uploaded_pages
+                                && page < pending.generation.page_count
+                        }
+                        None => false,
+                    })
+            {
+                return Err(PublicationError::Corrupt);
+            }
             out.push(retired);
         }
         Ok(out)
@@ -1217,6 +1310,9 @@ pub fn finish_retirement(
     deadline: Instant,
     cancel: &AtomicBool,
 ) -> Result<()> {
+    if retired.unresolved_build.is_some() {
+        return Err(PublicationError::Unresolved);
+    }
     let sequence = retired.generation.sequence;
     let prefix = sequence.to_be_bytes();
     for definition in [SOURCES, PAGES, EVIDENCE] {
@@ -1288,7 +1384,10 @@ fn check_retired(tx: &WriteTransaction, state: &State, retired: &RetiredGenerati
         .ok_or(PublicationError::Stale)?;
     let actual: RetiredGeneration =
         serde_json::from_slice(value.value()).map_err(|_| PublicationError::Corrupt)?;
-    if actual.generation != *g || actual.remote_owned != retired.remote_owned {
+    if actual.generation != *g
+        || actual.remote_owned != retired.remote_owned
+        || actual.unresolved_build != retired.unresolved_build
+    {
         return Err(PublicationError::Stale);
     }
     Ok(())

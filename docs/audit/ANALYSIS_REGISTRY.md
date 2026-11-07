@@ -1,27 +1,26 @@
 # Work register
 
-Current checkpoint, 2026-11-06: S1/P1/Q1 are merged in their separately recorded Windows debug scopes.
-U1 connects read-only search to verified full retained units and citations. Source c843171fc430e794180d476168a9382add743736
-passed bounded source re-review and targeted final-pin native qualification. Earlier 2ae transport/budget
-evidence and initial 20c31 Unicode publications retain their own scopes below. U1 merge is next; R1 follows.
-The full product, convergence, later Exact/windows and installed baseline remain unfinished.
+Current checkpoint, 2026-11-06: U1 is merged at main f45a0f6e in its recorded Windows debug scopes.
+R1 source a492442e971978d4dea94fdc5a7d44b9d9275bd4 connects explicit file/tree index and refresh to retained
+preparation/publication/search. Source review and scoped native cases passed; R1 remains PARTIAL.
+Durable admission/reload, periodic triggering, later Exact/windows and installed-baseline work remain open.
 
 <a id="resume"></a>
 <a id="resume-after-interruption"></a>
 ## Next task
 
-**R1 after U1 merge: direct file/repository index and refresh through existing helpers.** Connect a real
-operator command to current source acquisition/retention, preparation and complete-generation publication
-without manual UUID assembly. Start from the [source rules](../../crates/search-source/AGENTS.md#connected-path-rules),
-[actual daemon caller](../../bins/eliot-searchd/src/native_root_command.rs) and
-[desired-state publication rule](../../crates/search-index-qdrant/search-publication/FUNCTIONS.md#desired-state).
-Use private concrete helpers; do not restore the removed reconciliation platform or add a new service/database.
+**R1 next: durable file/tree admission → writable-index startup reload.** The current
+[CLI index command](../../bins/eliot-search/FUNCTIONS.md#index-and-refresh) refreshes an explicit PATH through the
+[existing daemon helpers](../../bins/eliot-searchd/FUNCTIONS.md#index-and-refresh-path).
+Persist the admitted selection in existing owner state and reload it at writable startup; do not make search
+write or infer a complete inventory from inaccessible observations. Periodic policy remains required, but no
+resident trigger/lifetime/interval is implemented yet.
 
-Confirmed filesystem deletion must exclude registered membership from new generations without waiting for
-unregister. Preserve retained objects and already pinned views. Partial or inaccessible inventory is not
-confirmed removal. Add the smallest guarded membership mutation in existing CONTROL ownership; keep non-reset
-source/registration/wanted guards and perform acquisition/backend I/O outside writers. Ordinary search remains
-read-only and never reconciles or reparses a live source. Restart/inventory convergence is R1 work, not U1 proof.
+Confirmed in-scope deletion/exclusion already changes new-generation membership while retaining immutable bytes
+and published evidence. Unknown Create/Insert obligations remain preserved; only the active pending slot can
+move to a never-reused successor. No manual settlement/reset is required or authorized.
+Both query and writer hold the same exclusive root guard through output flush. A concurrent view manager is
+not the next requirement. Keep these changes in the concrete owners, without a new service/database/framework.
 
 <a id="work-register"></a>
 <a id="delivery-remaining"></a>
@@ -38,8 +37,8 @@ DONE below is the named delivered scope, not completion of the product.
 | S1 / DONE, Windows debug scope | F2 | current daemon/CLI + [source owners](../../crates/search-source/README.md#ownership), root, object store, control | One bounded file read → verified ObjectRef → guarded CurrentSourceRecord; final source 06bb6877 and distinct native scopes below. |
 | P1 / DONE, Windows debug scope | S1 | Materializer/unitizer, shared writer, CONTROL and actual prepare-source child | Complete artifact/current outcome with actual stored text/ranges, empty/Gap and guarded CAS; source d2ccb596 scopes below. |
 | Q1 / DONE, Windows debug scope | P1 | Actual daemon publisher, CONTROL and concrete bridge | Full corpus → exact backend/readback/canary → guarded current/evidence → validated PublishedView; source 3c33d831. |
-| U1 / ACCEPTED, Windows debug; merge pending | Q1 | CONTROL resolver, daemon/CLI, protocol/client | Read-only verified full retained units/citations; c843 targeted final-pin scope and earlier evidence below. |
-| R1 / READY after U1 merge | U1 | Existing source/preparation/publication helpers and CONTROL | Direct file/repository index/refresh, confirmed-deletion membership and restart/inventory convergence; preserve pinned generations. |
+| U1 / DONE, Windows debug scope | Q1 | CONTROL resolver, daemon/CLI, protocol/client | Read-only verified full retained units/citations; c843 targeted final-pin scope and earlier evidence below. |
+| R1 / PARTIAL, scoped Windows debug | U1 | CLI/daemon index helpers, source CONTROL and publication | Explicit file/tree refresh works; next durable admission and writable-startup reload, then actual periodic triggering/convergence. |
 | X1 / WAIT | R1 | Exact/query window and client owners | Retained exact denominator, same-session paging/expansion and expiry. |
 | M1 / WAIT | R1 | Retention and future stopped-root maintenance caller | Conservative collection/archive/import preserving originals. |
 | O1 / DEFERRED | Connected baseline + actual need | [Selected depth](../product/AGENT_ANALYSIS_FRAMEWORK.md#optional-depth) | Add only an actual source-backed consumer; remove unused scaffolds. |
@@ -86,6 +85,38 @@ hydration reuse. No application encryption, grants, OS-secret platform or second
 <a id="evidence-status"></a>
 <a id="execution-evidence"></a>
 ## Verification and known blockers
+
+R1 evidence scopes, Windows debug / Rust 1.98.0:
+
+- Source a492442: source review PASS. the ff4 check result is carried from 2ba0;
+  selected strict Clippy and both real builds exited 0. Current a492 daemon locked check/strict Clippy/build
+  exited 0. These are named source/build scopes, not a whole-R1 or installed-baseline qualification.
+- ff4 unchanged refresh preserved generation 2/source revisions with no extra collection. Replacing a file
+  with identical bytes changed its NativeFileKey and row revision 1 → 2 while retaining the same ObjectRef.
+  Edit A/delete B/add C produced generation 4: A 110 bytes, B absent, C/D correct and outside D's row stable.
+- a492 locked .ignore refusal (PID 83556) returned exit 2 INDEX_SCAN_INCOMPLETE with CONTROL, source/preparation,
+  membership and backend unchanged. Malformed ignore PID 88632 returned the same error; old generation 4 stayed
+  usable. Reparse PID 50484 returned INDEX_REPARSE_REFUSED. The pinned ignore 0.4.34 consumer uses strict I/O
+  propagation and captured CWD; only three upstream vendor source files changed, with provenance/licenses retained.
+- a492 positive index/search PIDs 113284/29448 exited 0 and returned exact A 110-byte text.
+  Managed-repository index/search PIDs 54432/58724 exited 0: 332 sources/478 points and verified Rust cards
+  of 8185/16379 bytes. All 340 tracked input hashes were unchanged; search observations were read-only.
+- Recovery ran on an OWNED COPY of the old Q1 root. Index PID 68840 installed fresh generation 2; query PID
+  102404 exited 0. Old generation 1's unresolved Create header remained. Late old worker PID 67144 created
+  generation 1 plus three points AFTER successor success; retry PID 74312 exited 0, kept current generation 2
+  and preserved generation 1's obligation. No manual settle/reset or adoption occurred.
+- Raw decoder witness PID 65140 exited 0: legacy ELSUPG01 and saved source/page/evidence rows (4/2/3) remained
+  byte-identical to the frozen copy. The ORIGINAL failed Q1 root remains unserved and untouched at its recorded
+  CONTROL SHA256 89D5D06FCDF04E14027F81BEC69B46300F6A8B491D82602FF4E4D7948D9EC361.
+- Operator Qdrant PID 484 ended (exit -1); operator exit 0 and zero owned processes were confirmed. Storage
+  was preserved. Native coverage is not claimed for persisted unknown INSERT headers, cancellation/restart/
+  lifetime cases. Create/Insert source-state isolation guards were reviewed; this does not promote them to
+  executed INSERT recovery proof. No complete R1 convergence or periodic lifecycle is qualified.
+
+Actual command/PID/exit records and the current binary pins are under
+C:\Development\Rust\targets\task-r1-native\run-20261106-v1: logs/r1-*.exit.json and bin/a4924/pins.json.
+Normal executed forms are initialize-data-root --data-root ROOT, index PATH --data-root ROOT --qdrant-url URL,
+then search --query TEXT [--limit N] with the same root/endpoint. Root initialization is explicit and once-only.
 
 U1 evidence scopes, Windows debug / Rust 1.98.0:
 
