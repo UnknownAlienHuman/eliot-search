@@ -16,10 +16,27 @@ use search_source_registry::{
 
 use crate::current_source::{
     NAMESPACE_KEY, PREPARATION_TABLE_NAME, SCHEMA_VERSION_KEY, SOURCE_ROWS, SOURCE_SCHEMA_VERSION,
-    SOURCE_STATE, catalogue_names, decode_record, read_namespace, read_source_by_id,
+    SOURCE_STATE, SourceControlError, catalogue_names, decode_record, read_namespace,
+    read_source_by_id,
 };
 
 const PREPARATIONS: TableDefinition<&[u8], &[u8]> = TableDefinition::new(PREPARATION_TABLE_NAME);
+
+pub(super) fn remove_source_preparation(
+    transaction: &WriteTransaction,
+    source_id: SourceId,
+) -> std::result::Result<(), SourceControlError> {
+    match transaction.open_table(PREPARATIONS) {
+        Ok(mut preparations) => {
+            preparations
+                .remove(source_id.as_bytes().as_slice())
+                .map_err(|_| SourceControlError::Database)?;
+            Ok(())
+        }
+        Err(TableError::TableDoesNotExist(_)) => Ok(()),
+        Err(_) => Err(SourceControlError::Database),
+    }
+}
 
 /// Bounded content or execution-limit reason for a preparation gap.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

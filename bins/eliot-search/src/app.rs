@@ -1,4 +1,4 @@
-//! Four root operations over one bounded, owned daemon child.
+//! Root operations over one bounded, owned daemon child.
 
 use search_source_registry::{MAX_PREPARATION_RESPONSE_BYTES, MAX_PUBLICATION_RESPONSE_BYTES};
 use std::env;
@@ -27,6 +27,7 @@ enum RootCommand {
     RetainFile,
     PrepareSource,
     PublishPrepared,
+    Index,
     Search,
 }
 
@@ -40,6 +41,7 @@ impl RootCommand {
             Self::RetainFile => "retain-file",
             Self::PrepareSource => "prepare-source",
             Self::PublishPrepared => "publish-prepared",
+            Self::Index => "index",
             Self::Search => "search",
         }
     }
@@ -53,6 +55,7 @@ impl RootCommand {
             Self::RetainFile => "--retain-file",
             Self::PrepareSource => "--prepare-source",
             Self::PublishPrepared => "--publish-prepared",
+            Self::Index => "--index",
             Self::Search => "--search-stdio",
         }
     }
@@ -137,6 +140,7 @@ enum DaemonResponse<'a> {
     Retained(&'a str),
     Prepared(&'a str),
     Published(&'a str),
+    Indexed(&'a str),
     Error(&'a str),
 }
 
@@ -188,6 +192,7 @@ fn command(value: &OsStr) -> Option<RootCommand> {
         "retain-file" => Some(RootCommand::RetainFile),
         "prepare-source" => Some(RootCommand::PrepareSource),
         "publish-prepared" => Some(RootCommand::PublishPrepared),
+        "index" => Some(RootCommand::Index),
         "search" => Some(RootCommand::Search),
         _ => None,
     }
@@ -204,6 +209,7 @@ fn is_daemon_root_flag(value: &OsStr) -> bool {
                 | "--retain-file"
                 | "--prepare-source"
                 | "--publish-prepared"
+                | "--index"
                 | "--search-stdio"
         )
     )
@@ -327,7 +333,10 @@ impl PublicationRequest {
         {
             return Ok(false);
         }
-        if !matches!(command, RootCommand::PublishPrepared | RootCommand::Search) {
+        if !matches!(
+            command,
+            RootCommand::PublishPrepared | RootCommand::Index | RootCommand::Search
+        ) {
             return Err("USAGE_ERROR");
         }
         if !matches!(command, RootCommand::Search) && argument != OsStr::new("--qdrant-url") {
@@ -382,6 +391,7 @@ fn parse(arguments: &[OsString]) -> Result<Parsed, &'static str> {
     let mut positional_root_seen = false;
     let mut config_seen = false;
     let mut source_file_seen = false;
+    let mut index_path_seen = false;
     let mut preparation = PreparationRequest::default();
     let mut publication = PublicationRequest::default();
     let mut index = 1;
@@ -435,15 +445,25 @@ fn parse(arguments: &[OsString]) -> Result<Parsed, &'static str> {
         } else if argument
             .to_str()
             .is_some_and(|value| value.starts_with("--"))
+            && !(matches!(root_command, RootCommand::Index) && !index_path_seen)
         {
             return Err("UNKNOWN_ARGUMENT");
         } else {
-            if positional_root_seen || data_root_seen {
-                return Err("USAGE_ERROR");
-            }
             validate_path(argument)?;
-            positional_root_seen = true;
-            settings.push(argument.clone());
+            if matches!(root_command, RootCommand::Index) {
+                if index_path_seen {
+                    return Err("USAGE_ERROR");
+                }
+                index_path_seen = true;
+                settings.push(OsString::from("--index-path"));
+                settings.push(argument.clone());
+            } else {
+                if positional_root_seen || data_root_seen {
+                    return Err("USAGE_ERROR");
+                }
+                positional_root_seen = true;
+                settings.push(argument.clone());
+            }
             index += 1;
         }
     }
@@ -452,8 +472,9 @@ fn parse(arguments: &[OsString]) -> Result<Parsed, &'static str> {
     }
     if matches!(
         root_command,
-        RootCommand::PublishPrepared | RootCommand::Search
+        RootCommand::PublishPrepared | RootCommand::Index | RootCommand::Search
     ) != publication.endpoint.is_some()
+        || (matches!(root_command, RootCommand::Index) != index_path_seen)
         || (publication.limit.is_some() && publication.query.is_none())
         || (matches!(root_command, RootCommand::Search) && publication.query.is_none())
     {
@@ -686,6 +707,7 @@ fn validated_snapshot(bytes: &[u8], command: RootCommand) -> Option<&str> {
         RootCommand::RetainFile
         | RootCommand::PrepareSource
         | RootCommand::PublishPrepared
+        | RootCommand::Index
         | RootCommand::Search => {
             return None;
         }
@@ -792,7 +814,11 @@ fn validated_response<'a>(
     preparation: &PreparationRequest,
 ) -> Option<DaemonResponse<'a>> {
     if output.stderr.bytes.is_empty() {
-        if matches!(command, RootCommand::PublishPrepared) {
+        if matches!(command, RootCommand::Index) {
+            validated_line(&output.stdout.bytes)
+                .filter(|line| *line == "{\"operation\":\"index\",\"state\":\"refreshed\"}")
+                .map(DaemonResponse::Indexed)
+        } else if matches!(command, RootCommand::PublishPrepared) {
             crate::published_response::validate(&output.stdout.bytes).map(DaemonResponse::Published)
         } else if matches!(command, RootCommand::PrepareSource) {
             crate::prepared_response::validate(
@@ -834,6 +860,7 @@ fn print_help() {
         "  eliot-search retain-file --file PATH [ROOT] [--data-root ROOT] [--config-file PATH] [--daemon PATH]\n",
         "  eliot-search prepare-source --source-id UUID [--unit N] [--data-root ROOT] [--config-file PATH] [--daemon PATH]\n",
         "  eliot-search publish-prepared --qdrant-url URL [--data-root ROOT] [--config-file PATH] [--daemon PATH]\n",
+        "  eliot-search index PATH --qdrant-url URL [--data-root ROOT] [--config-file PATH] [--daemon PATH]\n",
         "  eliot-search search --query TEXT [--limit N] --qdrant-url URL [--data-root ROOT] [--config-file PATH] [--daemon PATH]\n",
     ));
 }
@@ -907,7 +934,8 @@ pub fn run_main() -> i32 {
             DaemonResponse::Snapshot(result)
             | DaemonResponse::Retained(result)
             | DaemonResponse::Prepared(result)
-            | DaemonResponse::Published(result),
+            | DaemonResponse::Published(result)
+            | DaemonResponse::Indexed(result),
         ) => (write_line(&mut std::io::stdout().lock(), result), 0),
         (false, DaemonResponse::Error(error)) => (
             write_line(&mut std::io::stderr().lock(), error),

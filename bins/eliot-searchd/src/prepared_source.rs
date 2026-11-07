@@ -145,13 +145,20 @@ fn ready_response(
     response["unit"] = json!({"ordinal":ordinal,"start":unit.source_start,"end":unit.source_end,"line_start":unit.logical_line_start,"line_end":unit.logical_line_end,"starts_at_line_boundary":unit.starts_at_line_boundary,"ends_at_line_boundary":unit.ends_at_line_boundary,"text":text});
     Ok(response)
 }
-fn prepare(
+/// Verified current preparation returned to in-process command composition.
+pub(super) struct PreparedSource {
+    source: CurrentSourceRecord,
+    current: CurrentPreparation,
+    stored_artifact: Option<(ObjectRef, Vec<u8>)>,
+}
+
+/// Reuses or creates the selected source's verified preparation without CLI serialization.
+pub(super) fn prepare(
     root: &PlainRootGuard,
     id: SourceId,
-    ordinal: usize,
     deadline: Instant,
     cancel: &AtomicBool,
-) -> Result<Value, &'static str> {
+) -> Result<PreparedSource, &'static str> {
     check(deadline, cancel)?;
     let control = root.control_path();
     ensure_preparation_settings(&control, id, deadline, cancel)
@@ -180,11 +187,15 @@ fn prepare(
         PreparationOutcome::Ready { artifact } => {
             let stored = read_object(root, artifact, encoded_limit, deadline, cancel)
                 .map_err(ObjectStoreError::code)?;
-            let view = decode_prepared_utf8(&stored, &source, &settings, budget, deadline, cancel)
+            let _view = decode_prepared_utf8(&stored, &source, &settings, budget, deadline, cancel)
                 .map_err(PreparationError::code)?;
             let current = commit_preparation(&control, &capture, result, deadline, cancel)
                 .map_err(PreparationControlError::code)?;
-            ready_response(&source, &current, artifact, &view, ordinal)
+            Ok(PreparedSource {
+                source,
+                current,
+                stored_artifact: Some((artifact, stored)),
+            })
         }
         PreparationOutcome::Gap { reason } => {
             let current = commit_preparation(&control, &capture, result, deadline, cancel)
@@ -193,19 +204,59 @@ fn prepare(
                 Some(PreparationOutcome::Ready { artifact }) => {
                     let stored = read_object(root, artifact, encoded_limit, deadline, cancel)
                         .map_err(ObjectStoreError::code)?;
-                    let view =
+                    let _view =
                         decode_prepared_utf8(&stored, &source, &settings, budget, deadline, cancel)
                             .map_err(PreparationError::code)?;
-                    ready_response(&source, &current, artifact, &view, ordinal)
+                    Ok(PreparedSource {
+                        source,
+                        current,
+                        stored_artifact: Some((artifact, stored)),
+                    })
                 }
                 Some(PreparationOutcome::Gap { reason: actual }) if actual == reason => {
-                    let mut response = base(&source, &current);
-                    response["gap"] = json!(actual.code());
-                    Ok(response)
+                    Ok(PreparedSource {
+                        source,
+                        current,
+                        stored_artifact: None,
+                    })
                 }
                 _ => Err("PREPARATION_CONTROL_CORRUPT"),
             }
         }
+    }
+}
+
+fn response(
+    prepared: &PreparedSource,
+    ordinal: usize,
+    deadline: Instant,
+    cancel: &AtomicBool,
+) -> Result<Value, &'static str> {
+    let state = &prepared.current;
+    match state.outcome.as_ref().map(|outcome| outcome.result) {
+        Some(PreparationOutcome::Ready { artifact }) => {
+            let (stored_ref, stored) = prepared
+                .stored_artifact
+                .as_ref()
+                .filter(|(stored_ref, _)| *stored_ref == artifact)
+                .ok_or("PREPARATION_CONTROL_CORRUPT")?;
+            let view = decode_prepared_utf8(
+                stored,
+                &prepared.source,
+                &state.settings,
+                limits(),
+                deadline,
+                cancel,
+            )
+            .map_err(PreparationError::code)?;
+            ready_response(&prepared.source, state, *stored_ref, &view, ordinal)
+        }
+        Some(PreparationOutcome::Gap { reason }) => {
+            let mut value = base(&prepared.source, state);
+            value["gap"] = json!(reason.code());
+            Ok(value)
+        }
+        None => Err("PREPARATION_CONTROL_CORRUPT"),
     }
 }
 
@@ -220,7 +271,11 @@ pub fn run(
         Ok(guard) => guard,
         Err(e) => return emit_error(e.code()),
     };
-    let response = match prepare(&guard, id, ordinal, deadline, cancel) {
+    let prepared = match prepare(&guard, id, deadline, cancel) {
+        Ok(prepared) => prepared,
+        Err(code) => return emit_error(code),
+    };
+    let response = match response(&prepared, ordinal, deadline, cancel) {
         Ok(response) => response,
         Err(code) => return emit_error(code),
     };

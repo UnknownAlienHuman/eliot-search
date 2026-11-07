@@ -28,6 +28,7 @@ search-provider-protocol.workspace = true
 tokio = { workspace = true, features = ["rt", "io-std", "io-util", "time", "sync", "macros"] }
 serde_json.workspace = true
 toml.workspace = true
+ignore.workspace = true
 
 [lints]
 workspace = true

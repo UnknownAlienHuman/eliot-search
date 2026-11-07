@@ -22,6 +22,7 @@ pub enum RootCommand {
     RetainFile,
     PrepareSource,
     PublishPrepared,
+    Index,
     Search,
 }
 
@@ -35,6 +36,7 @@ impl RootCommand {
             Self::RetainFile => "retain-file",
             Self::PrepareSource => "prepare-source",
             Self::PublishPrepared => "publish-prepared",
+            Self::Index => "index",
             Self::Search => "search",
         }
     }
@@ -44,6 +46,7 @@ pub struct RootInvocation {
     pub(crate) command: RootCommand,
     pub(crate) data_root: PathBuf,
     pub(crate) source_file: Option<PathBuf>,
+    pub(crate) index_path: Option<PathBuf>,
     pub(crate) source_id: Option<SourceId>,
     pub(crate) unit: Option<usize>,
     pub(crate) publication: Option<PublicationRequest>,
@@ -87,6 +90,7 @@ fn print_help() {
         "  eliot-searchd --retain-file --source-file PATH [ROOT] [--data-root ROOT] [--config-file PATH]\n",
         "  eliot-searchd --prepare-source --source-id UUID [--unit N] [--data-root ROOT] [--config-file PATH]\n",
         "  eliot-searchd --publish-prepared --qdrant-url URL [--data-root ROOT] [--config-file PATH]\n",
+        "  eliot-searchd --index --index-path PATH --qdrant-url URL [--data-root ROOT] [--config-file PATH]\n",
         "  eliot-searchd --search-stdio --qdrant-url URL [--data-root ROOT] [--config-file PATH]\n",
     ));
 }
