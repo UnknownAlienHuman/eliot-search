@@ -8,6 +8,9 @@ deadline: Instant, cancelled: &AtomicBool)` returns QueryCompletion or content-f
 raw_exact_owned_child has the same ownership/deadline arguments with RawExactRequest and returns the same
 QueryCompletion. Both methods use the serviced child I/O/reap owner; the raw result is additionally validated
 against its literal, published-source selection and output limit. Raw matches stay in bytes_hex form.
+decoded_utf8_owned_child takes DecodedUtf8Request with the same executable/args/deadline/cancellation ownership.
+It validates the complete decoded terminal against literal, selection, retained references, identity ranges
+and item bound before returning QueryCompletion. It performs no materialization or on-the-fly source decoding.
 The CLI supplies native invocation settings, starts the original deadline before setup and owns safe rendering.
 
 The CLI explicitly calls enable_ctrl_c() before its query. Other callers leave signal handling disabled.

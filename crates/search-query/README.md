@@ -9,8 +9,11 @@ prepare, publish or reopen live paths. The actual consumers are
 FIRST RAW Exact now scans selected committed retained Source inventory through
 [raw_exact.rs](../../bins/eliot-searchd/src/raw_exact.rs), including Empty/PreparationGap inputs without points.
 It matches UTF-8 literal bytes over undecoded input without Qdrant or latest/live fallback, returning verified
-raw ranges/hex and separate scan/presentation accounting. X1 is PARTIAL: DecodedUtf8 identity-map is next;
-extracted has no producer/route, and Continue/Expand/expiry/held-output windows remain future work.
+raw ranges/hex and separate scan/presentation accounting. Retained DecodedUtf8 also works through
+[decoded_exact.rs](../../bins/eliot-searchd/src/decoded_exact.rs): saved Prepared UTF-8 plus verified Source,
+identity byte map, both refs/ranges and exact text. It neither decodes/materializes input on demand nor
+normalizes/reprepares it. X1 is PARTIAL: Continue/Expand/expiry and held-output windows are next;
+extracted has no real producer/implemented route, and arbitrary non-UTF-8 needles remain unsupported.
 There is no authentication/grant/revocation system in
 [the local product](../../docs/architecture/LOCAL_SCOPE.md).
 

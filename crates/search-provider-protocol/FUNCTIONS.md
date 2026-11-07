@@ -3,13 +3,13 @@
 ## Actual API
 
 `SearchRequest { query, limit }` is shared by CLI and daemon. `ClientFrame` has JSON tag `type`:
-Query and RawExact carry `request_id = 1`, `remaining_ms` and `request`; Cancel carries that same ID.
+Query, RawExact and DecodedUtf8 carry `request_id = 1`, `remaining_ms` and `request`; Cancel carries that same ID.
 Query UTF-8 is nonempty, at most 4096 bytes, without NUL; limit is 1..=64. Remaining duration is
 1..=120000 milliseconds. The parent samples it at send and independently enforces its original deadline.
 The receiver charges observed partial-frame time to the duration; processes never exchange Instant values.
 
 `Terminal { request_id, outcome }` has one `QueryOutcome` tagged `status`: Complete contains
-generation, ordered items and stop (complete/output_limit); RawExact contains its separately validated raw result;
+generation, ordered items and stop (complete/output_limit); RawExact/DecodedUtf8 contain their separately validated results;
 Cancelled contains no result; Failed carries
 a validated 1..=64 byte uppercase/digit/underscore FailureCode. Unknown and duplicate DTO fields fail.
 
@@ -46,6 +46,21 @@ The client validates literal bytes, selection and limit against the complete cor
 prepare_raw_exact encodes the producer's already bounded whole-item prefix under the same 8 MiB total frame
 cap; it clips no match/range and rejects an oversized frame. Ranked prepare_complete below retains its own
 whole-card sizing behavior. Both operation variants use the existing Cancel/terminal/EOF/reap path.
+
+## Retained DecodedUtf8 request and result
+
+DecodedUtf8Request has the same literal/source_ids/limit bounds as RawExactRequest and a distinct operation tag.
+DecodedUtf8Match carries RawSourceRef/input, Prepared ObjectRef, representation_start/end, source_start/end and
+exact text. The source and representation ranges must match the verified retained UTF-8 identity map; text byte
+length equals the range and request literal. The wire validates structure/request binding; the daemon verifies
+the actual stored objects, saved representation and source equality before producing the match.
+
+DecodedUtf8Gap has prepared=None only for PREPARATION_GAP; SOURCE_OBJECT_MISSING and PREPARED_OBJECT_MISSING
+retain Some(selected Ready ObjectRef). Integrity failure is a Failed terminal. Result counters include
+selected_sources/scanned_sources/gap_sources/scanned_bytes/matches plus items, scan_complete/complete_negative
+and stop. A presentation prefix is separate from full representation scanning. Any representation gap prevents
+complete negative. prepare_decoded_utf8 encodes the bounded result under the unchanged 8 MiB total cap.
+The production codec's correlated Cancel and remaining-duration/QUERY_DEADLINE path is shared with other queries.
 
 ## Framing and bounded output
 

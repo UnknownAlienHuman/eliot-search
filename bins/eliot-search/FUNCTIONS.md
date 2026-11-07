@@ -57,6 +57,20 @@ imply incomplete scanning. Missing Source is an explicit Gap; corruption fails. 
 all selected objects verified/scanned with zero matches and no missing input. The total frame remains 8 MiB.
 This is not arbitrary byte-needle syntax, a decoded/extracted mode or a reusable window/expansion locator.
 
+## Retained DecodedUtf8 Exact
+
+    eliot-search exact --decoded-utf8 --literal TEXT --data-root ROOT [--source-id UUID] [--limit N] [--config-file PATH] [--daemon PATH]
+
+--decoded-utf8 and --raw are mutually exclusive. This command scans the real SAVED Prepared UTF-8 representation
+and verified retained Source with an identity byte map; it does not decode/reprepare live or raw input on demand.
+Output carries Source/Prepared refs, both byte ranges and exact matching text, including retained BOM/CRLF.
+Matching spans the full representation across stored unit boundaries. No Qdrant endpoint is required.
+
+The literal/source selection/output bounds remain 4096 UTF-8 bytes, at most 64 items and 8 MiB total framing.
+PrepGap or missing input/artifact produces an explicit representation gap; corruption fails. Output cuts do
+not stop the scan, and gaps prevent complete negative. X1 remains PARTIAL: session/windows are not delivered;
+there is no extracted producer/route or arbitrary non-UTF-8 needle syntax.
+
 ## Retained result
 
 The daemon returns one bounded JSON line only after the source object has been read back and the current source row committed. The CLI validates the operation, random namespace/source IDs, nonzero revisions, source ObjectRef version/kind/digest/length, native file-key shape, and the verified-readback marker before printing it.
