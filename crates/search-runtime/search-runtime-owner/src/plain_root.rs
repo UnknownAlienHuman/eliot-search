@@ -1242,7 +1242,13 @@ pub fn open_plain_for_index(
     match inspect_control_format(&guard.control_path(), operation) {
         Ok(()) => {}
         Err(PlainRootError::NeedsRepair) => {
-            recover_plain_control(&guard.control_path(), deadline, cancellation)
+            // Anonymous tempfile ownership gives OS cleanup even if the process
+            // is killed. Use the canonical root's parent, never its classified layout.
+            let canonical_root = after_io(path.canonicalize(), operation)?;
+            let parent = canonical_root.parent().ok_or(PlainRootError::InvalidPath)?;
+            operation.check()?;
+            let candidate = after_io(tempfile::tempfile_in(parent), operation)?;
+            recover_plain_control(&guard.control_path(), candidate, deadline, cancellation)
                 .map_err(control_error)?;
         }
         Err(error) => return Err(error),

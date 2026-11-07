@@ -6,8 +6,8 @@
 //! proof. The caller holds root exclusion for initialization and discard.
 
 use std::fmt;
-use std::fs::{File, OpenOptions};
-use std::io;
+use std::fs::{File, Metadata, OpenOptions};
+use std::io::{self, Read, Seek, Write};
 use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -621,9 +621,10 @@ pub fn inspect_plain_control(
     inspect_open_file(file, deadline, cancellation)
 }
 
-/// Recovers an existing CONTROL file only after read-only inspection requires repair.
+/// Validates recovery on an owned copy before recovering the existing CONTROL file.
 ///
 /// The caller must hold exclusive ownership of a validated current application root.
+/// `candidate` must be a newly created, empty temporary file outside that root.
 /// No format row, user table, or savepoint is created, removed, or reset here.
 ///
 /// # Errors
@@ -631,14 +632,26 @@ pub fn inspect_plain_control(
 /// Cancellation or the original deadline aborts recovery through redb's callback.
 pub fn recover_plain_control(
     path: &Path,
+    mut candidate: File,
     deadline: Instant,
     cancellation: &Arc<AtomicBool>,
 ) -> Result<(), PlainControlError> {
+    check(deadline, cancellation)?;
+    let mut original = open_recovery_source(path)?;
+    let snapshot = original.metadata().map_err(|error| map_io_error(&error))?;
     match inspect_plain_control(path, deadline, cancellation) {
         Ok(()) => return Ok(()),
         Err(PlainControlError::NeedsRepair) => {}
         Err(error) => return Err(error),
     }
+    copy_recovery_source(
+        &mut original,
+        &mut candidate,
+        snapshot.len(),
+        deadline,
+        cancellation,
+    )?;
+    verify_recovery_source(path, &original, &snapshot, deadline, cancellation)?;
     check(deadline, cancellation)?;
     let repair_cancel = Arc::clone(cancellation);
     let mut builder = redb_plain::Builder::new();
@@ -649,8 +662,135 @@ pub fn recover_plain_control(
                 session.abort();
             }
         });
-    // open(), unlike create()/create_file(), cannot initialize an empty or foreign file.
-    let opened = builder.open(path);
+    // The maintained file-backend API receives a complete nonempty owned copy.
+    // Its recovery/integrity settings are exactly those used for the original.
+    let backend = FileBackend::new(candidate).map_err(map_database_error)?;
+    inspect_recovered_control(builder.create_with_backend(backend), deadline, cancellation)?;
+    verify_recovery_source(path, &original, &snapshot, deadline, cancellation)?;
+    match inspect_plain_control(path, deadline, cancellation) {
+        Err(PlainControlError::NeedsRepair) => {}
+        Ok(()) => return Err(PlainControlError::Busy),
+        Err(error) => return Err(error),
+    }
+    // Only the validated, unchanged original is now opened writable. This API
+    // cannot initialize an empty or foreign file, and never copies candidate bytes back.
+    check(deadline, cancellation)?;
+    let recovered = inspect_recovered_control(builder.open(path), deadline, cancellation);
+    // Keep the retained identity handle alive through the original engine's close.
+    drop(original);
+    recovered
+}
+
+fn open_recovery_source(path: &Path) -> Result<File, PlainControlError> {
+    let mut options = OpenOptions::new();
+    options.read(true);
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        // Keep the original named file identity fixed while allowing the later
+        // engine writer. Denying DELETE sharing prevents replacement/rename.
+        options.share_mode(0x0000_0003); // FILE_SHARE_READ | FILE_SHARE_WRITE
+    }
+    options.open(path).map_err(|error| map_io_error(&error))
+}
+
+fn copy_recovery_source(
+    original: &mut File,
+    candidate: &mut File,
+    length: u64,
+    deadline: Instant,
+    cancellation: &AtomicBool,
+) -> Result<(), PlainControlError> {
+    if length == 0 || opened_file_len(candidate, deadline, cancellation)? != 0 {
+        return Err(PlainControlError::Unsupported);
+    }
+    original.rewind().map_err(|error| map_io_error(&error))?;
+    candidate.rewind().map_err(|error| map_io_error(&error))?;
+    let mut remaining = length;
+    let mut buffer = vec![0_u8; 64 * 1024];
+    while remaining != 0 {
+        check(deadline, cancellation)?;
+        let limit = usize::try_from(remaining.min(64 * 1024))
+            .map_err(|_| PlainControlError::Unavailable)?;
+        let count = original
+            .read(&mut buffer[..limit])
+            .map_err(|error| map_io_error(&error))?;
+        if count == 0 {
+            return Err(PlainControlError::Busy);
+        }
+        check(deadline, cancellation)?;
+        candidate
+            .write_all(&buffer[..count])
+            .map_err(|error| map_io_error(&error))?;
+        remaining -= u64::try_from(count).map_err(|_| PlainControlError::Unavailable)?;
+    }
+    check(deadline, cancellation)?;
+    if original
+        .read(&mut buffer[..1])
+        .map_err(|error| map_io_error(&error))?
+        != 0
+    {
+        return Err(PlainControlError::Busy);
+    }
+    candidate.sync_all().map_err(|error| map_io_error(&error))?;
+    check(deadline, cancellation)?;
+    if opened_file_len(candidate, deadline, cancellation)? != length {
+        return Err(PlainControlError::Busy);
+    }
+    Ok(())
+}
+
+fn verify_recovery_source(
+    path: &Path,
+    original: &File,
+    snapshot: &Metadata,
+    deadline: Instant,
+    cancellation: &AtomicBool,
+) -> Result<(), PlainControlError> {
+    check(deadline, cancellation)?;
+    let held = original.metadata().map_err(|error| map_io_error(&error))?;
+    let named = std::fs::symlink_metadata(path).map_err(|error| map_io_error(&error))?;
+    if !held.is_file() || !named.is_file() || named.file_type().is_symlink() {
+        return Err(PlainControlError::Unsupported);
+    }
+    let modified = snapshot.modified().map_err(|error| map_io_error(&error))?;
+    if held.len() != snapshot.len()
+        || named.len() != snapshot.len()
+        || held.modified().map_err(|error| map_io_error(&error))? != modified
+        || named.modified().map_err(|error| map_io_error(&error))? != modified
+    {
+        return Err(PlainControlError::Busy);
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        if held.dev() != snapshot.dev()
+            || held.ino() != snapshot.ino()
+            || named.dev() != snapshot.dev()
+            || named.ino() != snapshot.ino()
+        {
+            return Err(PlainControlError::Busy);
+        }
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        if held.creation_time() != snapshot.creation_time()
+            || named.creation_time() != snapshot.creation_time()
+            || named.file_attributes() & 0x0000_0400 != 0
+        // FILE_ATTRIBUTE_REPARSE_POINT
+        {
+            return Err(PlainControlError::Busy);
+        }
+    }
+    check(deadline, cancellation)
+}
+
+fn inspect_recovered_control(
+    opened: Result<redb_plain::Database, redb_plain::DatabaseError>,
+    deadline: Instant,
+    cancellation: &AtomicBool,
+) -> Result<(), PlainControlError> {
     let after_open = check(deadline, cancellation);
     match opened {
         Ok(database) => {
