@@ -12,6 +12,8 @@ query state or lifecycle ledger.
         -> Result<PlainRootGuard, PlainRootError>
     open_plain(&Path, Instant, &AtomicBool)
         -> Result<PlainRootGuard, PlainRootError>
+    open_plain_with_recovery(&Path, Instant, &Arc<AtomicBool>)
+        -> Result<PlainRootGuard, PlainRootError>
     discard_incomplete_plain(&Path, Instant, &AtomicBool)
         -> Result<(), PlainRootError>
 
@@ -45,7 +47,8 @@ eliot-plain-root-initializing-v1\n.
 | Reserved root.importing entry | IncompleteImport |
 
 Unknown or unsupported roots are classified before initialization creates a lock or other file. Existing roots
-are never repaired by inspect or open. Current validates the manifest and calls inspect_plain_control; it does
+are never repaired by inspect_plain or ordinary open_plain. The separate writable-open capability is described
+below. Current validates the manifest and calls inspect_plain_control; it does
 not infer a valid database from file presence and does not require an active control database to be
 semantically empty.
 
@@ -64,7 +67,7 @@ probe uses the same opened file for its 64 MiB byte ceiling and accepts both ven
 metadata report nonempty; hitting the ceiling returns the distinct ProbeLimit error. Zero-length staging is
 accepted as empty. Only explicit initialization under the lock and exact init marker may complete the control
 format on a proven empty preformat database. Current still requires the format metadata. This module never
-parses or copies database bytes. The legacy redb 2.6.3 dependency remains with legacy consumers only.
+parses or copies database bytes; the control owner owns the guarded recovery copy and maintained redb operations.
 
 ## Stable lock and initialization
 
@@ -132,10 +135,24 @@ Open accepts only Current, acquires the existing lock without creating a file, a
 before returning the guard. Stores open afterward and must close before the guard drops. There is no
 root-directory file handle, custom NT path, ancestor lock graph or silent legacy fallback.
 
+## Guarded writable open
+
+open_plain_with_recovery expresses repair permission, not an Index-specific constructor or routing wrapper.
+Its current consumer is Index, including watch's owned Index children. It validates the existing layout,
+takes root.lock and revalidates before any writable engine open. Ordinary read-only open/inspection/query
+continue through their non-repairing paths and can return NeedsRepair.
+
+On NeedsRepair, the root owner supplies an owned anonymous temporary file outside the root to
+[recover_plain_control](../../search-control-redb/FUNCTIONS.md#guarded-engine-recovery). CONTROL validates
+recovery/integrity and application format on that copy, rechecks the original, then recovers/clean-closes/
+inspects the original through maintained redb. No candidate bytes are copied back, no root is reset and no
+unknown/corrupt/unsupported format is initialized. The guard and original deadline/cancellation remain live.
+This capability is not incomplete-initialization repair, source reconciliation or an alternate root lifecycle.
+
 ## Crate surface and physical removal
 
 Only src/lib.rs and src/plain_root.rs remain. The public plain_root module and crate-root reexports expose
-the four three-argument operations above, PlainRootStatus, PlainRootInspection, PlainRootGuard, PlainRootError,
+the operations above, including guarded writable opening, PlainRootStatus, PlainRootInspection, PlainRootGuard, PlainRootError,
 PlainRootResult, and the existing layout constants LOCK_FILE, MANIFEST_FILE, INIT_MARKER,
 INCOMPLETE_IMPORT_MARKER, OBJECT_DIR, CONTROL_DIR and CONTROL_DB_FILE.
 

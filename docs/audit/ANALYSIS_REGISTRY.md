@@ -1,25 +1,26 @@
 # Work register
 
-Current checkpoint, 2026-11-07: U1 and the explicit-index R1 slice are merged through main 86822d10.
-R1 source ec9fb6f09b84ea30c1413c0f0177800f58fd857e adds durable File/Tree selections and bare-index reload.
-Source and scoped native checks passed; R1 remains PARTIAL. Periodic triggering/lifetime/interval, later
-Exact/windows and installed-baseline work remain unfinished.
+Current checkpoint, 2026-11-07: main includes PR #631's durable selections/reload.
+Source fef129fd0e5f89862f422b9c7b733090444997aa adds foreground watch and guarded writable CONTROL recovery.
+Source review, changed-owner checks/strict Clippy and scoped native cases passed. R1 remains PARTIAL:
+watch does not close all Stage 3A recovery/convergence/lifetime gates or the full product.
 
 <a id="resume"></a>
 <a id="resume-after-interruption"></a>
 ## Next task
 
-**R1 next: implement the actual foreground periodic-refresh consumer.** Durable admission and writable-startup
-reload now exist: [index PATH](../../bins/eliot-search/FUNCTIONS.md#index-and-refresh) admits/refreshes only that
-scope; bare index reloads all stored selections through the existing daemon read/scan plan. Add the concrete
-foreground trigger with its real lifetime/interval; periodic policy alone is not an implemented consumer.
-No resident watcher/interval currently exists.
+**R1 next: qualify the remaining Stage 3A boundaries.** The [foreground watch](../../bins/eliot-search/FUNCTIONS.md#foreground-watch)
+consumer now repeats saved-selection Index with bounded owned-child I/O, cancellation and after-completion
+sleep. [Guarded writable open](../../crates/search-runtime/search-runtime-owner/FUNCTIONS.md#guarded-writable-open)
+permits validated CONTROL engine recovery for Index; search remains read-only.
 
-Keep explicit File precedence, union deduplication, known selection kind through absence/re-add and only
-confirmed absence removal. A still-present ignored file is not removal. Legacy source rows neither create
-admissions nor disappear from publication validation. Search stays read-only. Query and writer retain the
-same exclusive root guard through output flush; a concurrent view manager is not the next prerequisite.
-Unknown Create/Insert obligations and retained/pinned evidence remain preserved; no manual settlement/reset.
+Remaining qualification includes unknown Insert-header recovery, commit/install interruption, stale/ABA work,
+pinned-view lifetime and whole-generation cleanup. Prior S1 guard evidence may be reused only at its actual
+scope. A concurrent view framework is not the default prerequisite: query and writer retain the existing
+exclusive root guard through output. Do not invent a replacement for the deleted task queue.
+
+After R1 acceptance, deliver X1 literal Exact plus same-session Continue/Expand/expiry, then M1 stopped-root
+archive/import, then V1 relevance/scale/installed release qualification. Foreground watch is not full R1 acceptance.
 
 <a id="work-register"></a>
 <a id="delivery-remaining"></a>
@@ -37,11 +38,11 @@ DONE below is the named delivered scope, not completion of the product.
 | P1 / DONE, Windows debug scope | S1 | Materializer/unitizer, shared writer, CONTROL and actual prepare-source child | Complete artifact/current outcome with actual stored text/ranges, empty/Gap and guarded CAS; source d2ccb596 scopes below. |
 | Q1 / DONE, Windows debug scope | P1 | Actual daemon publisher, CONTROL and concrete bridge | Full corpus → exact backend/readback/canary → guarded current/evidence → validated PublishedView; source 3c33d831. |
 | U1 / DONE, Windows debug scope | Q1 | CONTROL resolver, daemon/CLI, protocol/client | Read-only verified full retained units/citations; c843 targeted final-pin scope and earlier evidence below. |
-| R1 / PARTIAL, scoped Windows debug | U1 | CLI/daemon index helpers, source CONTROL and publication | Durable selection and scoped/bare union refresh work; next actual foreground periodic consumer with lifetime/interval and convergence. |
+| R1 / PARTIAL, scoped Windows debug | U1 | CLI/daemon index helpers, source CONTROL and publication | Durable selection, scoped/bare refresh and foreground watch work; remaining Stage 3A recovery/convergence/lifetime qualification is next. |
 | X1 / WAIT | R1 | Exact/query window and client owners | Retained exact denominator, same-session paging/expansion and expiry. |
-| M1 / WAIT | R1 | Retention and future stopped-root maintenance caller | Conservative collection/archive/import preserving originals. |
+| M1 / WAIT | X1 | Retention and future stopped-root maintenance caller | Conservative collection/archive/import preserving originals. |
 | O1 / DEFERRED | Connected baseline + actual need | [Selected depth](../product/AGENT_ANALYSIS_FRAMEWORK.md#optional-depth) | Add only an actual source-backed consumer; remove unused scaffolds. |
-| V1 / WAIT | Connected shipped paths | [Qualification](../implementation/TEST_CUTOVER.md), #215 | Measured relevance/scale/platform/release and installed-baseline evidence. |
+| V1 / WAIT | X1/M1 shipped paths | [Qualification](../implementation/TEST_CUTOVER.md), #215 | Measured relevance/scale/platform/release and installed-baseline evidence. |
 
 [Implementation](../implementation/README.md#delivery-sequence) owns delivery order. Stage 3B is conditional
 on measured Stage 3A budgets failing; there is no separate global rewrite programme.
@@ -84,6 +85,39 @@ hydration reuse. No application encryption, grants, OS-secret platform or second
 <a id="evidence-status"></a>
 <a id="execution-evidence"></a>
 ## Verification and known blockers
+
+Watch/recovery evidence, Windows debug / Rust 1.98.0:
+
+- Final source fef129fd: source review PASS; changed-owner locked checks/strict Clippy passed, final daemon
+  build exited 0 with zero warnings. The capability is open_plain_with_recovery; the export/caller rename
+  has no alias or behavior change. Runtime AGENTS policy is unchanged.
+- Earlier basic watch at a7 emitted 11 success reports: automatic add/edit/delete/re-add advanced generations
+  3–6; four more unchanged iterations kept generation 6. Parent-only kill PID 55712 exited -1 and owned child
+  40264 exited 130; reopen/index/query exited 0. This remains a7 provenance, not a final-ae parent-kill run.
+- ae802 actual Ctrl-C during sleep PID 70732 and active work PID 93948 exited 130 with no Index survivors.
+  Valid dirty CONTROL refused read-only access with byte identity, then Index/Search PIDs 110992/47072 exited 0;
+  persistent savepoint [1] remained [1] and application guards held. Dirty unsupported/missing-format cases
+  PIDs 104800/47040 refused with original bytes unchanged; the sentinel was verified on a recovered COPY.
+- ae timeout peer 41852 exited 1; watch reported DAEMON_TIMEOUT and was stopped at exit 130 (PID 119644).
+  Reopen PID 91144 reported current/exit 0. 262144-byte stdout/stderr peers 101952/112372 exited 0;
+  watch PIDs 72140/82724 typed-refused oversized output, exited 130 on stop and left no peers.
+  Three inherited-pipe peers and holders exited 0; watch 28028 exited 130. The next iteration began
+  202.1 ms after holder exit with a 200-ms interval.
+- ae final backpressure run prefilled 4096 bytes before launch and held the read end open/unread: one peer
+  109464 exited 0, watch stayed alive 401 ms without a second peer. Actual Ctrl-C sender 48448 exited 0;
+  watch 52192 exited 130 within 69 ms and all were gone. Failed closed-output attempts are separate failures,
+  not passing backpressure evidence. Real Index durations were 105.8/100.4/100.8 ms at interval 1 ms;
+  next starts were 9.9/9 ms AFTER prior exits, with no overlap. Watch 49292 exited 130.
+- Final fef Index/reopen/search PIDs 73944/23440/27592 and owned daemon children exited 0: exact 41 UTF-8 bytes
+  including CRLF, generation 6, citation [0,41). Pins are in bin/fef129fd/pins.json below.
+  Operator Qdrant 97720 was guarded-stopped (-1), operator 86970 exited 0; zero owned processes were confirmed
+  at 07:08:59 UTC and storage was preserved. Measurements describe those runs, not universal OS timing.
+- Exact pre-spawn signal boundary, memory/performance, other platforms, power loss, unknown Insert-header
+  recovery and broader Stage 3A gates remain NOT_RUN/unqualified. Scoped watch success does not close R1.
+
+Native commands, PID/exit/pipe observations and exact pins remain under
+C:\Development\Rust\targets\task-r1-watch-native\run-20261107-v1, with final bin/fef129fd/pins.json.
+The a7, ae802 and final fef scopes above are not relabelled as reruns of one another.
 
 Selection-reload evidence, Windows debug / Rust 1.98.0:
 

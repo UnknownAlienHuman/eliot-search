@@ -1,6 +1,6 @@
 # Code entrypoints and change map
 
-Current binaries expose root operations, index [PATH], retain-file, prepare-source, publish-prepared and read-only search. Native binary and library
+Current binaries expose root operations, index [PATH], retain-file, prepare-source, publish-prepared, foreground watch and read-only search. Native binary and library
 cases have distinct exact-source scopes in the [registry](../audit/ANALYSIS_REGISTRY.md#evidence-status).
 U1 targeted Windows debug acceptance is at c843171, with earlier transport/budget and initial-publication scopes kept separate.
 The [owner map](README.md#owners) defines responsibilities; a row does not require keeping a crate.
@@ -22,6 +22,7 @@ routes are removed. Check the real binary; package names and retained workspace 
       standalone help/version → local output, no daemon
       root subcommands        → owned eliot-searchd child with matching --operation and settings
                               → bounded root response validation → output
+      watch                   → repeated owned saved-selection Index → cleanup → cancellable interval
       index [PATH]            → same owned child → closed refreshed result → output
       retain-file --file PATH → same owned child → bounded retained-source response validation → output
       prepare-source          → same owned child → parsed source ID/unit-bound stored-unit validation → output
@@ -53,13 +54,16 @@ routes are removed. Check the real binary; package names and retained workspace 
 | initialize-data-root | --initialize-data-root | initialize_plain |
 | check-existing-root-owner | --check-existing-root-owner | open_plain |
 | discard-incomplete-data-root | --discard-incomplete-data-root | discard_incomplete_plain |
-| index [PATH] --qdrant-url URL | --index [--index-path PATH] with matching settings | open_plain → capture_selections/admit_selection → unique scoped/union scan → retain/prepare/remove_current_sources/publish |
+| watch [--interval-ms N] --qdrant-url URL | owned --index --index-owner-stdio child, no PATH | app/watch.rs → one bounded iteration → observed cleanup → after-completion sleep |
+| index [PATH] --qdrant-url URL | --index [--index-path PATH] with matching settings | open_plain_with_recovery → capture_selections/admit_selection → unique scoped/union scan → retain/prepare/remove_current_sources/publish |
 | retain-file --file PATH | --retain-file --source-file PATH | open_plain → acquire_file → store_object/read_object → commit_current_source |
 | prepare-source --source-id UUID [--unit N] | --prepare-source --source-id UUID [--unit N] | open_plain → prepared_source::run → retained read/prepare/store/decode → commit_preparation |
 | publish-prepared --qdrant-url URL | --publish-prepared with matching settings | open_plain → published_corpus::run → compact references/Prepared hydration/backend/current/view → generation state |
 | search --query TEXT [--limit N] --qdrant-url URL | --search-stdio with framed SearchRequest | framed_search::run → pin_published → verified_query::execute → full retained unit/citation |
 
-Root functions take (&Path, Instant, &AtomicBool). Init/open return PlainRootGuard; inspection returns
+Read-only/root operator functions take (&Path, Instant, &AtomicBool); open_plain_with_recovery takes the shared
+Arc cancellation flag for maintained engine repair callbacks. Index alone uses that capability.
+Init/open return PlainRootGuard; inspection returns
 PlainRootInspection and discard returns unit. The daemon holds guards through terminal root output.
 Its original deadline/cancellation is passed to root/control effects.
 
@@ -108,7 +112,8 @@ Do not restore deleted daemon implementations or unconsumed APIs because an olde
 ## Keep the implementation small
 
 That read-only query → pinned published evidence → verified retained text/citation → CLI path is connected.
-Scoped index and bare selection reload now use those helpers. Next R1 connects an actual foreground periodic
-refresh consumer; no trigger/lifetime/interval exists. Confirmed absence and inaccessible inventory stay distinct.
+Scoped index, bare selection reload and foreground watch now use those helpers. R1 next qualifies remaining
+recovery/convergence/lifetime gates; it does not require a concurrent view framework by default.
+Confirmed absence and inaccessible inventory stay distinct.
 Build the actual owners and delete displaced code with its callers. Root-only command checks, helper-native
 probes and retained workspace libraries do not qualify that pipeline or an installed baseline.

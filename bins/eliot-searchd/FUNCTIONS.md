@@ -6,8 +6,9 @@ The daemon owns native invocation, bootstrap settings, root dispatch and factual
 
     eliot-searchd --index [--index-path PATH] --qdrant-url URL [--data-root ROOT] [--config-file PATH]
 
-[native_root_command.rs](src/native_root_command.rs) opens the existing current root once; initialization is
-explicit. index_sources carries that same guard and original 120-second deadline through scan, typed retain/
+[native_root_command.rs](src/native_root_command.rs) calls open_plain_with_recovery once for Index;
+initialization remains explicit. This is guarded repair-permitted opening, not command routing inside the root
+owner. Ordinary open/query remain read-only. index_sources carries that same guard and original 120-second deadline through scan, typed retain/
 prepare, membership update, publication and output. It does not chain JSON-producing commands or reacquire
 the root between stages.
 
@@ -25,9 +26,11 @@ metadata per selection, not complete file-list copies per scope. This bound is s
 performance qualification.
 
 Admission/kind remain after absence/re-add. No admission returns INDEX_SELECTION_REQUIRED; legacy source rows
-are not promoted, implicitly prepared or omitted from complete publication checks. R1 next connects an actual
-foreground periodic consumer; its trigger/lifetime/interval are not implemented. Query and writer share root
-exclusion through output, so a concurrent view manager is not the next prerequisite.
+are not promoted, implicitly prepared or omitted from complete publication checks. Foreground CLI watch now
+repeats saved-selection Index with no overlap and a new original budget per iteration. Its internal
+--index-owner-stdio flag installs a process-lifetime stdin reader: EOF/read failure requests cooperative
+cancellation, including when the parent disappears. This flag is Index-only and creates no public protocol.
+Query and writer retain root exclusion through output; no concurrent view manager is required by this cut.
 
 ## retain-file path
 

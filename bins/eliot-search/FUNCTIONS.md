@@ -16,6 +16,22 @@ removes current membership; an ignored still-present source remains. Link/incomp
 Unrelated unprepared current rows still cause PUBLICATION_SOURCE_NOT_PREPARED. Success is the closed
 index/refreshed result; use search for cards. Unchanged key/ObjectRef preserves logical revisions/collection.
 
+## Foreground watch
+
+    eliot-search watch [--interval-ms N] --qdrant-url URL [--data-root ROOT] [--config-file PATH] [--daemon PATH]
+
+Admit selections first with index PATH. Watch takes no PATH and starts one owned bare-Index child per iteration.
+Default interval is 30000 ms; N must be positive. Each iteration gets one original 120-second budget before
+path/process/pipe setup. Sleep begins only after that child, its stdout/stderr and cleanup/report output finish,
+so work never overlaps the next watch iteration. Ordinary iteration errors are reported and the loop continues;
+fatal signal/cleanup/output failures stop it.
+
+[app/watch.rs](src/app/watch.rs) retains at most 64 KiB per child stream while continuing to drain excess.
+Ctrl-C is serviced during active work, output and sleep; native active/sleep stops exited 130. Closing the held
+owner stdin asks Index to unwind cooperatively. Failed cleanup cannot be described as observed child exit.
+The internal --index-owner-stdio flag is used only by this owner, not a second public query protocol.
+Qdrant remains operator-owned; watch is a foreground process, not an installed service.
+
 ## Syntax
 
 - eliot-search retain-file --file PATH [ROOT] [--data-root ROOT] [--config-file PATH] [--daemon PATH]

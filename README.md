@@ -21,8 +21,9 @@ register. The full product and installed baseline remain open.
 
 Use `index PATH` on an initialized root to admit and refresh that file/tree, then `index` in a new process to
 reload all stored selections, followed by `search`. Explicit PATH refreshes only that scope; bare index uses
-the deduplicated union. R1 remains partial: the next foreground periodic-refresh consumer, lifetime and interval
-are not implemented. Search stays read-only.
+the deduplicated union. Foreground `watch` repeats saved-selection Index with no overlapping children;
+its default after-completion interval is 30 seconds. Search stays read-only. R1 remains partial: remaining
+Stage 3A recovery/convergence/lifetime qualification precedes Exact/windows, maintenance and release checks.
 Confirmed deletion excludes a source from new generations while preserving retained objects and pinned views.
 Do not build optional systems first or restore the retired source/qualification frameworks.
 
