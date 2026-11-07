@@ -126,7 +126,7 @@ hydration reuse. No application encryption, grants, OS-secret platform or second
 - Byte-case CLIs waited/both EOF/OS gone; fast v2 init/mismatch independent daemon custody remains UNKNOWN.
   Qdrant 73148 stopped/gone. Exact result:
   C:\Development\Rust\targets\task-a1-byte-native\run-20261107-v1\result.json.
-- A2 native healthy reuse/no allocation, missing collection→fresh generation 2 with Exact/Search, and unavailable
+- A2 native healthy reuse/no allocation, missing collection→fresh generation 2 with Search and byte-exact retained citations, and unavailable
   RPC→no allocation passed at recorded scope. Unavailable-case retired-payload diff remains UNKNOWN.
 - Archive 06f A-D functional closure/inert-layout/missing-corrupt/parent-reparse and 7a7d v2 positive/Busy/
   incomplete-scan preservation passed at those earlier scopes; they are not relabelled final597 runs.
