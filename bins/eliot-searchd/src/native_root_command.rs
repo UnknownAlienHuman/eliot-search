@@ -1,6 +1,6 @@
 //! Executes one plain-root operation and emits its observed final state.
 
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 use std::ffi::OsStr;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -10,8 +10,9 @@ use std::time::{Duration, Instant};
 
 use ignore::WalkBuilder;
 use search_control_redb::current_source::{
-    MAX_CURRENT_SOURCES, SourceControlError, capture_current_source, capture_current_sources,
-    commit_current_source, remove_current_sources, source_locator_bytes, source_path_from_locator,
+    AdmittedSelection, MAX_CURRENT_SOURCES, SelectionKind, SourceControlError, admit_selection,
+    capture_current_source, capture_current_sources, capture_selections, commit_current_source,
+    remove_current_sources, source_locator_bytes, source_path_from_locator,
 };
 use search_revision_store::store_object;
 use search_runtime_owner::{
@@ -144,7 +145,7 @@ fn retain_file_command(data_root: &Path, file_path: &Path, deadline: Instant) ->
 struct IndexScan {
     root: PathBuf,
     is_directory: bool,
-    missing_file: bool,
+    root_missing: bool,
     files: Vec<PathBuf>,
     locators: HashSet<Vec<u8>>,
 }
@@ -169,11 +170,13 @@ fn protected_index_path(path: &Path, data_root: &Path) -> bool {
 }
 
 fn scan_index_path(
-    index_path: &Path,
+    selection: &AdmittedSelection,
     data_root: &Path,
     deadline: Instant,
 ) -> Result<IndexScan, &'static str> {
     check_index(deadline)?;
+    let index_path = &selection.path;
+    let is_directory = selection.kind == SelectionKind::Tree;
     if !index_path.is_absolute() || protected_index_path(index_path, data_root) {
         return Err("INDEX_SCOPE_INVALID");
     }
@@ -182,8 +185,8 @@ fn scan_index_path(
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
             return Ok(IndexScan {
                 root: index_path.to_path_buf(),
-                is_directory: false,
-                missing_file: true,
+                is_directory,
+                root_missing: true,
                 files: Vec::new(),
                 locators: HashSet::new(),
             });
@@ -197,7 +200,9 @@ fn scan_index_path(
     if !metadata.is_file() && !metadata.is_dir() {
         return Err("INDEX_SCOPE_INVALID");
     }
-    let is_directory = metadata.is_dir();
+    if metadata.is_dir() != is_directory {
+        return Err("INDEX_SCOPE_KIND_CHANGED");
+    }
     let mut files = Vec::new();
     if is_directory {
         let excluded_root = data_root.to_path_buf();
@@ -248,7 +253,7 @@ fn scan_index_path(
     Ok(IndexScan {
         root: index_path.to_path_buf(),
         is_directory,
-        missing_file: false,
+        root_missing: false,
         files,
         locators,
     })
@@ -264,14 +269,18 @@ fn source_is_in_scope(source_path: &Path, scan: &IndexScan) -> bool {
 
 fn confirmed_removals(
     inventory: &[CurrentSourceRecord],
-    scan: &IndexScan,
+    scans: &[IndexScan],
     deadline: Instant,
 ) -> Result<Vec<CurrentSourceRecord>, &'static str> {
     let mut removals = Vec::new();
     for source in inventory {
         check_index(deadline)?;
         let path = source_path_from_locator(&source.locator).map_err(SourceControlError::code)?;
-        if !source_is_in_scope(&path, scan) || scan.locators.contains(&source.locator) {
+        if !scans.iter().any(|scan| source_is_in_scope(&path, scan))
+            || scans
+                .iter()
+                .any(|scan| scan.locators.contains(&source.locator))
+        {
             continue;
         }
         match fs::symlink_metadata(&path) {
@@ -281,45 +290,109 @@ fn confirmed_removals(
             Ok(metadata) if metadata.file_type().is_symlink() => {
                 return Err("INDEX_REPARSE_REFUSED");
             }
-            Ok(metadata) if metadata.is_file() => {
-                // A complete ignore-aware walk omitted a still-present file, so it is
-                // outside this refresh's selected source set.
-                removals.push(source.clone());
-            }
+            Ok(metadata) if metadata.is_file() => {}
             Err(_) | Ok(_) => return Err("INDEX_SCAN_INCOMPLETE"),
         }
     }
-    if scan.missing_file && removals.is_empty() {
-        return Err("INDEX_FILE_NOT_FOUND");
-    }
     Ok(removals)
+}
+
+fn index_selections(
+    requested: Option<&Path>,
+    admitted: Vec<AdmittedSelection>,
+    deadline: Instant,
+) -> Result<Vec<AdmittedSelection>, &'static str> {
+    let Some(path) = requested else {
+        return if admitted.is_empty() {
+            Err("INDEX_SELECTION_REQUIRED")
+        } else {
+            Ok(admitted)
+        };
+    };
+    check_index(deadline)?;
+    let kind = match fs::symlink_metadata(path) {
+        Ok(metadata) if metadata.file_type().is_symlink() => {
+            return Err("INDEX_REPARSE_REFUSED");
+        }
+        Ok(metadata) if metadata.is_file() => SelectionKind::File,
+        Ok(metadata) if metadata.is_dir() => SelectionKind::Tree,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return admitted
+                .into_iter()
+                .find(|selection| selection.path == path)
+                .map(|selection| vec![selection])
+                .ok_or("INDEX_SELECTION_REQUIRED");
+        }
+        Err(_) => return Err("INDEX_SCAN_INCOMPLETE"),
+        Ok(_) => return Err("INDEX_SCOPE_INVALID"),
+    };
+    Ok(vec![AdmittedSelection {
+        path: path.to_path_buf(),
+        kind,
+    }])
+}
+
+fn scan_selections(
+    selections: &[AdmittedSelection],
+    data_root: &Path,
+    deadline: Instant,
+) -> Result<Vec<IndexScan>, &'static str> {
+    selections
+        .iter()
+        .map(|selection| scan_index_path(selection, data_root, deadline))
+        .collect()
+}
+
+fn scanned_files(scans: &[IndexScan], deadline: Instant) -> Result<Vec<PathBuf>, &'static str> {
+    let mut files = BTreeMap::new();
+    for scan in scans {
+        for file in &scan.files {
+            check_index(deadline)?;
+            let locator = source_locator_bytes(file).map_err(SourceControlError::code)?;
+            files.entry(locator).or_insert_with(|| file.clone());
+            if files.len() > MAX_CURRENT_SOURCES {
+                return Err("INDEX_SOURCE_LIMIT");
+            }
+        }
+    }
+    Ok(files.into_values().collect())
 }
 
 fn index_sources(
     root: &PlainRootGuard,
     data_root: &Path,
-    index_path: &Path,
+    index_path: Option<&Path>,
     request: &crate::app::PublicationRequest,
     deadline: Instant,
 ) -> Result<(), &'static str> {
     let control = root.control_path();
     let inventory = capture_current_sources(&control, deadline, &CANCELLED)
         .map_err(SourceControlError::code)?;
-    let scan = scan_index_path(index_path, data_root, deadline)?;
-    for file in &scan.files {
+    let admitted =
+        capture_selections(&control, deadline, &CANCELLED).map_err(SourceControlError::code)?;
+    let selections = index_selections(index_path, admitted, deadline)?;
+    let scans = scan_selections(&selections, data_root, deadline)?;
+    let files = scanned_files(&scans, deadline)?;
+    if index_path.is_some() {
+        let selection = selections.first().ok_or("INDEX_SELECTION_REQUIRED")?;
+        admit_selection(&control, selection, deadline, &CANCELLED)
+            .map_err(SourceControlError::code)?;
+    }
+    for file in &files {
         check_index(deadline)?;
         let source = retain_file(root, file, deadline)?;
         crate::prepared_source::prepare(root, source.source_id, deadline, &CANCELLED)?;
     }
 
-    let verified_scan = scan_index_path(index_path, data_root, deadline)?;
-    if scan.is_directory != verified_scan.is_directory
-        || scan.missing_file != verified_scan.missing_file
-        || scan.locators != verified_scan.locators
-    {
+    let verified = scan_selections(&selections, data_root, deadline)?;
+    if scans.iter().zip(&verified).any(|(before, after)| {
+        before.is_directory != after.is_directory
+            || before.root_missing != after.root_missing
+            || before.locators != after.locators
+    }) {
         return Err("INDEX_SCAN_CHANGED");
     }
-    let removals = confirmed_removals(&inventory, &scan, deadline)?;
+    let removals = confirmed_removals(&inventory, &scans, deadline)?;
     remove_current_sources(&control, &removals, deadline, &CANCELLED)
         .map_err(SourceControlError::code)?;
 
@@ -330,7 +403,7 @@ fn index_sources(
 
 fn index_command(
     data_root: &Path,
-    index_path: &Path,
+    index_path: Option<&Path>,
     request: &crate::app::PublicationRequest,
     deadline: Instant,
 ) -> ExitCode {
@@ -403,12 +476,10 @@ pub fn run(invocation: RootInvocation, started: Instant) -> ExitCode {
             || emit_source_error("PUBLICATION_ARGUMENT_REQUIRED"),
             |request| crate::published_corpus::run(&data_root, &request, deadline, &CANCELLED),
         ),
-        RootCommand::Index => match (index_path, publication) {
-            (Some(index_path), Some(request)) => {
-                index_command(&data_root, &index_path, &request, deadline)
-            }
-            _ => emit_source_error("INDEX_ARGUMENT_REQUIRED"),
-        },
+        RootCommand::Index => publication.map_or_else(
+            || emit_source_error("INDEX_ARGUMENT_REQUIRED"),
+            |request| index_command(&data_root, index_path.as_deref(), &request, deadline),
+        ),
         RootCommand::Search => search_endpoint.map_or_else(
             || emit_source_error("QUERY_ENDPOINT_REQUIRED"),
             |endpoint| crate::framed_search::run(&data_root, &endpoint),

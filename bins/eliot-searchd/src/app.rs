@@ -90,7 +90,7 @@ fn print_help() {
         "  eliot-searchd --retain-file --source-file PATH [ROOT] [--data-root ROOT] [--config-file PATH]\n",
         "  eliot-searchd --prepare-source --source-id UUID [--unit N] [--data-root ROOT] [--config-file PATH]\n",
         "  eliot-searchd --publish-prepared --qdrant-url URL [--data-root ROOT] [--config-file PATH]\n",
-        "  eliot-searchd --index --index-path PATH --qdrant-url URL [--data-root ROOT] [--config-file PATH]\n",
+        "  eliot-searchd --index [--index-path PATH] --qdrant-url URL [--data-root ROOT] [--config-file PATH]\n",
         "  eliot-searchd --search-stdio --qdrant-url URL [--data-root ROOT] [--config-file PATH]\n",
     ));
 }
