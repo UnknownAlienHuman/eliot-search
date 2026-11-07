@@ -6,7 +6,16 @@ The connected operation is:
 
 explicit file selection → read-only source-row capture → one bounded same-handle read → plain ObjectRef publication and byte readback → one source-row CAS in control/control.redb → factual CLI result
 
-The actual commands, using an already-current root, are:
+The normal operator route uses an already-initialized root and an operator-owned local Qdrant endpoint:
+
+    eliot-search index "C:\example\repo" --data-root "C:\example\root" --qdrant-url http://127.0.0.1:6334
+    eliot-search search --query "identifier" --data-root "C:\example\root" --qdrant-url http://127.0.0.1:6334
+
+Index accepts a file or ignore-aware tree and repeats as explicit refresh. It uses typed retain/preparation/
+publication helpers under one guard/deadline, without manual UUID assembly. .git/data-root paths are excluded;
+links and incomplete observations refuse refresh. The lower-level commands remain available:
+
+The actual retained-file commands, using an already-current root, are:
 
     eliot-search retain-file --file "C:\example\input.txt" --data-root "C:\example\root"
     eliot-searchd --retain-file --source-file "C:\example\input.txt" --data-root "C:\example\root"
@@ -56,9 +65,11 @@ from the same published snapshot; absent original paths or newer preparation do 
 See [publication](../search-index-qdrant/search-publication/FUNCTIONS.md#current-q1-consumer) and
 [evidence](../search-query/search-candidate-validator/FUNCTIONS.md).
 
-R1 next connects direct file/repository index and refresh using these existing owners. Confirmed filesystem
-deletion excludes the registered source from new generations without waiting for unregister. Retained objects
-and already pinned generations remain intact. Inaccessible/partial inventory is not confirmed removal.
+R1 explicit index/refresh now uses these owners. Identical native key/ObjectRef preserves the logical head;
+a changed key updates it even for identical bytes. Confirmed in-scope deletion/exclusion removes current
+membership for new generations, while retained objects and pinned evidence remain. Outside rows are unchanged;
+inaccessible/partial inventory is not confirmed removal. R1 remains partial: next persist file/tree admission
+and reload it at writable-index startup; no resident periodic trigger/interval is implemented.
 
 ## Ownership
 

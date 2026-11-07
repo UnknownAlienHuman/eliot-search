@@ -1,14 +1,14 @@
 # eliot-search
 
-The CLI provides local help/version, four one-shot root operations, retain-file --file PATH and
-prepare-source --source-id UUID [--unit N], and publish-prepared --qdrant-url URL [--query TEXT] [--limit N].
-The same owned daemon child retains/prepares a file or publishes the complete prepared corpus to Qdrant and
-returns real point/evidence metadata. Read-only retained-excerpt search and live queries remain U1/later work.
+Use an operator-started same-host Qdrant and initialize a new application data root once, then:
 
-Read [FUNCTIONS.md](FUNCTIONS.md) for exact syntax, daemon selection, response handling and future client work;
-[AGENTS.md](AGENTS.md) gives editing constraints. The
-[current dispatch map](../../docs/implementation/CODE_MAP.md#existing-dispatch-to-replace) names the actual files.
+    eliot-search index PATH --qdrant-url URL --data-root ROOT
+    eliot-search search --query TEXT [--limit N] --qdrant-url URL --data-root ROOT
 
-Root, S1, P1 and Q1 qualification have distinct source/binary scopes in the
-[registry](../../docs/audit/ANALYSIS_REGISTRY.md#evidence-status). Stored-unit readback does not complete
-the retained-source → Qdrant → verified-excerpt product or qualify an installed baseline.
+Index refreshes an explicit file or ignore-aware tree through the same owned daemon child; it does not
+initialize the root or start Qdrant. Search returns verified full retained units/citations and is read-only.
+Root, retain-file, prepare-source and state-only publish-prepared remain available for direct operations.
+
+[FUNCTIONS.md](FUNCTIONS.md) owns syntax, failure/output and child lifetime; [Quickstart](../../QUICKSTART.md)
+gives the normal path. [Registry](../../docs/audit/ANALYSIS_REGISTRY.md#evidence-status) keeps exact source/native
+scopes. R1 is partial: durable admission, writable-startup reload and actual periodic triggering remain open.

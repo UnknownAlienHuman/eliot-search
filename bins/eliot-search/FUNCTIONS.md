@@ -3,6 +3,17 @@
 The CLI owns local help/version, native argument capture, daemon selection, owned-child completion and safe bounded output. Root, retention, preparation and publication retain their argv operation path; search uses the serviced framed query child.
 
 <a id="capture-and-dispatch"></a>
+## Index and refresh
+
+    eliot-search index PATH --qdrant-url URL [--data-root ROOT] [--config-file PATH] [--daemon PATH]
+
+PATH is one explicit file or ignore-aware tree. Initialize a new data root once with initialize-data-root;
+index requires an existing current root. The owned child retains/prepares the selected files, refreshes
+confirmed in-scope membership and publishes using typed helpers under one root guard/original deadline.
+Success is the closed index/refreshed result; use search for actual verified cards. Repeat index to refresh,
+without manually assembling SourceIds or a separate refresh command. Link/incomplete observations fail;
+unchanged native key plus ObjectRef does not advance the logical source head or create another collection.
+
 ## Syntax
 
 - eliot-search retain-file --file PATH [ROOT] [--data-root ROOT] [--config-file PATH] [--daemon PATH]

@@ -6,8 +6,8 @@ This page owns delivery order and cross-owner values. Use [code map](CODE_MAP.md
 
 ## Connected path
 
-The current binaries expose four root operations, retain-file, retained-only prepare-source, publish-prepared
-and framed read-only search. The connected path reaches source/current row, complete preparation/current outcome,
+The current binaries expose four root operations, explicit file/tree index, retain-file, retained-only
+prepare-source, publish-prepared and framed read-only search. The connected path reaches source/current row, complete preparation/current outcome,
 Qdrant generation/current evidence/view and verified retained units/citations. Publication returns generation
 state/counts; search is the sole user query route. U1 Windows debug scopes belong in the registry;
 R1 convergence, Exact/windows and later product stages remain unfinished.
@@ -106,9 +106,15 @@ Retention, preparation and publication retain their root-owned argv child. Searc
 <a id="3a-fresh-generation-convergence"></a>
 ### 3A. Fresh-generation convergence
 
-R1 first connects direct file/repository index and refresh to the existing source/preparation/publication helpers,
-without manual SourceId assembly or a new service/database. Confirmed filesystem deletion excludes a source from
-new generations while retained objects and pinned views remain; partial/inaccessible inventory is not removal.
+R1 now connects index PATH to the existing source/preparation/publication helpers under one root guard and
+original deadline. Repeat index to refresh that explicit scope; unchanged native key/ObjectRef is a no-op.
+Confirmed in-scope deletion/exclusion changes new-generation membership while retained bytes/pinned evidence
+remain; partial/inaccessible inventory is not removal.
+
+R1 remains partial. Next persist admitted file/tree selection and reload it at writable-index startup.
+Periodic refresh is required policy, but an actual resident trigger/lifetime/interval is not implemented.
+Search stays read-only; query and writer share exclusive root exclusion through flush, so a concurrent view
+manager is not the next prerequisite.
 
 Owners #270/#271/#331/#261/#300/#303. Add restart, inventory, stale-work/ABA guards, lost-wakeup repair and complete
 desired-versus-published comparison. Fixed input → fresh complete collection → matching metadata commit → view install.

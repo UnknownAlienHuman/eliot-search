@@ -7,6 +7,10 @@ compact object/range/point reference pages and evidence, then commits a short gu
 Publication/recovery validates the complete graph; ordinary search pins the committed snapshot and validates
 returned evidence plus retained objects. [FUNCTIONS.md](FUNCTIONS.md) owns the concrete APIs and boundaries.
 
+Explicit refresh uses guarded current-inventory removal and an unchanged-key/ObjectRef no-op. Saved generation
+evidence and immutable objects survive current membership removal. Unresolved old builds retain their complete
+header/rows in retired obligations while a fresh successor may proceed; cleanup cannot erase those obligations.
+
 Source/Prepared immutable objects and external Qdrant effects belong to their existing owners; no writer
 transaction spans their I/O. Legacy journals, authority/DEK APIs and exclusive fixtures remain removed.
 Unsupported database files remain untouched.

@@ -2,6 +2,26 @@
 
 The daemon owns native invocation, bootstrap settings, root dispatch and factual output. Retention, preparation and publish-prepared use the existing root-owned CLI child; --search-stdio services one framed query with one joinable synchronous worker.
 
+## Index and refresh path
+
+    eliot-searchd --index --index-path PATH --qdrant-url URL [--data-root ROOT] [--config-file PATH]
+
+[native_root_command.rs](src/native_root_command.rs) opens the existing current root once; initialization is
+explicit. index_sources carries that same guard and original 120-second deadline through scan, typed retain/
+prepare, membership update, publication and output. It does not chain JSON-producing commands or reacquire
+the root between stages.
+
+The pinned ignore 0.4.34 walk uses captured CWD, strict ignore-file I/O, standard filters, no link following,
+and explicit .git/data-root exclusion. Reparse/link and incomplete/malformed-ignore observations refuse the
+refresh; a second matching scan precedes removals. Only confirmed in-scope deletion or complete-scan exclusion
+removes captured current membership; outside source rows remain. Retained objects/published evidence are kept.
+An unchanged NativeFileKey/ObjectRef preserves the logical source head; a key change is a real update even
+when content is identical. Typed preparation preserves matching outcomes/settings before publication.
+
+Repeat index PATH for explicit refresh. Durable file/tree admission and writable-startup reload are next;
+no resident periodic trigger/interval exists. Query and writer share exclusive root exclusion through output,
+so a concurrent view manager is not required for this next step.
+
 ## retain-file path
 
 1. Resolve --source-file against the captured startup directory while preserving native path bytes.

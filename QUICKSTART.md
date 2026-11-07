@@ -11,6 +11,27 @@ passed at c843171; initial Unicode publications at 20c31 and earlier 2ae transpo
 separate scopes. This is Windows debug qualification, not an installed baseline or the complete product.
 See the [exact source, artifacts and verification scope](docs/audit/ANALYSIS_REGISTRY.md#evidence-status).
 
+## Index and search
+
+Start the operator-owned Qdrant 1.20.0 service first. Initialize a new application data root once; index opens
+an existing current root and does not initialize it. Paths below are placeholders, separate from user originals:
+
+    eliot-search initialize-data-root --data-root "C:\example\data-root"
+    eliot-search index "C:\example\repo" --data-root "C:\example\data-root" --qdrant-url http://127.0.0.1:6334
+    eliot-search search --query "supersede_unknown_build" --limit 10 --data-root "C:\example\data-root" --qdrant-url http://127.0.0.1:6334
+
+These command forms were executed against isolated native fixtures and the managed repository; the native
+operator used its own endpoint. Supply --daemon PATH for a matching binary pair when needed.
+Repeat the same index command to refresh a file or tree; no UUID assembly or separate refresh subcommand is
+needed. Index respects ignore rules and excludes .git/data-root paths. Link/reparse or incomplete observations
+fail; they are not empty inventory. Confirmed in-scope removal/exclusion affects new generations while retained
+objects and pinned evidence remain. Sources outside the selected scope are unchanged.
+
+Unchanged native identity plus ObjectRef preserves the logical source head and avoids a new collection.
+Search returns verified retained units and is read-only. Current a492442 scoped native evidence passed; earlier
+unchanged/key-change/edit cases retain their ff4 scope. R1 is partial: admission is not yet durable for automatic
+writable-startup reload, and no resident periodic trigger/interval exists. See the [registry](docs/audit/ANALYSIS_REGISTRY.md#resume).
+
 ## Root operator commands
 
 Use the matching CLI/daemon debug pair. The examples assume those executables are available to the shell.
@@ -158,7 +179,7 @@ the ad8 recovery/config batch and records the exact checked revisions.
 One explicit file connects through no-execute acquisition, verified plain ObjectRef storage and a guarded
 CurrentSourceRecord. prepare-source consumes retained bytes and stores the complete representation/ranges/current
 outcome. publish-prepared connects those stored inputs to actual Qdrant/current/evidence/PublishedView.
-Read-only search returns verified retained units and citations from that pinned generation. Next R1 connects
-direct file/repository index and refresh without manual SourceId assembly; restart/inventory convergence and
-installed-baseline qualification remain unfinished. Confirmed filesystem deletion excludes membership from
+Read-only search returns verified retained units and citations from that pinned generation. Index now connects
+explicit file/tree retention, preparation and publication without manual SourceId assembly. Durable admission,
+writable-startup reload, periodic triggering and installed-baseline qualification remain unfinished. Confirmed filesystem deletion excludes membership from
 new generations while preserving retained objects and pinned views. Inaccessible or partial inventory is not removal.
