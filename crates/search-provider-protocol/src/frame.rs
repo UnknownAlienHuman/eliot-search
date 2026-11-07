@@ -6,7 +6,7 @@ use std::io::{self, Write};
 use crate::{
     ClientFrame, DecodedUtf8Result, FRAME_PREFIX_BYTES, MAX_BODY_BYTES, MAX_CLIENT_FRAME_BYTES,
     MAX_FRAME_BYTES, MAX_ITEMS, ProtocolError, QueryOutcome, RawExactResult, SearchItem,
-    StopReason, Terminal,
+    SessionClientFrame, SessionReply, StopReason, Terminal,
 };
 
 /// Incremental storage for exactly one length-prefixed frame.
@@ -105,6 +105,32 @@ pub fn decode_client_frame(frame: &[u8]) -> Result<ClientFrame, ProtocolError> {
     let message: ClientFrame = decode(frame, MAX_CLIENT_FRAME_BYTES)?;
     message.validate()?;
     Ok(message)
+}
+
+/// Encodes one typed session operation with the existing bounded frame codec.
+pub fn encode_session_frame(message: &SessionClientFrame) -> Result<Vec<u8>, ProtocolError> {
+    message.validate()?;
+    encode(message, MAX_CLIENT_FRAME_BYTES)
+}
+
+/// Decodes one complete session data/control frame without a second transport.
+pub fn decode_session_frame(frame: &[u8]) -> Result<SessionClientFrame, ProtocolError> {
+    let message: SessionClientFrame = decode(frame, MAX_CLIENT_FRAME_BYTES)?;
+    message.validate()?;
+    Ok(message)
+}
+
+/// Encodes a complete session reply, refusing partial or over-limit payloads.
+pub fn encode_session_reply(reply: &SessionReply) -> Result<Vec<u8>, ProtocolError> {
+    reply.validate()?;
+    encode(reply, MAX_FRAME_BYTES)
+}
+
+/// Decodes and validates one whole session reply. The caller checks its active request/window.
+pub fn decode_session_reply(frame: &[u8]) -> Result<SessionReply, ProtocolError> {
+    let reply: SessionReply = decode(frame, MAX_FRAME_BYTES)?;
+    reply.validate()?;
+    Ok(reply)
 }
 
 /// Serializes one complete terminal, refusing an oversized result.

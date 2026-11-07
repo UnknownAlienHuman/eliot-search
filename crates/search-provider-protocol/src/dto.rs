@@ -959,6 +959,679 @@ impl Terminal {
     }
 }
 
+/// The original query executed once when opening this child's sole window.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(
+    tag = "mode",
+    content = "request",
+    rename_all = "snake_case",
+    deny_unknown_fields
+)]
+pub enum WindowQuery {
+    /// Ranked retrieval in original backend order.
+    Search(SearchRequest),
+    /// Raw retained-byte literal scan in source/range order.
+    Raw(RawExactRequest),
+    /// Saved unchanged UTF-8 literal scan in source/range order.
+    DecodedUtf8(DecodedUtf8Request),
+}
+
+impl WindowQuery {
+    /// Checks the actual query's existing limits and selection semantics.
+    pub fn validate(&self) -> Result<(), ProtocolError> {
+        match self {
+            Self::Search(request) => request.validate(),
+            Self::Raw(request) => request.validate(),
+            Self::DecodedUtf8(request) => request.validate(),
+        }
+    }
+
+    /// Maximum size of the original retained result prefix, never all Exact matches.
+    #[must_use]
+    pub const fn limit(&self) -> u8 {
+        match self {
+            Self::Search(request) => request.limit,
+            Self::Raw(request) => request.limit,
+            Self::DecodedUtf8(request) => request.limit,
+        }
+    }
+}
+
+/// One session data/control frame; request identities are scoped to this owned child.
+/// Open is accepted once. Later data identities increase; Cancel names active work.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
+pub enum SessionClientFrame {
+    /// Execute the original query and return its first bounded page.
+    Open {
+        /// Nonzero request correlation identity.
+        request_id: u64,
+        /// Original operation milliseconds remaining, sampled at send.
+        remaining_ms: u64,
+        /// Query kind and original bounded result limit.
+        query: WindowQuery,
+        /// First-page size, 1..=64; omitted JSON uses 16.
+        #[serde(default = "default_window_page_size")]
+        page_size: u8,
+        /// Fixed lifetime from accepted Open before work or pinning; never renewed.
+        #[serde(default = "default_window_ttl")]
+        ttl_ms: u64,
+    },
+    /// Page only the stored original result prefix, without rescanning or repinning.
+    Continue {
+        /// Nonzero correlation identity for this operation.
+        request_id: u64,
+        /// Original operation milliseconds remaining.
+        remaining_ms: u64,
+        /// The sole session-local window identity.
+        window_id: u64,
+        /// Next-page size, 1..=64; omitted JSON uses 16.
+        #[serde(default = "default_window_page_size")]
+        page_size: u8,
+    },
+    /// Read bounded context around an item already emitted by this same window.
+    Expand {
+        /// Nonzero correlation identity for this operation.
+        request_id: u64,
+        /// Original operation milliseconds remaining.
+        remaining_ms: u64,
+        /// The sole session-local window identity.
+        window_id: u64,
+        /// Zero-based original retained-vector index, already emitted after flush.
+        item_index: u8,
+        /// Explicit context bytes before the original range; no default.
+        before_bytes: u64,
+        /// Explicit context bytes after the original range; no default.
+        after_bytes: u64,
+    },
+    /// Cancel the correlated active operation without allocating a data work slot.
+    Cancel {
+        /// Active request identity, not a new operation identity.
+        request_id: u64,
+    },
+    /// Release the window and end this child; no subsequent query is admitted.
+    Close {
+        /// Nonzero close correlation identity.
+        request_id: u64,
+    },
+}
+
+const fn default_window_page_size() -> u8 {
+    crate::DEFAULT_WINDOW_PAGE_SIZE
+}
+
+const fn default_window_ttl() -> u64 {
+    crate::MAX_WINDOW_TTL_MS
+}
+
+impl SessionClientFrame {
+    /// Correlation identity, with Cancel referring to the active request.
+    #[must_use]
+    pub const fn request_id(&self) -> u64 {
+        match self {
+            Self::Open { request_id, .. }
+            | Self::Continue { request_id, .. }
+            | Self::Expand { request_id, .. }
+            | Self::Cancel { request_id }
+            | Self::Close { request_id } => *request_id,
+        }
+    }
+
+    /// Checks closed operation bounds; live window/emitted membership belongs to the owner.
+    pub fn validate(&self) -> Result<(), ProtocolError> {
+        if self.request_id() == 0 {
+            return Err(ProtocolError::InvalidCorrelation);
+        }
+        let remaining = match self {
+            Self::Open {
+                remaining_ms,
+                query,
+                page_size,
+                ttl_ms,
+                ..
+            } => {
+                query.validate()?;
+                validate_page_size(*page_size)?;
+                if *ttl_ms == 0 || *ttl_ms > crate::MAX_WINDOW_TTL_MS {
+                    return Err(ProtocolError::InvalidMessage);
+                }
+                Some(*remaining_ms)
+            }
+            Self::Continue {
+                remaining_ms,
+                window_id,
+                page_size,
+                ..
+            } => {
+                validate_window_id(*window_id)?;
+                validate_page_size(*page_size)?;
+                Some(*remaining_ms)
+            }
+            Self::Expand {
+                remaining_ms,
+                window_id,
+                item_index,
+                before_bytes,
+                after_bytes,
+                ..
+            } => {
+                validate_window_id(*window_id)?;
+                if usize::from(*item_index) >= MAX_ITEMS
+                    || before_bytes
+                        .checked_add(*after_bytes)
+                        .is_none_or(|n| n > crate::MAX_EXPANSION_BYTES)
+                {
+                    return Err(ProtocolError::InvalidMessage);
+                }
+                // The owner additionally includes the original span in this ceiling.
+                Some(*remaining_ms)
+            }
+            Self::Cancel { .. } | Self::Close { .. } => None,
+        };
+        if remaining.is_some_and(|ms| ms == 0 || ms > MAX_REMAINING_MS) {
+            return Err(ProtocolError::InvalidMessage);
+        }
+        Ok(())
+    }
+}
+
+fn validate_page_size(size: u8) -> Result<(), ProtocolError> {
+    if size == 0 || usize::from(size) > MAX_ITEMS {
+        Err(ProtocolError::InvalidMessage)
+    } else {
+        Ok(())
+    }
+}
+
+const fn validate_window_id(id: u64) -> Result<(), ProtocolError> {
+    if id == crate::SESSION_WINDOW_ID {
+        Ok(())
+    } else {
+        Err(ProtocolError::InvalidMessage)
+    }
+}
+
+/// An original verified item; its query mode and coordinate domain remain explicit.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(
+    tag = "mode",
+    content = "item",
+    rename_all = "snake_case",
+    deny_unknown_fields
+)]
+pub enum WindowItem {
+    /// Original ranked card or gap, retaining its backend rank and score.
+    Search(SearchItem),
+    /// Original raw-byte occurrence or gap.
+    Raw(RawExactItem),
+    /// Original saved UTF-8 occurrence or gap.
+    DecodedUtf8(DecodedUtf8Item),
+}
+
+impl WindowItem {
+    fn validate(&self, generation: u64) -> Result<(), ProtocolError> {
+        match self {
+            Self::Search(item) => item.validate(generation),
+            Self::Raw(item) => item.validate(),
+            Self::DecodedUtf8(item) => item.validate(),
+        }
+    }
+}
+
+/// A stable index into the original bounded vector, usable only after full page flush.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct WindowEntry {
+    /// Zero-based original vector index; it is not a new rank or source offset.
+    pub item_index: u8,
+    /// The original verified card, literal occurrence or explicit gap.
+    pub item: WindowItem,
+}
+
+/// Original query facts retained independently from page size and total Exact count.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct WindowSummary {
+    /// Original pinned generation, never refreshed by Continue/Expand.
+    pub generation: u64,
+    /// Stored original result prefix size, at most the original query limit of 64.
+    pub retained_items: u8,
+    /// Total Exact occurrences, including those outside the stored prefix; None for ranked.
+    pub found_matches: Option<u64>,
+    /// Original Exact scan completeness; None for ranked retrieval.
+    pub scan_complete: Option<bool>,
+    /// Original Exact complete-negative claim; None for ranked retrieval.
+    pub complete_negative: Option<bool>,
+    /// Original query presentation completeness, distinct from a page's output cut.
+    pub result_stop: StopReason,
+}
+
+/// One whole-item page prepared against the current committed cursor.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct WindowPage {
+    /// The sole window identity, meaningful only within this child session.
+    pub window_id: u64,
+    /// Unchanged original query facts.
+    pub summary: WindowSummary,
+    /// Cursor before this page.
+    pub start_index: u8,
+    /// Cursor proposed for commitment only after the complete frame flushes.
+    pub next_index: u8,
+    /// Contiguous whole-item prefix, bounded before decoding a 65th entry.
+    #[serde(deserialize_with = "deserialize_items")]
+    pub items: Vec<WindowEntry>,
+    /// More entries remain in the stored original prefix, not unbounded Exact matches.
+    pub has_more: bool,
+    /// Complete requested page or a whole-item frame-size cut.
+    pub page_stop: StopReason,
+}
+
+impl WindowPage {
+    /// Checks original facts, contiguous indexes and item coordinate bindings.
+    pub fn validate(&self) -> Result<(), ProtocolError> {
+        validate_window_id(self.window_id)?;
+        let summary = &self.summary;
+        if summary.generation == 0
+            || usize::from(summary.retained_items) > MAX_ITEMS
+            || self.start_index > self.next_index
+            || self.next_index > summary.retained_items
+            || usize::from(self.next_index - self.start_index) != self.items.len()
+            || self.has_more != (self.next_index < summary.retained_items)
+            || (self.items.is_empty() && self.has_more)
+            || !matches!(
+                (
+                    summary.found_matches,
+                    summary.scan_complete,
+                    summary.complete_negative
+                ),
+                (None, None, None) | (Some(_), Some(_), Some(_))
+            )
+            || summary.complete_negative.is_some_and(|negative| {
+                negative
+                    != (summary.scan_complete == Some(true) && summary.found_matches == Some(0))
+            })
+        {
+            return Err(ProtocolError::InvalidMessage);
+        }
+        for (index, entry) in self.items.iter().enumerate() {
+            if usize::from(entry.item_index) != usize::from(self.start_index) + index {
+                return Err(ProtocolError::InvalidMessage);
+            }
+            entry.item.validate(summary.generation)?;
+            if matches!(&entry.item, WindowItem::Search(_)) != summary.found_matches.is_none() {
+                return Err(ProtocolError::InvalidMessage);
+            }
+            if let WindowItem::Search(item) = &entry.item
+                && usize::from(item.rank()) != usize::from(entry.item_index) + 1
+            {
+                return Err(ProtocolError::InvalidMessage);
+            }
+        }
+        Ok(())
+    }
+}
+
+/// Returned context bytes in the original representation domain.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum ExpansionContent {
+    /// Raw retained bytes, without UTF-8 decoding or replacement.
+    Raw {
+        /// Exact context bytes in lowercase hex.
+        bytes_hex: String,
+    },
+    /// Exact retained UTF-8 context, preserving BOM and line endings.
+    Utf8 {
+        /// Exact whole UTF-8 text in the bounded neighborhood.
+        text: String,
+    },
+}
+
+/// Bounded context from an already emitted item's original representation.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct WindowExpansion {
+    /// Same-child window identity.
+    pub window_id: u64,
+    /// Already emitted original vector index.
+    pub item_index: u8,
+    /// Pinned original source revision and input `ObjectRef`.
+    pub source: RawSourceRef,
+    /// Actual saved artifact for UTF-8; None for raw bytes.
+    pub prepared: Option<ObjectRefDto>,
+    /// Inclusive context start in the original representation.
+    pub representation_start: u64,
+    /// Exclusive context end in the original representation.
+    pub representation_end: u64,
+    /// Inclusive mapped source start; current supported mappings are identity.
+    pub source_start: u64,
+    /// Exclusive mapped source end.
+    pub source_end: u64,
+    /// Exact verified context, not a latest-source substitution.
+    pub content: ExpansionContent,
+}
+
+impl WindowExpansion {
+    /// Checks total returned size, representation kind and identity mapping.
+    pub fn validate(&self) -> Result<(), ProtocolError> {
+        validate_window_id(self.window_id)?;
+        self.source.validate()?;
+        let length = self
+            .representation_end
+            .checked_sub(self.representation_start)
+            .filter(|n| *n != 0 && *n <= crate::MAX_EXPANSION_BYTES)
+            .ok_or(ProtocolError::InvalidMessage)?;
+        if usize::from(self.item_index) >= MAX_ITEMS
+            || self.source_start != self.representation_start
+            || self.source_end != self.representation_end
+            || self.source_end > self.source.input.bytes
+        {
+            return Err(ProtocolError::InvalidMessage);
+        }
+        match (&self.content, &self.prepared) {
+            (ExpansionContent::Raw { bytes_hex }, None) => {
+                if !lower_hex(
+                    bytes_hex,
+                    usize::try_from(length * 2).map_err(|_| ProtocolError::InvalidMessage)?,
+                ) {
+                    return Err(ProtocolError::InvalidMessage);
+                }
+            }
+            (ExpansionContent::Utf8 { text }, Some(prepared)) => {
+                prepared.validate(ObjectKindDto::Prepared)?;
+                if u64::try_from(text.len()).ok() != Some(length) {
+                    return Err(ProtocolError::InvalidMessage);
+                }
+            }
+            _ => return Err(ProtocolError::InvalidMessage),
+        }
+        Ok(())
+    }
+}
+
+/// One correlated session reply; expiry may be unsolicited with request identity zero.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SessionReply {
+    /// Active request identity, or zero only for idle expiry.
+    pub request_id: u64,
+    /// The complete typed outcome of one operation.
+    pub outcome: SessionOutcome,
+}
+
+/// A whole session operation outcome, independent of existing one-shot terminals.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "status", rename_all = "snake_case", deny_unknown_fields)]
+pub enum SessionOutcome {
+    /// Open or Continue page; cursor commitment follows full local flush.
+    Page {
+        /// The whole-item page.
+        page: WindowPage,
+    },
+    /// Verified original-representation neighborhood.
+    Expanded {
+        /// The bounded context and its retained citation.
+        expansion: WindowExpansion,
+    },
+    /// Explicit Close completed; the child will terminate and be reaped.
+    Closed {},
+    /// Fixed lifetime expired; access did not renew it.
+    Expired {},
+    /// The correlated active operation was cancelled.
+    Cancelled {},
+    /// Healthy pre-output failure leaves existing committed cursor unchanged.
+    Failed {
+        /// Content-free validated failure code.
+        code: FailureCode,
+    },
+}
+
+impl SessionReply {
+    /// Checks correlation and complete payload bounds before exposure.
+    pub fn validate(&self) -> Result<(), ProtocolError> {
+        if self.request_id == 0 && !matches!(self.outcome, SessionOutcome::Expired { .. }) {
+            return Err(ProtocolError::InvalidCorrelation);
+        }
+        match &self.outcome {
+            SessionOutcome::Page { page } => page.validate(),
+            SessionOutcome::Expanded { expansion } => expansion.validate(),
+            SessionOutcome::Closed {}
+            | SessionOutcome::Expired {}
+            | SessionOutcome::Cancelled {}
+            | SessionOutcome::Failed { .. } => Ok(()),
+        }
+    }
+}
+
+impl WindowItem {
+    /// Checks this original item against the session's query mode and literal.
+    pub fn validate_request(
+        &self,
+        query: &WindowQuery,
+        generation: u64,
+    ) -> Result<(), ProtocolError> {
+        self.validate(generation)?;
+        let (ids, source) = match (self, query) {
+            (Self::Search(_), WindowQuery::Search(_)) => return Ok(()),
+            (Self::Raw(item), WindowQuery::Raw(request)) => {
+                if let RawExactItem::Match(hit) = item {
+                    const DIGITS: &[u8; 16] = b"0123456789abcdef";
+                    if hit.end - hit.start != request.literal.len() as u64
+                        || hit
+                            .bytes_hex
+                            .as_bytes()
+                            .as_chunks::<2>()
+                            .0
+                            .iter()
+                            .zip(request.literal.bytes())
+                            .any(|(pair, byte)| {
+                                pair[0] != DIGITS[usize::from(byte >> 4)]
+                                    || pair[1] != DIGITS[usize::from(byte & 15)]
+                            })
+                    {
+                        return Err(ProtocolError::InvalidMessage);
+                    }
+                }
+                (&request.source_ids, item.source())
+            }
+            (Self::DecodedUtf8(item), WindowQuery::DecodedUtf8(request)) => {
+                if let DecodedUtf8Item::Match(hit) = item
+                    && hit.text != request.literal
+                {
+                    return Err(ProtocolError::InvalidMessage);
+                }
+                (&request.source_ids, item.source())
+            }
+            _ => return Err(ProtocolError::InvalidMessage),
+        };
+        if ids
+            .as_ref()
+            .is_some_and(|ids| !ids.contains(&source.source_id))
+        {
+            return Err(ProtocolError::InvalidMessage);
+        }
+        Ok(())
+    }
+}
+
+impl WindowPage {
+    /// Checks a successive page against the original query and previously emitted prefix.
+    pub fn validate_request(
+        &self,
+        query: &WindowQuery,
+        emitted: &[WindowEntry],
+        page_size: u8,
+    ) -> Result<(), ProtocolError> {
+        self.validate()?;
+        query.validate()?;
+        validate_page_size(page_size)?;
+        let expected = usize::from(page_size)
+            .min(usize::from(self.summary.retained_items).saturating_sub(emitted.len()));
+        if self.start_index as usize != emitted.len()
+            || self.summary.retained_items > query.limit()
+            || self.items.len() > expected
+            || (self.page_stop == StopReason::Complete) != (self.items.len() == expected)
+            || matches!(query, WindowQuery::Search(_)) != self.summary.found_matches.is_none()
+        {
+            return Err(ProtocolError::InvalidMessage);
+        }
+        let mut found = 0_u64;
+        let mut gaps = 0_u64;
+        let mut previous: Option<&WindowItem> = None;
+        for (index, entry) in emitted.iter().chain(&self.items).enumerate() {
+            entry
+                .item
+                .validate_request(query, self.summary.generation)?;
+            match &entry.item {
+                WindowItem::Search(item) => {
+                    if emitted.iter().chain(&self.items).take(index).any(|prior| {
+                        matches!(&prior.item, WindowItem::Search(p) if p.evidence().point_id == item.evidence().point_id)
+                    }) {
+                        return Err(ProtocolError::InvalidMessage);
+                    }
+                }
+                WindowItem::Raw(RawExactItem::Match(_))
+                | WindowItem::DecodedUtf8(DecodedUtf8Item::Match(_)) => found += 1,
+                WindowItem::Raw(RawExactItem::Gap(_))
+                | WindowItem::DecodedUtf8(DecodedUtf8Item::Gap(_)) => gaps += 1,
+            }
+            if let Some(left) = previous {
+                validate_window_order(left, &entry.item)?;
+            }
+            previous = Some(&entry.item);
+        }
+        if let Some(total) = self.summary.found_matches
+            && (found > total
+                || (gaps > 0 && self.summary.scan_complete == Some(true))
+                || (self.next_index == self.summary.retained_items
+                    && self.summary.result_stop == StopReason::Complete
+                    && (found != total || self.summary.scan_complete != Some(gaps == 0))))
+        {
+            return Err(ProtocolError::InvalidMessage);
+        }
+        Ok(())
+    }
+}
+
+fn validate_window_order(left: &WindowItem, right: &WindowItem) -> Result<(), ProtocolError> {
+    let valid = match (left, right) {
+        (WindowItem::Search(a), WindowItem::Search(b)) => a.rank().checked_add(1) == Some(b.rank()),
+        (WindowItem::Raw(a), WindowItem::Raw(b)) => {
+            a.source().source_namespace_id == b.source().source_namespace_id
+                && (a.source().source_id < b.source().source_id
+                    || (a.source() == b.source()
+                        && matches!((a, b), (RawExactItem::Match(a), RawExactItem::Match(b)) if a.start < b.start)))
+        }
+        (WindowItem::DecodedUtf8(a), WindowItem::DecodedUtf8(b)) => {
+            a.source().source_namespace_id == b.source().source_namespace_id
+                && (a.source().source_id < b.source().source_id
+                    || (a.source() == b.source()
+                        && matches!((a, b), (DecodedUtf8Item::Match(a), DecodedUtf8Item::Match(b))
+                            if a.prepared == b.prepared && a.representation_start < b.representation_start)))
+        }
+        _ => false,
+    };
+    if valid {
+        Ok(())
+    } else {
+        Err(ProtocolError::InvalidMessage)
+    }
+}
+
+impl WindowExpansion {
+    /// Binds returned context to the emitted original item and explicit neighborhood request.
+    pub fn validate_request(
+        &self,
+        request: &SessionClientFrame,
+        original: &WindowItem,
+    ) -> Result<(), ProtocolError> {
+        self.validate()?;
+        let SessionClientFrame::Expand {
+            window_id,
+            item_index,
+            before_bytes,
+            after_bytes,
+            ..
+        } = request
+        else {
+            return Err(ProtocolError::InvalidMessage);
+        };
+        let (namespace, id, input, prepared, start, end, text, hex, source) = match original {
+            WindowItem::Search(SearchItem::Hit(hit)) => {
+                let e = &hit.evidence;
+                (
+                    &e.source_namespace_id,
+                    &e.source_id,
+                    &e.input,
+                    Some(&e.prepared),
+                    e.start,
+                    e.end,
+                    Some(hit.unit_text.as_str()),
+                    None,
+                    None,
+                )
+            }
+            WindowItem::Raw(RawExactItem::Match(hit)) => (
+                &hit.source.source_namespace_id,
+                &hit.source.source_id,
+                &hit.source.input,
+                None,
+                hit.start,
+                hit.end,
+                None,
+                Some(hit.bytes_hex.as_str()),
+                Some(&hit.source),
+            ),
+            WindowItem::DecodedUtf8(DecodedUtf8Item::Match(hit)) => (
+                &hit.source.source_namespace_id,
+                &hit.source.source_id,
+                &hit.source.input,
+                Some(&hit.prepared),
+                hit.representation_start,
+                hit.representation_end,
+                Some(hit.text.as_str()),
+                None,
+                Some(&hit.source),
+            ),
+            _ => return Err(ProtocolError::InvalidMessage),
+        };
+        let wanted_start = start.saturating_sub(*before_bytes);
+        let wanted_end = end
+            .checked_add(*after_bytes)
+            .ok_or(ProtocolError::InvalidMessage)?
+            .min(input.bytes);
+        if *window_id != self.window_id
+            || *item_index != self.item_index
+            || &self.source.source_namespace_id != namespace
+            || &self.source.source_id != id
+            || &self.source.input != input
+            || self.prepared.as_ref() != prepared
+            || source.is_some_and(|s| s != &self.source)
+            || self.representation_start != wanted_start
+            || self.representation_end != wanted_end
+        {
+            return Err(ProtocolError::InvalidMessage);
+        }
+        let from =
+            usize::try_from(start - wanted_start).map_err(|_| ProtocolError::InvalidMessage)?;
+        let to = usize::try_from(end - wanted_start).map_err(|_| ProtocolError::InvalidMessage)?;
+        match (&self.content, text, hex) {
+            (ExpansionContent::Utf8 { text: expanded }, Some(original), None)
+                if expanded.get(from..to) == Some(original) =>
+            {
+                Ok(())
+            }
+            (ExpansionContent::Raw { bytes_hex }, None, Some(original))
+                if bytes_hex.get(from * 2..to * 2) == Some(original) =>
+            {
+                Ok(())
+            }
+            _ => Err(ProtocolError::InvalidMessage),
+        }
+    }
+}
+
 fn deserialize_items<'de, D: Deserializer<'de>, T: Deserialize<'de>>(
     deserializer: D,
 ) -> Result<Vec<T>, D::Error> {

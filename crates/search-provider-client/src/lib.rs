@@ -205,3 +205,107 @@ fn synchronous() -> Result<(), ClientError> {
     }
     Ok(())
 }
+
+/// Observed child exit and completely drained output from a finished session.
+pub struct SessionCompletion {
+    /// Actual process status obtained through wait/reap, never a fabricated exit code.
+    pub status: std::process::ExitStatus,
+    /// Retained untrusted diagnostics; at most 64 KiB.
+    pub diagnostics: Vec<u8>,
+    /// Additional stderr was drained without retention.
+    pub diagnostics_truncated: bool,
+}
+
+/// One concrete session child with one original query and a bounded emitted prefix.
+///
+/// These async methods run on the caller's Tokio runtime. Call finish for checked
+/// shutdown; dropping without finish is emergency cleanup and supplies no receipt.
+pub struct OwnedQuerySession {
+    inner: child::Session,
+}
+
+impl OwnedQuerySession {
+    /// Starts one child, registering optional Ctrl-C before spawn.
+    pub async fn open(
+        executable: &Path,
+        args: &[OsString],
+        deadline: Instant,
+        cancelled: &AtomicBool,
+        cancel_on_ctrl_c: bool,
+    ) -> Result<Self, ClientError> {
+        Ok(Self {
+            inner: child::Session::open(executable, args, deadline, cancelled, cancel_on_ctrl_c)
+                .await?,
+        })
+    }
+
+    /// Submits one typed data request or correlated Cancel/Close control.
+    /// Data is serialized; a partial wire frame is never interleaved with control.
+    pub fn submit(
+        &mut self,
+        message: search_provider_protocol::SessionClientFrame,
+        deadline: Instant,
+    ) -> Result<(), ClientError> {
+        self.inner.submit(message, deadline)
+    }
+
+    /// Whether a data operation is awaiting its reply.
+    #[must_use]
+    pub const fn has_active_request(&self) -> bool {
+        self.inner.active()
+    }
+
+    /// Whether child exit and output EOFs have already been observed.
+    #[must_use]
+    pub const fn is_finished(&self) -> bool {
+        self.inner.is_finished()
+    }
+
+    /// Receives and validates one reply; terminal replies are reaped before exposure.
+    /// Cancelling this future preserves partial frame/write state for the next poll.
+    pub async fn next_reply(
+        &mut self,
+        deadline: Instant,
+        cancelled: &AtomicBool,
+    ) -> Result<search_provider_protocol::SessionReply, ClientError> {
+        let result = self.inner.receive(deadline, cancelled).await;
+        match result {
+            Ok(reply) => {
+                if matches!(
+                    reply.outcome,
+                    search_provider_protocol::SessionOutcome::Closed {}
+                        | search_provider_protocol::SessionOutcome::Expired {}
+                ) {
+                    let completion = self.inner.finish(deadline, true).await?;
+                    if !completion.status.success() {
+                        return Err(ClientError::ChildExit);
+                    }
+                }
+                Ok(reply)
+            }
+            Err(error) => {
+                self.inner.finish(deadline, false).await?;
+                Err(error)
+            }
+        }
+    }
+
+    /// Performs one serialized operation using the same child.
+    pub async fn request(
+        &mut self,
+        message: search_provider_protocol::SessionClientFrame,
+        deadline: Instant,
+        cancelled: &AtomicBool,
+    ) -> Result<search_provider_protocol::SessionReply, ClientError> {
+        if let Err(error) = self.submit(message, deadline) {
+            self.inner.finish(deadline, false).await?;
+            return Err(error);
+        }
+        self.next_reply(deadline, cancelled).await
+    }
+
+    /// Closes stdin and observes actual child wait and both output EOFs.
+    pub async fn finish(&mut self, deadline: Instant) -> Result<SessionCompletion, ClientError> {
+        self.inner.finish(deadline, false).await
+    }
+}

@@ -19,9 +19,9 @@ use crate::verified_query::QueryFailure;
 
 type Result<T> = std::result::Result<T, QueryFailure>;
 
-struct RepresentationGap {
-    prepared: Option<ObjectRef>,
-    code: &'static str,
+pub struct RepresentationGap {
+    pub prepared: Option<ObjectRef>,
+    pub code: &'static str,
 }
 
 const fn limits() -> PreparationLimits {
@@ -44,7 +44,7 @@ const fn object_failure(error: ObjectStoreError) -> QueryFailure {
 
 // The callback borrows one verified artifact. No self-referential owner, second
 // decoding pass or materialization is needed; source bytes die before scanning.
-fn visit_representation(
+pub fn visit_representation(
     root: &PlainRootGuard,
     captured: &CapturedSource,
     deadline: Instant,

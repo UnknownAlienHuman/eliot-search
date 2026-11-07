@@ -113,6 +113,7 @@ fn is_command(value: &OsStr) -> Option<RootCommand> {
         "--publish-prepared" => Some(RootCommand::PublishPrepared),
         "--index" => Some(RootCommand::Index),
         "--search-stdio" => Some(RootCommand::Search),
+        "--session-stdio" => Some(RootCommand::Session),
         _ => None,
     }
 }
@@ -190,7 +191,7 @@ impl PublicationOptions {
         self,
         command: RootCommand,
     ) -> Result<(Option<PublicationRequest>, Option<String>), String> {
-        if command == RootCommand::Search {
+        if matches!(command, RootCommand::Search | RootCommand::Session) {
             return Ok((None, self.endpoint));
         }
         if matches!(command, RootCommand::PublishPrepared | RootCommand::Index)

@@ -1493,6 +1493,22 @@ pub struct PublishedView {
     database: ReadOnlyDatabase,
 }
 impl PublishedView {
+    /// Reads one captured source from this same pinned committed generation.
+    ///
+    /// # Errors
+    /// Refuses missing, incomplete or foreign bindings, cancellation and deadline expiry.
+    pub fn source(
+        &self,
+        source_id: SourceId,
+        deadline: Instant,
+        cancel: &AtomicBool,
+    ) -> Result<CapturedSource> {
+        check(deadline, cancel)?;
+        let source = read_saved_source(&self.transaction, &self.generation, source_id)?;
+        check(deadline, cancel)?;
+        Ok(source)
+    }
+
     /// Reads the complete committed source inventory from this pinned generation.
     /// Empty inputs and preparation Gaps remain members, even without points.
     ///

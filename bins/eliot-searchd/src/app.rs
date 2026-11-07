@@ -24,6 +24,7 @@ pub enum RootCommand {
     PublishPrepared,
     Index,
     Search,
+    Session,
 }
 
 impl RootCommand {
@@ -38,6 +39,7 @@ impl RootCommand {
             Self::PublishPrepared => "publish-prepared",
             Self::Index => "index",
             Self::Search => "search",
+            Self::Session => "session",
         }
     }
 }
@@ -93,6 +95,7 @@ fn print_help() {
         "  eliot-searchd --publish-prepared --qdrant-url URL [--data-root ROOT] [--config-file PATH]\n",
         "  eliot-searchd --index [--index-path PATH] --qdrant-url URL [--data-root ROOT] [--config-file PATH]\n",
         "  eliot-searchd --search-stdio [--qdrant-url URL] [--data-root ROOT] [--config-file PATH]\n",
+        "  eliot-searchd --session-stdio [--qdrant-url URL] [--data-root ROOT] [--config-file PATH]\n",
     ));
 }
 
