@@ -1,5 +1,10 @@
 //! One serviced framed query with one joinable synchronous worker.
 
+mod session;
+mod window;
+
+pub use session::run as run_session;
+
 use std::future::pending;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;

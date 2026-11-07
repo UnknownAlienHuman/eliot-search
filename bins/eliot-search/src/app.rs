@@ -68,6 +68,10 @@ enum Parsed {
     Help,
     Version,
     Watch(watch::Request),
+    Session {
+        settings: Vec<OsString>,
+        daemon: Option<PathBuf>,
+    },
     RawExact {
         settings: Vec<OsString>,
         daemon: Option<PathBuf>,
@@ -235,6 +239,7 @@ fn is_daemon_root_flag(value: &OsStr) -> bool {
                 | "--publish-prepared"
                 | "--index"
                 | "--search-stdio"
+                | "--session-stdio"
         )
     )
 }
@@ -255,6 +260,9 @@ fn standalone_invocation(arguments: &[OsString]) -> Option<Result<Parsed, &'stat
     }
     if arguments[0] == OsStr::new("exact") {
         return Some(parse_exact(arguments));
+    }
+    if arguments[0] == OsStr::new("session") {
+        return Some(parse_session(arguments));
     }
     if arguments.len() == 1 && (is_help_flag(&arguments[0]) || is_help_command(&arguments[0])) {
         return Some(Ok(Parsed::Help));
@@ -648,6 +656,61 @@ fn build_exact_request(
     }
 }
 
+fn parse_session(arguments: &[OsString]) -> Result<Parsed, &'static str> {
+    let mut settings = Vec::new();
+    let mut daemon = None;
+    let mut root_seen = false;
+    let mut config_seen = false;
+    let mut qdrant_seen = false;
+    let mut index = 1;
+    while index < arguments.len() {
+        let argument = &arguments[index];
+        match argument.to_str() {
+            Some("--data-root" | "--config-file") => {
+                let seen = if argument == OsStr::new("--data-root") {
+                    &mut root_seen
+                } else {
+                    &mut config_seen
+                };
+                if *seen {
+                    return Err("USAGE_ERROR");
+                }
+                let value = path_option(arguments, index)?;
+                *seen = true;
+                settings.push(argument.clone());
+                settings.push(value.clone());
+            }
+            Some("--daemon") => {
+                if daemon.is_some() {
+                    return Err("USAGE_ERROR");
+                }
+                daemon = Some(PathBuf::from(path_option(arguments, index)?));
+            }
+            Some("--qdrant-url") => {
+                if qdrant_seen {
+                    return Err("USAGE_ERROR");
+                }
+                let value = arguments
+                    .get(index + 1)
+                    .and_then(|v| v.to_str())
+                    .ok_or("USAGE_ERROR")?;
+                if value.is_empty() || value.len() > 4096 || value.as_bytes().contains(&0) {
+                    return Err("USAGE_ERROR");
+                }
+                qdrant_seen = true;
+                settings.push(argument.clone());
+                settings.push(OsString::from(value));
+            }
+            _ => return Err("UNKNOWN_ARGUMENT"),
+        }
+        index += 2;
+    }
+    if !root_seen {
+        return Err("USAGE_ERROR");
+    }
+    Ok(Parsed::Session { settings, daemon })
+}
+
 fn daemon_path(explicit: Option<PathBuf>) -> Result<PathBuf, &'static str> {
     if let Some(path) = explicit {
         return Ok(path);
@@ -1012,6 +1075,8 @@ fn print_help() {
         "\n\n",
         "  eliot-search --help\n",
         "  eliot-search --version\n",
+        "  eliot-search session --data-root ROOT [--qdrant-url URL] [--config-file PATH] [--daemon PATH]\n",
+        "    stdin/stdout: SessionClientFrame/SessionReply JSON, one object per line\n",
         "  eliot-search inspect-data-root [ROOT] [--data-root ROOT] [--config-file PATH] [--daemon PATH]\n",
         "  eliot-search initialize-data-root [ROOT] [--data-root ROOT] [--config-file PATH] [--daemon PATH]\n",
         "  eliot-search check-existing-root-owner [ROOT] [--data-root ROOT] [--config-file PATH] [--daemon PATH]\n",
@@ -1063,6 +1128,19 @@ fn run_decoded_utf8(
     crate::search_command::run_decoded_utf8(&daemon, &arguments, request, deadline)
 }
 
+fn run_session(settings: Vec<OsString>, explicit_daemon: Option<PathBuf>, started: Instant) -> i32 {
+    let Some(deadline) = started.checked_add(COMMAND_TIMEOUT) else {
+        return emit_error("DEADLINE_UNAVAILABLE");
+    };
+    let daemon = match daemon_path(explicit_daemon) {
+        Ok(path) => path,
+        Err(error) => return emit_error(error),
+    };
+    let mut arguments = vec![OsString::from("--session-stdio")];
+    arguments.extend(settings);
+    crate::search_command::run_session(&daemon, &arguments, deadline)
+}
+
 pub fn run_main() -> i32 {
     let started = Instant::now();
     let arguments = match capture_arguments() {
@@ -1075,6 +1153,7 @@ pub fn run_main() -> i32 {
     };
     let (command, settings, explicit_daemon, preparation, publication) = match parsed {
         Parsed::Watch(request) => return watch::run(request),
+        Parsed::Session { settings, daemon } => return run_session(settings, daemon, started),
         Parsed::RawExact {
             settings,
             daemon,
