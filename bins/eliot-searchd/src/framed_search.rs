@@ -8,20 +8,58 @@ use std::sync::{Arc, mpsc};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
-use search_control_redb::publication::pin_published;
+use search_control_redb::publication::{PublishedView, pin_published};
 use search_provider_protocol::{
     ClientFrame, FailureCode, FrameBuffer, MAX_CLIENT_FRAME_BYTES, MAX_REMAINING_MS, ProtocolError,
-    QUERY_REQUEST_ID, QueryOutcome, SearchRequest, Terminal, decode_client_frame,
-    encode_terminal_frame, prepare_complete,
+    QUERY_REQUEST_ID, QueryOutcome, RawExactRequest, SearchRequest, Terminal, decode_client_frame,
+    encode_terminal_frame, prepare_complete, prepare_raw_exact,
 };
-use search_runtime_owner::open_plain;
+use search_runtime_owner::{PlainRootGuard, open_plain};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::oneshot;
 
-use crate::verified_query::{self, QueryFailure};
+use crate::{
+    raw_exact,
+    verified_query::{self, QueryFailure},
+};
 
 const CLEANUP_ALLOWANCE: Duration = Duration::from_secs(5);
 type Encoded = Result<Vec<u8>, ProtocolError>;
+
+enum Request {
+    Search(SearchRequest),
+    RawExact(RawExactRequest),
+}
+impl Request {
+    fn execute(
+        &self,
+        root: &PlainRootGuard,
+        view: &PublishedView,
+        endpoint: Option<&str>,
+        deadline: Instant,
+        cancel: &AtomicBool,
+    ) -> Encoded {
+        match self {
+            Self::Search(request) => {
+                let Some(endpoint) = endpoint else {
+                    return stopped(QueryFailure::Code("QUERY_ENDPOINT_REQUIRED"));
+                };
+                match verified_query::execute(root, view, endpoint, request, deadline, cancel) {
+                    Ok(items) => {
+                        prepare_complete(QUERY_REQUEST_ID, view.generation.sequence, items)
+                    }
+                    Err(error) => stopped(error),
+                }
+            }
+            Self::RawExact(request) => {
+                match raw_exact::execute(root, view, request, deadline, cancel) {
+                    Ok(result) => prepare_raw_exact(QUERY_REQUEST_ID, result),
+                    Err(error) => stopped(error),
+                }
+            }
+        }
+    }
+}
 
 struct Worker {
     release: mpsc::Sender<()>,
@@ -50,8 +88,8 @@ fn stopped(failure: QueryFailure) -> Encoded {
 }
 fn worker_result(
     root: &Path,
-    endpoint: &str,
-    request: &SearchRequest,
+    endpoint: Option<&str>,
+    request: &Request,
     deadline: Instant,
     cancel: &AtomicBool,
     tx: oneshot::Sender<Encoded>,
@@ -67,12 +105,7 @@ fn worker_result(
     let encoded = match (&root, &view) {
         (Err(error), _) => stopped(QueryFailure::root(*error)),
         (Ok(_), Some(Err(error))) => stopped(QueryFailure::publication(*error)),
-        (Ok(root), Some(Ok(view))) => {
-            match verified_query::execute(root, view, endpoint, request, deadline, cancel) {
-                Ok(items) => prepare_complete(QUERY_REQUEST_ID, view.generation.sequence, items),
-                Err(error) => stopped(error),
-            }
-        }
+        (Ok(root), Some(Ok(view))) => request.execute(root, view, endpoint, deadline, cancel),
         _ => stopped(QueryFailure::Code("QUERY_INTERNAL_ERROR")),
     };
     let _ = tx.send(encoded);
@@ -82,8 +115,8 @@ fn worker_result(
 }
 fn spawn_worker(
     root: PathBuf,
-    endpoint: String,
-    request: SearchRequest,
+    endpoint: Option<String>,
+    request: Request,
     deadline: Instant,
     cancel: Arc<AtomicBool>,
 ) -> Result<(Worker, oneshot::Receiver<Encoded>), &'static str> {
@@ -91,7 +124,17 @@ fn spawn_worker(
     let (release, released) = mpsc::channel();
     let join = thread::Builder::new()
         .name("eliot-query".to_owned())
-        .spawn(move || worker_result(&root, &endpoint, &request, deadline, &cancel, tx, &released))
+        .spawn(move || {
+            worker_result(
+                &root,
+                endpoint.as_deref(),
+                &request,
+                deadline,
+                &cancel,
+                tx,
+                &released,
+            );
+        })
         .map_err(|_| "QUERY_WORKER_START_FAILED")?;
     Ok((Worker { release, join }, rx))
 }
@@ -160,52 +203,56 @@ impl Exchange {
         message: ClientFrame,
         frame_started: Instant,
         root: &Path,
-        endpoint: &str,
+        endpoint: Option<&str>,
         cancel: &Arc<AtomicBool>,
         worker: &mut Option<Worker>,
     ) -> Result<(), &'static str> {
-        match message {
+        let (remaining_ms, request) = match message {
             ClientFrame::Query {
                 remaining_ms,
                 request,
                 ..
-            } => {
-                if self.admitted {
-                    return Err("QUERY_DUPLICATE_REQUEST");
-                }
-                self.admitted = true;
-                let deadline = frame_started
-                    .checked_add(Duration::from_millis(remaining_ms))
-                    .ok_or("QUERY_DEADLINE")?;
-                self.request_deadline = Some(deadline);
-                if Instant::now() >= deadline {
-                    self.cleanup_deadline = Instant::now().checked_add(CLEANUP_ALLOWANCE);
-                    return self.stop(QueryFailure::Deadline, cancel);
-                }
-                let (handle, receiver) = spawn_worker(
-                    root.to_path_buf(),
-                    endpoint.to_owned(),
-                    request,
-                    deadline,
-                    Arc::clone(cancel),
-                )?;
-                *worker = Some(handle);
-                self.receiver = Some(receiver);
-                Ok(())
-            }
+            } => (remaining_ms, Request::Search(request)),
+            ClientFrame::RawExact {
+                remaining_ms,
+                request,
+                ..
+            } => (remaining_ms, Request::RawExact(request)),
             ClientFrame::Cancel { .. } => {
                 if !self.admitted {
                     return Err("QUERY_CANCEL_WITHOUT_REQUEST");
                 }
-                self.stop(QueryFailure::Cancelled, cancel)
+                return self.stop(QueryFailure::Cancelled, cancel);
             }
+        };
+        if self.admitted {
+            return Err("QUERY_DUPLICATE_REQUEST");
         }
+        self.admitted = true;
+        let deadline = frame_started
+            .checked_add(Duration::from_millis(remaining_ms))
+            .ok_or("QUERY_DEADLINE")?;
+        self.request_deadline = Some(deadline);
+        if Instant::now() >= deadline {
+            self.cleanup_deadline = Instant::now().checked_add(CLEANUP_ALLOWANCE);
+            return self.stop(QueryFailure::Deadline, cancel);
+        }
+        let (handle, receiver) = spawn_worker(
+            root.to_path_buf(),
+            endpoint.map(str::to_owned),
+            request,
+            deadline,
+            Arc::clone(cancel),
+        )?;
+        *worker = Some(handle);
+        self.receiver = Some(receiver);
+        Ok(())
     }
     fn consume(
         &mut self,
         bytes: &[u8],
         root: &Path,
-        endpoint: &str,
+        endpoint: Option<&str>,
         cancel: &Arc<AtomicBool>,
         worker: &mut Option<Worker>,
     ) -> Result<(), &'static str> {
@@ -235,7 +282,7 @@ impl Exchange {
 }
 async fn exchange(
     root: &Path,
-    endpoint: &str,
+    endpoint: Option<&str>,
     cancel: &Arc<AtomicBool>,
     worker: &mut Option<Worker>,
 ) -> Result<(), &'static str> {
@@ -292,7 +339,7 @@ async fn exchange(
         }
     }
 }
-pub fn run(root: &Path, endpoint: &str) -> ExitCode {
+pub fn run(root: &Path, endpoint: Option<&str>) -> ExitCode {
     let cancel = Arc::new(AtomicBool::new(false));
     let mut worker = None;
     let result = (|| {

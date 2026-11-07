@@ -2,7 +2,7 @@
 
 use search_provider_protocol::{
     ClientFrame, FrameBuffer, MAX_FRAME_BYTES, MAX_REMAINING_MS, QUERY_REQUEST_ID, QueryOutcome,
-    SearchRequest, Terminal, decode_terminal_frame, encode_client_frame,
+    RawExactRequest, SearchRequest, Terminal, decode_terminal_frame, encode_client_frame,
 };
 use std::ffi::OsString;
 use std::future::{Future, poll_fn};
@@ -23,10 +23,15 @@ const MAX_DIAGNOSTIC_BYTES: usize = 64 * 1024;
 const CONTROL_POLL: Duration = Duration::from_millis(10);
 const CLEANUP_ALLOWANCE: Duration = Duration::from_secs(2);
 
+pub enum Request {
+    Search(SearchRequest),
+    RawExact(RawExactRequest),
+}
+
 pub async fn query(
     executable: &Path,
     args: &[OsString],
-    request: SearchRequest,
+    request: Request,
     deadline: Instant,
     cancelled: &AtomicBool,
     cancel_on_ctrl_c: bool,
@@ -136,17 +141,35 @@ async fn exchange(
     stdin: ChildStdin,
     mut stdout: ChildStdout,
     mut stderr: ChildStderr,
-    request: SearchRequest,
+    request: Request,
     deadline: Instant,
     cancelled: &AtomicBool,
     mut ctrl_c: Pin<&mut impl Future<Output = io::Result<()>>>,
     cancel_on_ctrl_c: bool,
 ) -> Result<QueryCompletion, ClientError> {
-    let requested_limit = request.limit;
-    let mut query = ClientFrame::Query {
-        request_id: QUERY_REQUEST_ID,
-        remaining_ms: 1,
-        request,
+    let (mut query, requested_limit) = match request {
+        Request::Search(request) => {
+            let limit = request.limit;
+            (
+                ClientFrame::Query {
+                    request_id: QUERY_REQUEST_ID,
+                    remaining_ms: 1,
+                    request,
+                },
+                limit,
+            )
+        }
+        Request::RawExact(request) => {
+            let limit = request.limit;
+            (
+                ClientFrame::RawExact {
+                    request_id: QUERY_REQUEST_ID,
+                    remaining_ms: 1,
+                    request,
+                },
+                limit,
+            )
+        }
     };
     let mut stdin = Some(stdin);
     let mut incoming = FrameBuffer::new(MAX_FRAME_BYTES)?;
@@ -194,7 +217,11 @@ async fn exchange(
             if matches!(stopped, Some(Stop::Deadline)) {
                 return Err(ClientError::Deadline);
             }
-            if matches!(terminal.outcome, QueryOutcome::Complete { .. }) && !status.success() {
+            if matches!(
+                terminal.outcome,
+                QueryOutcome::Complete { .. } | QueryOutcome::RawExact { .. }
+            ) && !status.success()
+            {
                 return Err(ClientError::ChildExit);
             }
             return Ok(QueryCompletion {
@@ -225,6 +252,9 @@ async fn exchange(
             }
             if let ClientFrame::Query {
                 remaining_ms: wire, ..
+            }
+            | ClientFrame::RawExact {
+                remaining_ms: wire, ..
             } = &mut query
             {
                 *wire = remaining_ms;
@@ -249,7 +279,16 @@ async fn exchange(
                     if consumed != count { return Err(ClientError::TrailingOutput); }
                     if let Some(frame) = incoming.frame() {
                         if !query_sent { return Err(ClientError::Protocol(search_provider_protocol::ProtocolError::InvalidMessage)); }
-                        terminal = Some(decode_terminal_frame(frame, requested_limit)?);
+                        let decoded = decode_terminal_frame(frame, requested_limit)?;
+                        match (&query, &decoded.outcome) {
+                            (ClientFrame::Query { .. }, QueryOutcome::Complete { .. })
+                            | (_, QueryOutcome::Cancelled | QueryOutcome::Failed { .. }) => {}
+                            (ClientFrame::RawExact { request, .. }, QueryOutcome::RawExact { result }) => {
+                                result.validate_request(request)?;
+                            }
+                            _ => return Err(ClientError::Protocol(search_provider_protocol::ProtocolError::InvalidMessage)),
+                        }
+                        terminal = Some(decoded);
                         // EOF releases the daemon's one process-scoped input
                         // reader before we wait for its owned worker to join.
                         drop(stdin.take());

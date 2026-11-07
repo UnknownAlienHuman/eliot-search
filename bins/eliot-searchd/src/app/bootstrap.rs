@@ -191,9 +191,6 @@ impl PublicationOptions {
         command: RootCommand,
     ) -> Result<(Option<PublicationRequest>, Option<String>), String> {
         if command == RootCommand::Search {
-            if self.endpoint.is_none() {
-                return Err(invalid("search_startup"));
-            }
             return Ok((None, self.endpoint));
         }
         if matches!(command, RootCommand::PublishPrepared | RootCommand::Index)
