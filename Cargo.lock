@@ -292,6 +292,7 @@ dependencies = [
  "search-provider-protocol",
  "search-source-registry",
  "serde_json",
+ "tokio",
 ]
 
 [[package]]

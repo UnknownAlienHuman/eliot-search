@@ -3,9 +3,11 @@
 use std::collections::BTreeMap;
 use std::ffi::OsStr;
 use std::fs;
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, LazyLock};
 use std::time::{Duration, Instant};
 
 use ignore::WalkBuilder;
@@ -17,14 +19,28 @@ use search_control_redb::current_source::{
 use search_revision_store::store_object;
 use search_runtime_owner::{
     PlainRootError, PlainRootGuard, PlainRootStatus, discard_incomplete_plain, initialize_plain,
-    inspect_plain, open_plain,
+    inspect_plain, open_plain, open_plain_with_recovery,
 };
 use search_safe_reader::{MAX_SOURCE_FILE_BYTES, SourceReadError, acquire_file};
 use search_source_registry::{CurrentSourceRecord, ObjectKind};
 
 use crate::app::{RootCommand, RootInvocation};
 
-static CANCELLED: AtomicBool = AtomicBool::new(false);
+static CANCELLED: LazyLock<Arc<AtomicBool>> = LazyLock::new(|| Arc::new(AtomicBool::new(false)));
+
+fn install_owner_lifeline() -> Result<(), &'static str> {
+    std::thread::Builder::new()
+        .name("eliot-index-owner".to_owned())
+        .spawn(|| {
+            let mut byte = [0_u8; 1];
+            let _ = std::io::stdin().lock().read(&mut byte);
+            // EOF/read failure (or unexpected input) requests normal owner unwinding.
+            // The one-shot daemon's main return ends this process-lifetime reader.
+            CANCELLED.store(true, Ordering::Release);
+        })
+        .map(drop)
+        .map_err(|_| "INDEX_OWNER_STDIN_UNAVAILABLE")
+}
 
 const fn status_name(status: PlainRootStatus) -> &'static str {
     match status {
@@ -49,6 +65,9 @@ fn emit_snapshot(command: RootCommand, status: PlainRootStatus) {
 }
 
 fn emit_error(error: PlainRootError) -> ExitCode {
+    if CANCELLED.load(Ordering::Acquire) {
+        return ExitCode::from(130);
+    }
     eprintln!("{{\"error\":\"{}\"}}", error.code());
     ExitCode::from(2)
 }
@@ -64,6 +83,9 @@ fn emit_guarded(command: RootCommand, guard: PlainRootGuard) -> ExitCode {
 }
 
 fn emit_source_error(code: &str) -> ExitCode {
+    if CANCELLED.load(Ordering::Acquire) {
+        return ExitCode::from(130);
+    }
     eprintln!("{{\"error\":\"{code}\"}}");
     ExitCode::from(2)
 }
@@ -387,13 +409,27 @@ fn index_command(
     request: &crate::app::PublicationRequest,
     deadline: Instant,
 ) -> ExitCode {
-    let root = match open_plain(data_root, deadline, &CANCELLED) {
+    let root = match open_plain_with_recovery(data_root, deadline, &CANCELLED) {
         Ok(root) => root,
         Err(error) => return emit_error(error),
     };
     match index_sources(&root, data_root, index_path, request, deadline) {
         Ok(()) => {
-            println!("{{\"operation\":\"index\",\"state\":\"refreshed\"}}");
+            if CANCELLED.load(Ordering::Acquire) {
+                return ExitCode::from(130);
+            }
+            let written = {
+                let mut stdout = std::io::stdout().lock();
+                stdout
+                    .write_all(b"{\"operation\":\"index\",\"state\":\"refreshed\"}\n")
+                    .and_then(|()| stdout.flush())
+            };
+            if written.is_err() {
+                return emit_source_error("OUTPUT_WRITE_ERROR");
+            }
+            if CANCELLED.load(Ordering::Acquire) {
+                return ExitCode::from(130);
+            }
             drop(root);
             ExitCode::SUCCESS
         }
@@ -410,11 +446,15 @@ pub fn run(invocation: RootInvocation, started: Instant) -> ExitCode {
         data_root,
         source_file,
         index_path,
+        index_owner_stdio,
         source_id,
         unit,
         publication,
         search_endpoint,
     } = invocation;
+    if index_owner_stdio && let Err(code) = install_owner_lifeline() {
+        return emit_source_error(code);
+    }
     match command {
         RootCommand::Inspect => match inspect_plain(&data_root, deadline, &CANCELLED) {
             Ok(inspection) => {

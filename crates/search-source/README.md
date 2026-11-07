@@ -73,7 +73,9 @@ a changed key updates it even for identical bytes. Only confirmed in-scope absen
 for new generations; admission/kind, retained objects and pinned evidence remain for later re-add. An ignored
 but present file is not removal. Outside rows remain; inaccessible/partial inventory cannot confirm absence.
 Unrelated legacy unprepared rows still fail full publication rather than being prepared or omitted implicitly.
-Admission/reload are implemented; R1 next needs the actual foreground periodic consumer/lifetime/interval.
+Admission/reload and foreground watch are implemented. Watch accepts no PATH and refreshes these saved
+selections in one owned Index child at a time, with cleanup before the next interval. R1 remains partial:
+remaining recovery/convergence/lifetime qualification is required before later product stages.
 
 ## Ownership
 

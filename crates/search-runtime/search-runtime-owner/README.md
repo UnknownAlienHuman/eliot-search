@@ -5,6 +5,12 @@ strict discard of recognized empty interrupted initialization. All four operatio
 deadline and cancellation flag. A returned PlainRootGuard retains the stable root.lock handle for its lifetime
 and exposes the root, object-directory and control-database paths.
 
+The separate open_plain_with_recovery capability permits maintained CONTROL engine recovery under that guard.
+Index is its current consumer; watch owns successive Index children. It validates a recovered owned temporary
+copy before writable recovery of the rechecked original, then clean-closes/inspects. It never resets or copies
+candidate bytes back. Ordinary inspection/open/query remain non-repairing. See
+[guarded writable open](FUNCTIONS.md#guarded-writable-open).
+
 Initialization writes the exact init marker before stores and publishes the final manifest last through a
 same-parent tempfile no-clobber stage. The control database is initialized and validated by
 search-control-redb at control/control.redb; the root owner does not parse redb bytes. Current-root

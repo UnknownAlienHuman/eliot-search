@@ -15,4 +15,7 @@ header/rows in retired obligations while a fresh successor may proceed; cleanup 
 
 Source/Prepared immutable objects and external Qdrant effects belong to their existing owners; no writer
 transaction spans their I/O. Legacy journals, authority/DEK APIs and exclusive fixtures remain removed.
-Unsupported database files remain untouched.
+NeedsRepair is distinct from corruption/unsupported format. The guarded writable-open capability may call
+recover_plain_control: validate a recovered owned copy, recheck and recover/clean-close/inspect the original.
+It never resets format metadata or copies candidate bytes back. Read-only opens remain non-repairing;
+unsupported/corrupt originals are refused unchanged.

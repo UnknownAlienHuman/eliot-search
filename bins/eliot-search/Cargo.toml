@@ -19,6 +19,7 @@ serde_json.workspace = true
 search-source-registry.workspace = true
 search-provider-protocol.workspace = true
 search-provider-client.workspace = true
+tokio = { workspace = true, features = ["rt", "process", "io-util", "io-std", "time", "macros", "signal"] }
 
 [lints]
 workspace = true

@@ -11,11 +11,13 @@ use std::fmt;
 use std::fs::{self, File, OpenOptions, TryLockError};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 
 use search_control_redb::plain_control::{
     PlainControlError, initialize_plain_control, inspect_plain_control, plain_control_is_empty,
+    recover_plain_control,
 };
 use tempfile::Builder;
 
@@ -180,6 +182,8 @@ pub enum PlainRootError {
     Unsupported,
     /// Recognized root metadata or control state is damaged.
     Corrupt,
+    /// CONTROL requires writable engine recovery; read-only callers cannot repair it.
+    NeedsRepair,
     /// The selected path is a recognized archive, not a runnable root.
     Archive,
     /// The selected path has an incomplete import marker.
@@ -212,6 +216,7 @@ impl PlainRootError {
             Self::Absent => "absent",
             Self::Unsupported => "unsupported",
             Self::Corrupt => "corrupt",
+            Self::NeedsRepair => "needs_repair",
             Self::Archive => "archive",
             Self::IncompleteImport => "incomplete_import",
             Self::WrongState => "wrong_state",
@@ -296,6 +301,7 @@ const fn control_error(error: PlainControlError) -> PlainRootError {
         PlainControlError::Deadline => PlainRootError::Deadline,
         PlainControlError::Unavailable => PlainRootError::Unavailable,
         PlainControlError::Corrupt => PlainRootError::Corrupt,
+        PlainControlError::NeedsRepair => PlainRootError::NeedsRepair,
         PlainControlError::Unsupported => PlainRootError::Unsupported,
         PlainControlError::Busy => PlainRootError::Busy,
         PlainControlError::ProbeLimit => PlainRootError::ProbeLimit,
@@ -492,6 +498,21 @@ fn classify_root(
     operation: OperationContext<'_>,
     probe_incomplete: bool,
 ) -> PlainRootResult<PlainRootStatus> {
+    let status = classify_root_layout(root, operation, probe_incomplete)?;
+    if status != PlainRootStatus::Current {
+        return Ok(status);
+    }
+    match inspect_control_format(&root.join(CONTROL_DIR).join(CONTROL_DB_FILE), operation) {
+        Ok(()) => Ok(PlainRootStatus::Current),
+        Err(error) => classify_control_failure(error).ok_or(error),
+    }
+}
+
+fn classify_root_layout(
+    root: &Path,
+    operation: OperationContext<'_>,
+    probe_incomplete: bool,
+) -> PlainRootResult<PlainRootStatus> {
     operation.check()?;
     match path_kind(root, operation)? {
         None => return Ok(PlainRootStatus::Absent),
@@ -531,13 +552,13 @@ fn classify_root(
     }
 
     if contains_name(&names, MANIFEST_FILE) {
-        classify_committed_root(root, &names, operation)
+        classify_committed_root_layout(root, &names, operation)
     } else {
         classify_incomplete_root(root, &names, operation, probe_incomplete)
     }
 }
 
-fn classify_committed_root(
+fn classify_committed_root_layout(
     root: &Path,
     names: &[OsString],
     operation: OperationContext<'_>,
@@ -639,10 +660,7 @@ fn classify_committed_root(
     if file_length(&control_path, operation)?.unwrap_or_default() == 0 {
         return Ok(PlainRootStatus::Corrupt);
     }
-    match inspect_control_format(&control_path, operation) {
-        Ok(()) => Ok(PlainRootStatus::Current),
-        Err(error) => classify_control_failure(error).ok_or(error),
-    }
+    Ok(PlainRootStatus::Current)
 }
 
 fn classify_incomplete_root(
@@ -1188,6 +1206,55 @@ pub fn open_plain(
             let status = classify_root(path, operation, true)?;
             Err(status_error(status))
         }
+        other => Err(status_error(other)),
+    }
+}
+
+/// Opens an existing application root with guarded CONTROL crash recovery.
+///
+/// The stable root lock is held before any writable engine open and is retained in the result.
+/// Read-only root/query entrypoints continue to use [`open_plain`].
+///
+/// # Errors
+/// Refuses unknown, incomplete, unsupported or corrupt root layouts before recovery;
+/// propagates normal engine, cancellation, deadline, schema and I/O failures.
+pub fn open_plain_with_recovery(
+    path: &Path,
+    deadline: Instant,
+    cancellation: &Arc<AtomicBool>,
+) -> PlainRootResult<PlainRootGuard> {
+    let operation = OperationContext::new(deadline, cancellation);
+    operation.check()?;
+    check_absolute(path)?;
+    let status = classify_root_layout(path, operation, false)?;
+    if status != PlainRootStatus::Current {
+        return Err(status_error(status));
+    }
+    let lock = acquire_lock(path, false, operation)?;
+    let status = classify_root_layout(path, operation, false)?;
+    if status != PlainRootStatus::Current {
+        return Err(status_error(status));
+    }
+    let guard = PlainRootGuard {
+        path: path.to_path_buf(),
+        _lock: lock,
+    };
+    match inspect_control_format(&guard.control_path(), operation) {
+        Ok(()) => {}
+        Err(PlainRootError::NeedsRepair) => {
+            // Anonymous tempfile ownership gives OS cleanup even if the process
+            // is killed. Use the canonical root's parent, never its classified layout.
+            let canonical_root = after_io(path.canonicalize(), operation)?;
+            let parent = canonical_root.parent().ok_or(PlainRootError::InvalidPath)?;
+            operation.check()?;
+            let candidate = after_io(tempfile::tempfile_in(parent), operation)?;
+            recover_plain_control(&guard.control_path(), candidate, deadline, cancellation)
+                .map_err(control_error)?;
+        }
+        Err(error) => return Err(error),
+    }
+    match classify_root(path, operation, false)? {
+        PlainRootStatus::Current => Ok(guard),
         other => Err(status_error(other)),
     }
 }

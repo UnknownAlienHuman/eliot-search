@@ -47,6 +47,7 @@ pub struct RootInvocation {
     pub(crate) data_root: PathBuf,
     pub(crate) source_file: Option<PathBuf>,
     pub(crate) index_path: Option<PathBuf>,
+    pub(crate) index_owner_stdio: bool,
     pub(crate) source_id: Option<SourceId>,
     pub(crate) unit: Option<usize>,
     pub(crate) publication: Option<PublicationRequest>,

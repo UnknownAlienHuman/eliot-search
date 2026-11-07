@@ -42,7 +42,9 @@ Compare both the selected current source/preparation snapshot and published inve
 removed or newly failed sources. Use bounded ordered reads. Scoped index admits/refreshes only its PATH;
 bare index reloads the union of durable selections. Publication still checks all current source rows: unrelated
 legacy unprepared rows return PUBLICATION_SOURCE_NOT_PREPARED, never implicit preparation or omission.
-The foreground periodic trigger/lifetime/interval remains unimplemented. Repeated identical outcomes are no-ops.
+Foreground watch now repeats saved-selection Index after owned-child completion/cleanup and cancellable sleep;
+it does not overlap iterations or add a publication queue/lifecycle owner. Repeated identical outcomes are no-ops.
+Remaining Stage 3A recovery/convergence/lifetime qualification is not completed by watch.
 
 | Observation | Desired outcome |
 |---|---|

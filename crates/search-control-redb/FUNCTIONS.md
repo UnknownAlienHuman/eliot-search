@@ -77,6 +77,19 @@ read_generation_source supplies the fixed decoder binding for publication page h
 
 These tables remain ordinary user data: the root format, persistent-savepoint protection and unfinished-root empty probe are unchanged. The [daemon publisher](../../bins/eliot-searchd/src/published_corpus.rs) owns actual backend readiness/canary, snapshot installation and output. The retained [publication recipe](../search-index-qdrant/search-publication/FUNCTIONS.md) owns later convergence/view-lifetime rules.
 
+## Guarded engine recovery
+
+Native read-only inspection reports NeedsRepair without repairing. The actual writable-open capability caller
+holds a validated current root's exclusive guard and supplies an owned empty temporary file outside that root.
+recover_plain_control reads the dirty original into this owned copy, uses maintained redb recovery/integrity
+checks and validates application format there before original writes. It rechecks the original, recovers it
+through maintained redb, clean-closes and inspects it. It never copies recovered candidate bytes back.
+
+Unsupported/corrupt/missing format metadata is refused without reset; no format row, user table or persistent
+savepoint is created/removed to bypass refusal. Original deadline/cancellation reach the engine repair callback.
+Cancellation is not a rollback or byte-preservation promise once recovery of a valid original has begun.
+Read-only source/preparation/query captures and incomplete-root emptiness/discard rules remain unchanged.
+
 ## Existing root-control operations
 
 initialize_plain creates only the existing format metadata. inspect_plain_control reads the marker without enumerating the populated table catalogue. open_plain retains root.lock and verifies the current root before source work. No new root registration, key, credential, or lifecycle service is added.

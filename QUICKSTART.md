@@ -38,7 +38,29 @@ still returns PUBLICATION_SOURCE_NOT_PREPARED if any current row lacks matching 
 Unchanged native identity plus ObjectRef preserves the logical source head and avoids a new collection.
 Search returns verified retained units and is read-only. ec9fb6f selection-reload source/native checks passed
 in the scopes recorded in the [registry](docs/audit/ANALYSIS_REGISTRY.md#resume); earlier cases retain their own
-binary scope. R1 remains partial: no foreground periodic-refresh consumer, lifetime or interval is implemented.
+binary scope. Foreground watch is connected; R1 still needs its remaining Stage 3A qualification.
+
+## Watch admitted selections
+
+After initializing the root and admitting at least one file/tree with index PATH, run:
+
+    eliot-search watch --qdrant-url http://127.0.0.1:6334 --data-root "C:\example\data-root"
+
+Watch accepts no PATH. It reloads saved selections in each owned Index child. The default interval is 30000 ms;
+--interval-ms N selects a positive interval. The interval starts after child/pipe cleanup and report output,
+so slow indexing does not overlap the next iteration. Each iteration has its own original 120-second budget.
+Ordinary iteration errors are reported before the next wait; fatal cleanup/signal/output failure ends watch.
+Ctrl-C stops watch; native sleep/active cases exited 130 without surviving Index children.
+
+Each child retains at most 64 KiB of stdout and stderr while continuing to drain excess. The internal owner
+stdin closes when its parent disappears, requesting cooperative Index cancellation. This is foreground work,
+not an OS service. Qdrant remains operator-owned. Search may run separately and remains read-only.
+
+Index alone uses guarded writable CONTROL crash recovery when NeedsRepair is observed. It validates a
+recovered owned temporary copy before writes to the unchanged original, then uses maintained redb recovery,
+clean close and inspection. Read-only open/query do not repair. Unsupported/corrupt or missing-format storage
+is refused without reset or copying candidate bytes back. See the [recovery owner](crates/search-runtime/search-runtime-owner/FUNCTIONS.md#guarded-writable-open)
+and [exact native scopes](docs/audit/ANALYSIS_REGISTRY.md#evidence-status).
 
 ## Root operator commands
 
@@ -177,8 +199,9 @@ preformat-empty retry/discard, stable lock identity, recognized partial stages a
 Stage states were constructed from actual producer bytes and real hardlinks, not produced by process kills.
 The savepoint regression preserves the same golden savepoint ID 1 and retained user data on refusal.
 
-Actual process-kill/power-loss recovery, other platforms and installed-baseline qualification were not run.
-The expired-before-spawn process trigger was not executed; that boundary has source review only.
+The earlier root-only batch did not run process-kill/power-loss recovery, other platforms or installed-baseline
+qualification. Later watch parent-death and dirty-engine cases have separate scopes in the registry; power loss
+and the exact pre-spawn signal boundary remain NOT_RUN.
 The [registry](docs/audit/ANALYSIS_REGISTRY.md#evidence-status) separates earlier native API/pipe probes from
 the ad8 recovery/config batch and records the exact checked revisions.
 
@@ -189,5 +212,5 @@ CurrentSourceRecord. prepare-source consumes retained bytes and stores the compl
 outcome. publish-prepared connects those stored inputs to actual Qdrant/current/evidence/PublishedView.
 Read-only search returns verified retained units and citations from that pinned generation. Index now connects
 explicit file/tree retention, preparation and publication without manual SourceId assembly. Admission is durable,
-and bare index reloads it at writable startup. Periodic triggering and installed-baseline qualification remain unfinished. Confirmed filesystem deletion excludes membership from
+and bare index reloads it at writable startup. Foreground periodic watch is connected; broader R1 and installed-baseline qualification remain unfinished. Confirmed filesystem deletion excludes membership from
 new generations while preserving retained objects and pinned views. Inaccessible or partial inventory is not removal.

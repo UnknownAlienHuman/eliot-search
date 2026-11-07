@@ -7,7 +7,7 @@ This page owns delivery order and cross-owner values. Use [code map](CODE_MAP.md
 ## Connected path
 
 The current binaries expose four root operations, explicit file/tree index, retain-file, retained-only
-prepare-source, publish-prepared and framed read-only search. The connected path reaches source/current row, complete preparation/current outcome,
+prepare-source, publish-prepared, foreground watch and framed read-only search. The connected path reaches source/current row, complete preparation/current outcome,
 Qdrant generation/current evidence/view and verified retained units/citations. Publication returns generation
 state/counts; search is the sole user query route. U1 Windows debug scopes belong in the registry;
 R1 convergence, Exact/windows and later product stages remain unfinished.
@@ -112,9 +112,16 @@ their bounded deduplicated union. Explicit File wins over Tree ignores. Unchange
 Admission/kind survive absence/re-add. Only confirmed in-scope absence removes current membership; ignored but
 present sources remain, as do retained bytes/pinned evidence. Incomplete inventory is not removal.
 
-R1 remains partial. Durable admission and writable-startup reload are implemented; next connect the concrete
-foreground periodic-refresh consumer under this selection/read plan. Its trigger/lifetime/interval do not
-exist yet. Periodic policy is required, not runtime qualification.
+R1 remains partial. Durable admission/reload and foreground watch are implemented. Watch accepts no PATH,
+runs one saved-selection Index child with its original 120-second budget, drains bounded retained output and
+cleans up before cancellable sleep (default 30 seconds, positive --interval-ms override). Iterations do not
+overlap. Owner-stdio EOF requests cooperative cancellation on parent loss. Index uses open_plain_with_recovery;
+ordinary read-only opens/queries do not repair.
+
+Next qualify remaining unknown Insert-header, commit/install interruption, stale/ABA, pinned-view lifetime and
+whole-generation cleanup boundaries. Prior guard proof retains its original scope; watch alone does not
+complete Stage 3A. After R1 acceptance the actual order is X1 Exact/Continue/Expand/expiry, M1 archive/import,
+then V1 relevance/scale/installed release.
 Search stays read-only; query and writer share exclusive root exclusion through flush, so a concurrent view
 manager is not the next prerequisite.
 
