@@ -10,7 +10,10 @@ The daemon owns native invocation, bootstrap settings, root dispatch and factual
 initialization remains explicit. This is guarded repair-permitted opening, not command routing inside the root
 owner. Ordinary open/query remain read-only. index_sources carries that same guard and original 120-second deadline through scan, typed retain/
 prepare, membership update, publication and output. It does not chain JSON-producing commands or reacquire
-the root between stages.
+the root between stages. After initial inventory/selection/scan, Index opens one ControlWriter and borrows
+short transactions for source/preparation work, then transfers it into publication staging/upload. The Database
+may remain open across object/RPC work; transactions may not. Failed borrowed commit stops the operation;
+explicit close precedes native read-only acceptance, final CAS and PublishedView.
 
 The pinned ignore 0.4.34 walk uses captured CWD, strict ignore-file I/O, standard filters, no link following,
 and explicit .git/data-root exclusion. Reparse/link and incomplete/malformed-ignore observations refuse the
@@ -75,7 +78,8 @@ No operation executes input or implicitly starts a network/model/Qdrant service.
 3. Build/verify the vectorless generation through the bridge: InsertOnly/wait, full schema/point/payload/count
    readback and independent source-backed singleton TextQuery canary.
 4. Compare/commit current, predecessor cleanup and pending clear atomically; open the completely validated
-   matching native RO snapshot before reporting generation state/counts. No writer spans object/backend I/O.
+   matching native RO snapshot before reporting generation state/counts. The shared ControlWriter closes before
+   acceptance/CAS/view; no write transaction spans object/backend I/O.
 
 Publication accepts no --query/--limit and returns no user hits. Canary candidates are bounded complete
 Unicode alphanumeric/underscore identifiers containing an alphanumeric character, including code/compact JSON.

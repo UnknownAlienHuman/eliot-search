@@ -19,6 +19,7 @@ use crate::current_source::{
     SOURCE_STATE, SourceControlError, catalogue_names, decode_record, read_namespace,
     read_source_by_id,
 };
+use crate::plain_control::ControlWriter;
 
 const PREPARATIONS: TableDefinition<&[u8], &[u8]> = TableDefinition::new(PREPARATION_TABLE_NAME);
 
@@ -406,6 +407,17 @@ fn read_view(
 ) -> Result<(CurrentSourceRecord, Option<CurrentPreparation>)> {
     check(deadline, cancel)?;
     let db = ReadOnlyDatabase::open(path).map_err(|_| PreparationControlError::Database)?;
+    let observed = read_database(&db, id, deadline, cancel)?;
+    db.close().map_err(|_| PreparationControlError::Database)?;
+    Ok(observed)
+}
+fn read_database(
+    db: &impl ReadableDatabase,
+    id: SourceId,
+    deadline: Instant,
+    cancel: &AtomicBool,
+) -> Result<(CurrentSourceRecord, Option<CurrentPreparation>)> {
+    check(deadline, cancel)?;
     let tx = db
         .begin_read()
         .map_err(|_| PreparationControlError::Database)?;
@@ -447,8 +459,6 @@ fn read_view(
         return Err(PreparationControlError::Corrupt);
     }
     check(deadline, cancel)?;
-    drop(tx);
-    db.close().map_err(|_| PreparationControlError::Database)?;
     Ok((source, row))
 }
 fn write_source(tx: &WriteTransaction, id: SourceId) -> Result<CurrentSourceRecord> {
@@ -501,19 +511,6 @@ fn finish_commit(
     }
 }
 
-/// Explicitly selects settings, advancing their revision only when their value changes.
-///
-/// # Errors
-/// Returns a closed error for invalid settings, missing/corrupt state, revision exhaustion or I/O.
-pub fn select_preparation_settings(
-    path: &Path,
-    id: SourceId,
-    settings: PreparationSettings,
-    deadline: Instant,
-    cancel: &AtomicBool,
-) -> Result<CurrentPreparation> {
-    select_settings(path, id, settings, false, deadline, cancel)
-}
 fn select_settings(
     path: &Path,
     id: SourceId,
@@ -532,6 +529,36 @@ fn select_settings(
         return Ok(row.clone());
     }
     let db = Database::open(path).map_err(|_| PreparationControlError::Database)?;
+    let (tx, row) = write_settings(&db, id, settings, &source, previous.as_ref())?;
+    finish_commit(db, tx, path, row, deadline, cancel)
+}
+fn select_settings_on(
+    db: &Database,
+    id: SourceId,
+    settings: PreparationSettings,
+    initialize_only: bool,
+    deadline: Instant,
+    cancel: &AtomicBool,
+) -> Result<CurrentPreparation> {
+    if !settings.is_supported() {
+        return Err(PreparationControlError::InvalidSettings);
+    }
+    let (source, previous) = read_database(db, id, deadline, cancel)?;
+    if let Some(row) = &previous
+        && (initialize_only || row.settings == settings)
+    {
+        return Ok(row.clone());
+    }
+    let (tx, row) = write_settings(db, id, settings, &source, previous.as_ref())?;
+    finish_borrowed_commit(tx, row, deadline, cancel)
+}
+fn write_settings(
+    db: &Database,
+    id: SourceId,
+    settings: PreparationSettings,
+    source: &CurrentSourceRecord,
+    previous: Option<&CurrentPreparation>,
+) -> Result<(WriteTransaction, CurrentPreparation)> {
     let tx = db
         .begin_write()
         .map_err(|_| PreparationControlError::Database)?;
@@ -549,7 +576,7 @@ fn select_settings(
         .map_err(|_| PreparationControlError::Database)?
         .map(|v| decode(v.value()))
         .transpose()?;
-    if found != previous {
+    if found.as_ref() != previous {
         return Err(PreparationControlError::Stale);
     }
     let row = match found {
@@ -576,7 +603,7 @@ fn select_settings(
         .map_err(|_| PreparationControlError::Database)?;
     drop(table);
     crate::current_source::advance_wanted_revision(&tx).map_err(source_error)?;
-    finish_commit(db, tx, path, row, deadline, cancel)
+    Ok((tx, row))
 }
 
 /// Initializes the default only when no selection exists, preserving selected settings on every repeat.
@@ -616,6 +643,12 @@ pub fn capture_preparation(
     cancel: &AtomicBool,
 ) -> Result<PreparationCapture> {
     let (source, row) = read_view(path, id, deadline, cancel)?;
+    capture_view(source, row)
+}
+fn capture_view(
+    source: CurrentSourceRecord,
+    row: Option<CurrentPreparation>,
+) -> Result<PreparationCapture> {
     let row = row.ok_or(PreparationControlError::NotSelected)?;
     Ok(PreparationCapture {
         source,
@@ -637,13 +670,28 @@ pub fn commit_preparation(
     deadline: Instant,
     cancel: &AtomicBool,
 ) -> Result<CurrentPreparation> {
+    check_outcome(result, deadline, cancel)?;
+    let db = Database::open(path).map_err(|_| PreparationControlError::Database)?;
+    let (tx, row) = write_outcome(&db, capture, result)?;
+    match tx {
+        Some(tx) => finish_commit(db, tx, path, row, deadline, cancel),
+        None => Ok(row),
+    }
+}
+fn check_outcome(result: PreparationOutcome, deadline: Instant, cancel: &AtomicBool) -> Result<()> {
     check(deadline, cancel)?;
     if let PreparationOutcome::Ready { artifact } = result
         && !valid_object(artifact, ObjectKind::Prepared)
     {
         return Err(PreparationControlError::InvalidOutcome);
     }
-    let db = Database::open(path).map_err(|_| PreparationControlError::Database)?;
+    Ok(())
+}
+fn write_outcome(
+    db: &Database,
+    capture: &PreparationCapture,
+    result: PreparationOutcome,
+) -> Result<(Option<WriteTransaction>, CurrentPreparation)> {
     let tx = db
         .begin_write()
         .map_err(|_| PreparationControlError::Database)?;
@@ -677,7 +725,7 @@ pub fn commit_preparation(
                 && matches!(o.result, PreparationOutcome::Ready { .. })
         })
     {
-        return Ok(row);
+        return Ok((None, row));
     }
     let outcome = BoundPreparationOutcome {
         source_row_revision: source.row_revision,
@@ -687,7 +735,7 @@ pub fn commit_preparation(
         result,
     };
     if row.outcome.as_ref() == Some(&outcome) {
-        return Ok(row);
+        return Ok((None, row));
     }
     row.outcome_revision = row
         .outcome_revision
@@ -700,5 +748,75 @@ pub fn commit_preparation(
         .map_err(|_| PreparationControlError::Database)?;
     drop(table);
     crate::current_source::advance_wanted_revision(&tx).map_err(source_error)?;
-    finish_commit(db, tx, path, row, deadline, cancel)
+    Ok((Some(tx), row))
+}
+fn finish_borrowed_commit(
+    tx: WriteTransaction,
+    proposed: CurrentPreparation,
+    deadline: Instant,
+    cancel: &AtomicBool,
+) -> Result<CurrentPreparation> {
+    check(deadline, cancel)?;
+    // A live read after a failed commit cannot establish durable acceptance.
+    // The owner must stop and close the database on this error.
+    tx.commit().map_err(|_| PreparationControlError::Database)?;
+    Ok(proposed)
+}
+
+impl ControlWriter {
+    /// Initializes defaults only when no settings selection exists.
+    ///
+    /// # Errors
+    /// Returns a preparation error for missing or invalid state, I/O,
+    /// cancellation or the original deadline.
+    pub fn ensure_preparation_settings(
+        &self,
+        id: SourceId,
+        deadline: Instant,
+        cancel: &AtomicBool,
+    ) -> Result<CurrentPreparation> {
+        select_settings_on(
+            self.database(),
+            id,
+            PreparationSettings::default(),
+            true,
+            deadline,
+            cancel,
+        )
+    }
+
+    /// Captures all source, settings and expected-outcome guards in one read snapshot.
+    ///
+    /// # Errors
+    /// Returns a preparation error without creating tables or repairing storage.
+    pub fn capture_preparation(
+        &self,
+        id: SourceId,
+        deadline: Instant,
+        cancel: &AtomicBool,
+    ) -> Result<PreparationCapture> {
+        let (source, row) = read_database(self.database(), id, deadline, cancel)?;
+        capture_view(source, row)
+    }
+
+    /// Commits an outcome after object I/O, comparing every captured guard.
+    ///
+    /// # Errors
+    /// Returns Stale for changed guards and Database on a failed commit.
+    /// On Database the owner must stop and close this writer before observation.
+    /// Cancellation, deadline and other preparation failures retain their meanings.
+    pub fn commit_preparation(
+        &self,
+        capture: &PreparationCapture,
+        result: PreparationOutcome,
+        deadline: Instant,
+        cancel: &AtomicBool,
+    ) -> Result<CurrentPreparation> {
+        check_outcome(result, deadline, cancel)?;
+        let (tx, row) = write_outcome(self.database(), capture, result)?;
+        match tx {
+            Some(tx) => finish_borrowed_commit(tx, row, deadline, cancel),
+            None => Ok(row),
+        }
+    }
 }

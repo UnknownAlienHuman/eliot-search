@@ -112,16 +112,18 @@ their bounded deduplicated union. Explicit File wins over Tree ignores. Unchange
 Admission/kind survive absence/re-add. Only confirmed in-scope absence removes current membership; ignored but
 present sources remain, as do retained bytes/pinned evidence. Incomplete inventory is not removal.
 
-R1 remains partial. Durable admission/reload and foreground watch are implemented. Watch accepts no PATH,
+R1 is accepted at its recorded functional and ordinary-repo-1 optimized RELEASE fixed-input scopes.
+Durable admission/reload and foreground watch are implemented. Watch accepts no PATH,
 runs one saved-selection Index child with its original 120-second budget, drains bounded retained output and
 cleans up before cancellable sleep (default 30 seconds, positive --interval-ms override). Iterations do not
 overlap. Owner-stdio EOF requests cooperative cancellation on parent loss. Index uses open_plain_with_recovery;
 ordinary read-only opens/queries do not repair.
 
-Next qualify remaining unknown Insert-header, commit/install interruption, stale/ABA, pinned-view lifetime and
-whole-generation cleanup boundaries. Prior guard proof retains its original scope; watch alone does not
-complete Stage 3A. After R1 acceptance the actual order is X1 Exact/Continue/Expand/expiry, M1 archive/import,
-then V1 relevance/scale/installed release.
+Persisted unknown Insert/ABA, postcommit/pre-view and held-query exclusion/cleanup have their separately pinned
+native scopes; the resource run does not relabel them. Fixed-input RELEASE measurement passed the declared
+profile with sampled/OS-reported counters; complete unsampled product peaks and generation-replacement peak
+remain UNKNOWN/NOT_RUN. DEBUG query performance is not qualified. See the registry for exact boundaries.
+X1 is next: literal Exact and same-session Continue/Expand/expiry, then M1 archive/import and V1 release checks.
 Search stays read-only; query and writer share exclusive root exclusion through flush, so a concurrent view
 manager is not the next prerequisite.
 
@@ -157,7 +159,9 @@ consumers. No encryption or restricted-user phase. Qdrant Edge, if studied later
 ## Lifetime and lock order
 
 PlainRootGuard covers current operations and the published query snapshot through complete output flush.
-Publication performs object/backend I/O outside redb writers, commits bounded metadata and completely validates
+Publication borrows short durable transactions from one ControlWriter/Database across Index/staging/upload.
+No transaction spans object/backend I/O. Explicit close precedes final CAS and native read-only acceptance;
+publication commits bounded metadata and completely validates
 its matching snapshot before reporting visibility. No final transaction copies the corpus. Ordinary search
 pins that committed snapshot and verifies only returned evidence/objects; it does not run acceptance again.
 

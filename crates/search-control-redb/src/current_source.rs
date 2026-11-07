@@ -21,6 +21,8 @@ use search_source_registry::{
 };
 use serde::{Deserialize, Serialize};
 
+use crate::plain_control::ControlWriter;
+
 const META_TABLE_NAME: &str = "plain_control_meta";
 const SOURCE_STATE_NAME: &str = "source_state";
 const SOURCE_ROWS_NAME: &str = "current_source_rows";
@@ -178,6 +180,15 @@ pub fn capture_selections(
     check(deadline, cancellation)?;
     let database =
         ReadOnlyDatabase::open(control_path).map_err(|_| SourceControlError::Database)?;
+    capture_selections_database(&database, deadline, cancellation)
+}
+
+fn capture_selections_database(
+    database: &impl ReadableDatabase,
+    deadline: Instant,
+    cancellation: &AtomicBool,
+) -> Result<Vec<AdmittedSelection>, SourceControlError> {
+    check(deadline, cancellation)?;
     let transaction = database
         .begin_read()
         .map_err(|_| SourceControlError::Database)?;
@@ -252,18 +263,12 @@ fn ensure_admission_schema(transaction: &WriteTransaction) -> Result<(), SourceC
     Ok(())
 }
 
-/// Persists an explicitly validated file/tree admission without creating source identities.
-/// Identical admission is a logical no-op; filesystem deletion never clears admission.
-///
-/// # Errors
-/// Refuses invalid locators, corrupt/unsupported state, inventory bounds,
-/// cancellation, deadline expiry, and database failures.
-pub fn admit_selection(
-    control_path: &Path,
+fn admit_selection_database(
+    database: &Database,
     selection: &AdmittedSelection,
     deadline: Instant,
     cancellation: &AtomicBool,
-) -> Result<(), SourceControlError> {
+) -> Result<bool, SourceControlError> {
     check(deadline, cancellation)?;
     let locator = source_locator_bytes(&selection.path)?;
     let key = selection_key(&locator);
@@ -273,7 +278,6 @@ pub fn admit_selection(
         kind: selection.kind,
     })
     .map_err(|_| SourceControlError::Corrupt)?;
-    let database = Database::open(control_path).map_err(|_| SourceControlError::Database)?;
     let transaction = database
         .begin_write()
         .map_err(|_| SourceControlError::Database)?;
@@ -286,7 +290,7 @@ pub fn admit_selection(
         .map_err(|_| SourceControlError::Database)?
         && decode_selection(&key, existing.value())? == *selection
     {
-        return Ok(());
+        return Ok(true);
     }
     let mut count = 1_usize;
     let mut charged = key.len() + bytes.len();
@@ -308,15 +312,7 @@ pub fn admit_selection(
         .map_err(|_| SourceControlError::Database)?;
     drop(state);
     check(deadline, cancellation)?;
-    if transaction.commit().is_ok() {
-        return Ok(());
-    }
-    drop(database);
-    if capture_selections(control_path, deadline, cancellation)?.contains(selection) {
-        Ok(())
-    } else {
-        Err(SourceControlError::Database)
-    }
+    Ok(transaction.commit().is_ok())
 }
 
 fn check(deadline: Instant, cancellation: &AtomicBool) -> Result<(), SourceControlError> {
@@ -718,6 +714,16 @@ pub fn capture_current_source(
     let locator = source_locator_bytes(selected_file)?;
     let database =
         ReadOnlyDatabase::open(control_path).map_err(|_| SourceControlError::Database)?;
+    capture_source_database(&database, locator, deadline, cancellation)
+}
+
+fn capture_source_database(
+    database: &impl ReadableDatabase,
+    locator: Vec<u8>,
+    deadline: Instant,
+    cancellation: &AtomicBool,
+) -> Result<SourceCapture, SourceControlError> {
+    check(deadline, cancellation)?;
     let transaction = database
         .begin_read()
         .map_err(|_| SourceControlError::Database)?;
@@ -736,7 +742,6 @@ pub fn capture_current_source(
         let source_namespace_id = SourceNamespaceId::from_bytes(random_id()?);
         let source_id = SourceId::from_bytes(random_id()?);
         drop(transaction);
-        drop(database);
         return Ok(SourceCapture {
             source_namespace_id,
             source_id,
@@ -763,7 +768,6 @@ pub fn capture_current_source(
         None => (SourceId::from_bytes(random_id()?), None, None),
     };
     drop(transaction);
-    drop(database);
     Ok(SourceCapture {
         source_namespace_id: namespace_id,
         source_id,
@@ -787,6 +791,15 @@ pub fn capture_current_sources(
     check(deadline, cancellation)?;
     let database =
         ReadOnlyDatabase::open(control_path).map_err(|_| SourceControlError::Database)?;
+    capture_sources_database(&database, deadline, cancellation)
+}
+
+fn capture_sources_database(
+    database: &impl ReadableDatabase,
+    deadline: Instant,
+    cancellation: &AtomicBool,
+) -> Result<Vec<CurrentSourceRecord>, SourceControlError> {
+    check(deadline, cancellation)?;
     let transaction = database
         .begin_read()
         .map_err(|_| SourceControlError::Database)?;
@@ -946,6 +959,31 @@ pub fn commit_current_source(
 ) -> Result<CurrentSourceRecord, SourceControlError> {
     check(deadline, cancellation)?;
     let database = Database::open(control_path).map_err(|_| SourceControlError::Database)?;
+    let (record, committed) = commit_source_database(
+        &database,
+        capture,
+        file_key,
+        object_ref,
+        deadline,
+        cancellation,
+    )?;
+    drop(database);
+    if committed {
+        return Ok(record);
+    }
+    let observed = load_current_source(control_path, &record.locator, deadline, cancellation);
+    resolve_source_commit(record, observed)
+}
+
+fn commit_source_database(
+    database: &Database,
+    capture: SourceCapture,
+    file_key: NativeFileKey,
+    object_ref: ObjectRef,
+    deadline: Instant,
+    cancellation: &AtomicBool,
+) -> Result<(CurrentSourceRecord, bool), SourceControlError> {
+    check(deadline, cancellation)?;
     let transaction = database
         .begin_write()
         .map_err(|_| SourceControlError::Database)?;
@@ -968,7 +1006,7 @@ pub fn commit_current_source(
             .ok_or(SourceControlError::Stale)?;
         let current = decode_record(current.value())?;
         if current.object_ref == object_ref && current.file_key == file_key {
-            return Ok(current);
+            return Ok((current, true));
         }
     }
 
@@ -1006,37 +1044,33 @@ pub fn commit_current_source(
     drop(state);
     advance_wanted_revision(&transaction)?;
     check(deadline, cancellation)?;
-    if transaction.commit().is_ok() {
-        Ok(record)
-    } else {
-        drop(database);
-        match load_current_source(control_path, &record.locator, deadline, cancellation) {
-            Ok(Some(observed)) if observed == record => Ok(record),
-            Ok(Some(_)) => Err(SourceControlError::Stale),
-            Ok(None) | Err(_) => Err(SourceControlError::Database),
-        }
+    Ok((record, transaction.commit().is_ok()))
+}
+
+fn resolve_source_commit(
+    record: CurrentSourceRecord,
+    observed: Result<Option<CurrentSourceRecord>, SourceControlError>,
+) -> Result<CurrentSourceRecord, SourceControlError> {
+    match observed {
+        Ok(Some(observed)) if observed == record => Ok(record),
+        Ok(Some(_)) => Err(SourceControlError::Stale),
+        Ok(None) | Err(_) => Err(SourceControlError::Database),
     }
 }
 
-/// Removes captured source rows, locator bindings, and preparation outcomes atomically.
-///
-/// # Errors
-/// Returns `Stale` for changed registrations or duplicate selections, or a limit,
-/// revision, corruption, cancellation, deadline, or database error.
-pub fn remove_current_sources(
-    control_path: &Path,
+fn remove_sources_database(
+    database: &Database,
     expected: &[CurrentSourceRecord],
     deadline: Instant,
     cancellation: &AtomicBool,
-) -> Result<(), SourceControlError> {
+) -> Result<bool, SourceControlError> {
     if expected.is_empty() {
-        return Ok(());
+        return Ok(true);
     }
     if expected.len() > MAX_CURRENT_SOURCES {
         return Err(SourceControlError::InventoryLimit);
     }
     check(deadline, cancellation)?;
-    let database = Database::open(control_path).map_err(|_| SourceControlError::Database)?;
     let transaction = database
         .begin_write()
         .map_err(|_| SourceControlError::Database)?;
@@ -1116,21 +1150,7 @@ pub fn remove_current_sources(
     drop(state);
     advance_wanted_revision(&transaction)?;
     check(deadline, cancellation)?;
-    if transaction.commit().is_ok() {
-        return Ok(());
-    }
-
-    drop(database);
-    let observed = capture_current_sources(control_path, deadline, cancellation)?;
-    if expected.iter().any(|removed| {
-        observed.iter().any(|current| {
-            current.source_id == removed.source_id || current.locator == removed.locator
-        })
-    }) {
-        Err(SourceControlError::Stale)
-    } else {
-        Ok(())
-    }
+    Ok(transaction.commit().is_ok())
 }
 
 fn load_current_source(
@@ -1142,6 +1162,16 @@ fn load_current_source(
     check(deadline, cancellation)?;
     let database =
         ReadOnlyDatabase::open(control_path).map_err(|_| SourceControlError::Database)?;
+    load_current_source_database(&database, locator, deadline, cancellation)
+}
+
+fn load_current_source_database(
+    database: &impl ReadableDatabase,
+    locator: &[u8],
+    deadline: Instant,
+    cancellation: &AtomicBool,
+) -> Result<Option<CurrentSourceRecord>, SourceControlError> {
+    check(deadline, cancellation)?;
     let transaction = database
         .begin_read()
         .map_err(|_| SourceControlError::Database)?;
@@ -1160,4 +1190,81 @@ fn load_current_source(
     let record = load_locator_row(&transaction, locator)?;
     check(deadline, cancellation)?;
     Ok(record)
+}
+
+impl ControlWriter {
+    /// Captures one source registration in a short read transaction on this owner.
+    ///
+    /// # Errors
+    /// Preserves locator, schema, integrity, random-source, cancellation and deadline failures.
+    pub fn capture_current_source(
+        &self,
+        selected_file: &Path,
+        deadline: Instant,
+        cancellation: &AtomicBool,
+    ) -> Result<SourceCapture, SourceControlError> {
+        let locator = source_locator_bytes(selected_file)?;
+        capture_source_database(self.database(), locator, deadline, cancellation)
+    }
+
+    /// Commits a verified retained source under the existing registration guards.
+    ///
+    /// # Errors
+    /// Preserves stale/invalid source failures. An ambiguous commit returns a
+    /// database error so the outer owner closes and stops before further work.
+    pub fn commit_current_source(
+        &self,
+        capture: SourceCapture,
+        file_key: NativeFileKey,
+        object_ref: ObjectRef,
+        deadline: Instant,
+        cancellation: &AtomicBool,
+    ) -> Result<CurrentSourceRecord, SourceControlError> {
+        let (record, committed) = commit_source_database(
+            self.database(),
+            capture,
+            file_key,
+            object_ref,
+            deadline,
+            cancellation,
+        )?;
+        if committed {
+            return Ok(record);
+        }
+        Err(SourceControlError::Database)
+    }
+
+    /// Persists desired admission using this operation's existing database owner.
+    ///
+    /// # Errors
+    /// Preserves admission bounds/schema checks; an ambiguous commit stops the owner.
+    pub fn admit_selection(
+        &self,
+        selection: &AdmittedSelection,
+        deadline: Instant,
+        cancellation: &AtomicBool,
+    ) -> Result<(), SourceControlError> {
+        if admit_selection_database(self.database(), selection, deadline, cancellation)? {
+            Ok(())
+        } else {
+            Err(SourceControlError::Database)
+        }
+    }
+
+    /// Removes only exactly captured source registrations and their preparation rows.
+    ///
+    /// # Errors
+    /// Preserves full-row/namespace/locator CAS, bounds and cancellation failures;
+    /// an ambiguous commit stops the owner without continuing production.
+    pub fn remove_current_sources(
+        &self,
+        expected: &[CurrentSourceRecord],
+        deadline: Instant,
+        cancellation: &AtomicBool,
+    ) -> Result<(), SourceControlError> {
+        if remove_sources_database(self.database(), expected, deadline, cancellation)? {
+            return Ok(());
+        }
+        Err(SourceControlError::Database)
+    }
 }

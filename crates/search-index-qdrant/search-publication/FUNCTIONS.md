@@ -83,7 +83,10 @@ fixed input/pages → exact collection and required indexes
 ```
 
 The final pointer transaction does not copy corpus-sized evidence rows; they were built in bounded transactions
-while the target was unserved. No redb writer or view mutex spans object/backend I/O. Do not start another
+while the target was unserved. One operation-scoped ControlWriter retains the existing Database across
+source/preparation, staging and upload; only short durable transactions are borrowed. It closes even on failure
+before native read-only verification, final current CAS and view opening. A failed borrowed commit is not
+accepted from live-handle readback. No write transaction or view mutex spans object/backend I/O. Do not start another
 publication before view installation succeeds or recovery refuses serving.
 
 Query addresses the view's physical collection, not an alias. Visible Stage 2/3A collections are immutable.

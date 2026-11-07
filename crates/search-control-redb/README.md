@@ -13,6 +13,11 @@ uses guarded current-inventory removal; ignored presence does not. Saved generat
 and immutable objects survive membership removal. Unchanged-key/ObjectRef remains a logical no-op. Unresolved old builds retain their complete
 header/rows in retired obligations while a fresh successor may proceed; cleanup cannot erase those obligations.
 
+Index retains one ControlWriter/Database across source/preparation and staging/upload, borrowing short durable
+transactions. It explicitly closes before read-only acceptance, final pointer CAS and views, including failure
+paths. A failed borrowed commit is not accepted by reading the live handle.
+[The owning rule](FUNCTIONS.md#operation-scoped-control-writer) distinguishes database and transaction lifetime.
+
 Source/Prepared immutable objects and external Qdrant effects belong to their existing owners; no writer
 transaction spans their I/O. Legacy journals, authority/DEK APIs and exclusive fixtures remain removed.
 NeedsRepair is distinct from corruption/unsupported format. The guarded writable-open capability may call

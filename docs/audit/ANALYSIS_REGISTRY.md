@@ -1,27 +1,28 @@
 # Work register
 
-Current checkpoint, 2026-11-07: main includes PR #631's durable selections/reload.
-Source fef129fd0e5f89862f422b9c7b733090444997aa adds foreground watch and guarded writable CONTROL recovery.
-Source review, changed-owner checks/strict Clippy and scoped native cases passed. R1 remains PARTIAL:
-watch does not close all Stage 3A recovery/convergence/lifetime gates or the full product.
+Current checkpoint, 2026-11-07: R1 is accepted at its separately recorded Windows functional and
+ordinary-repo-1 optimized RELEASE fixed-input scopes. Source 9e57418039d8e0effdb2edfd6b9e33d633e9e1c3
+is source-reviewed with changed-owner check/strict Clippy/build gates passed. The fixed-input run is
+FULL_RELEASE_PASS on its stated sampling/evidence basis; this is not DEBUG query, universal peak,
+replacement-workload, platform or whole-product qualification. X1 is READY; manager owns the next branch.
 
 <a id="resume"></a>
 <a id="resume-after-interruption"></a>
 ## Next task
 
-**R1 next: qualify the remaining Stage 3A boundaries.** The [foreground watch](../../bins/eliot-search/FUNCTIONS.md#foreground-watch)
-consumer now repeats saved-selection Index with bounded owned-child I/O, cancellation and after-completion
-sleep. [Guarded writable open](../../crates/search-runtime/search-runtime-owner/FUNCTIONS.md#guarded-writable-open)
-permits validated CONTROL engine recovery for Index; search remains read-only.
+**X1 next: literal Exact and same-session Continue/Expand/expiry.** Use the
+[Exact rule](../../crates/search-query/search-exact/FUNCTIONS.md), [selection rule](../../crates/search-query/search-access/FUNCTIONS.md)
+and [window owner](../../crates/search-query/search-continuation/FUNCTIONS.md) beside the actual daemon/client.
+Exact scans the selected pinned published inventory, including retained raw inputs without prepared points;
+it does not substitute latest current source/preparation. Continue/Expand retain that same view/order and
+commit local cursor progress only after complete output. Keep the existing serviced child connection.
 
-Remaining qualification includes commit/install interruption, pinned-view lifetime, whole-generation cleanup
-and resource qualification against the [predeclared Stage 3A corpus profile](../implementation/TEST_CUTOVER.md#stage-3a--convergence-and-resources);
-the persisted unknown Insert(1) recovery and ABA cases below cover stale/ABA at their actual process-boundary scope.
-Prior S1 guard evidence may be reused only at its actual scope. A concurrent view framework is not the default prerequisite: query and writer retain the existing
-exclusive root guard through output. Do not invent a replacement for the deleted task queue.
-
-After R1 acceptance, deliver X1 literal Exact plus same-session Continue/Expand/expiry, then M1 stopped-root
-archive/import, then V1 relevance/scale/installed release qualification. Foreground watch is not full R1 acceptance.
+R1's persisted unknown Insert/ABA, postcommit/pre-view interruption and fef held-view exclusion/cleanup are
+separately pinned native evidence. The 9e RELEASE resource run does not relabel those cases. Complete unsampled
+product peaks and generation-replacement peak remain UNKNOWN/NOT_RUN; exact pre-spawn timing, wire-level
+lost-ACK/original delayed RPC and real power loss remain NOT_RUN, not newly invented prerequisites.
+After X1, deliver M1 stopped-root archive/import, then V1 relevance/scale/installed release qualification.
+Do not restore a deleted task queue or add a concurrent view framework by default: root exclusion remains.
 
 <a id="work-register"></a>
 <a id="delivery-remaining"></a>
@@ -39,8 +40,8 @@ DONE below is the named delivered scope, not completion of the product.
 | P1 / DONE, Windows debug scope | S1 | Materializer/unitizer, shared writer, CONTROL and actual prepare-source child | Complete artifact/current outcome with actual stored text/ranges, empty/Gap and guarded CAS; source d2ccb596 scopes below. |
 | Q1 / DONE, Windows debug scope | P1 | Actual daemon publisher, CONTROL and concrete bridge | Full corpus → exact backend/readback/canary → guarded current/evidence → validated PublishedView; source 3c33d831. |
 | U1 / DONE, Windows debug scope | Q1 | CONTROL resolver, daemon/CLI, protocol/client | Read-only verified full retained units/citations; c843 targeted final-pin scope and earlier evidence below. |
-| R1 / PARTIAL, scoped Windows debug | U1 | CLI/daemon index helpers, source CONTROL and publication | Durable selection, scoped/bare refresh and foreground watch work; persisted unknown Insert(1) recovery and ABA verified at actual scope below; commit/install, pinned-view and resource qualification remain NOT_RUN. |
-| X1 / WAIT | R1 | Exact/query window and client owners | Retained exact denominator, same-session paging/expansion and expiry. |
+| R1 / ACCEPTED, recorded functional + RELEASE fixed-input scopes | U1 | CLI/daemon index helpers, source CONTROL and publication | Recorded owner gates include unknown Insert/ABA, postcommit boundary, held-query exclusion/cleanup and ordinary-repo-1 RELEASE fixed-input resource PASS; stronger unclaimed boundaries remain below. |
+| X1 / READY | R1 | Exact/query window and client owners | Retained exact denominator, same-session paging/expansion and expiry. |
 | M1 / WAIT | X1 | Retention and future stopped-root maintenance caller | Conservative collection/archive/import preserving originals. |
 | O1 / DEFERRED | Connected baseline + actual need | [Selected depth](../product/AGENT_ANALYSIS_FRAMEWORK.md#optional-depth) | Add only an actual source-backed consumer; remove unused scaffolds. |
 | V1 / WAIT | X1/M1 shipped paths | [Qualification](../implementation/TEST_CUTOVER.md), #215 | Measured relevance/scale/platform/release and installed-baseline evidence. |
@@ -86,6 +87,59 @@ hydration reuse. No application encryption, grants, OS-secret platform or second
 <a id="evidence-status"></a>
 <a id="execution-evidence"></a>
 ## Verification and known blockers
+
+<a id="release-fixed-input-resource-evidence"></a>
+### ordinary-repo-1 RELEASE fixed-input resource evidence
+
+- FINAL FULL_RELEASE_PASS: source 9e574180, Rust/Cargo 1.98.0, x86_64-pc-windows-msvc, optimized release with
+  existing incremental=true. Corpus/hardware/residency and all declared thresholds were unchanged.
+  CLI/daemon pins are the pre-measurement FDF0D5E9… / 1C1B7D57… pair in candidate-pins.json below.
+- Fresh full Index 27.917 s (35.820 files/s, 4.585 MiB/s), noop 2.6229 s. All 120 sequential queries
+  (24 × 5, limit 5, no excluded warmups) completed: p95 201.2634 ms, max 925.8224 ms, 6.3979 queries/s.
+  All 600 cards passed independent retained byte/ObjectRef/source/unit/range/line binding checks;
+  query-phase CONTROL bytes were identical. Backend count was 7971 points.
+- Watch emitted three success reports; CLI PID 29344 exited 130 and all three daemon children exited 0/gone.
+  After 600.043 s cleanup: current generation 1, pending absent, known retired backlog 0, one collection/
+  7971 points. This fixed-input workload exercised no generation replacement.
+- CPU phase means: product <=0.7804 core-equivalents (limit 8), Qdrant <=0.2145 (limit 16).
+  One query-child CPU counter was UNKNOWN; the conservative hardware/lifetime upper bound was 0.600 cores,
+  not an assumed zero. Machine sampled means <=42.31% (limit 80%) on 32 logical cores / 125.58 GiB.
+- Observed combined product working set 33681408 B (limit 4 GiB); Qdrant OS lifetime peak 712908800 B
+  (limit 8 GiB). Sampled handles: product 230/512, Qdrant 434/1024. CSV cadence was 2.06–2.10 s;
+  noop had one sample. Complete product working-set peak and unsampled handle/disk peaks remain UNKNOWN.
+  These are observed/sampled or OS-reported counters, not universal peak guarantees.
+- Product disk observed maximum 278727575 B <=1342177280. Final ALL-backend storage 839792099 B
+  <=2147483648; observed fixed-input high-water 906892580 B <=4294967296. Total backend storage includes
+  all generations/storage, not only live point count. This does NOT qualify generation-replacement peak;
+  replacement was not exercised and its peak remains NOT_RUN.
+- Qdrant PIDs 61356/15048 were guarded-stopped (-1), operators 97504/105556 exited 0; all owned processes
+  were reaped. Custody is complete. The full product, other platforms, real power loss, exact pre-spawn timing
+  and wire-level lost-ACK/original delayed RPC are not qualified.
+
+Before/after evidence remains distinct: first fef full Index timed out with 502 staged sources and no backend;
+c9's staging-only fix reached 1000 Ready/capture-complete, 1016 pages/7971 points but still timed out at
+120.0756 s (backend creation +105.635 s, 132 pages acknowledged, no in-flight operation/current).
+Neither timed-out job establishes successful throughput. c9→9e fixed-copy publication 99.151→28.769 s is a
+diagnostic comparison, not the fresh-profile result. 9e DEBUG full Index 101.26 s/noop 30.29 s passed only those
+limits; its query run was INCOMPLETE (5 valid / 16 attempted of 120 planned, observed 950–1115 ms latency misses).
+RELEASE is a separate build configuration, not a relabelled DEBUG PASS.
+
+The separate fef held-view exclusion run used copied daemon 99FBB1EA: a normal 131771-byte frame and an
+8296378-byte declared terminal with 2097152 queued/unread held the root guard. Concurrent Index returned
+Busy/exit 2; CONTROL stayed current generation 2, pending absent, retired generation 1, with both collections.
+After query PID 74868 drained/exited 0, Index PID 117976 exited 0; retirement emptied, generation 1 disappeared
+and generation 2 remained. Its operator/server were reaped. It is not a 9e RELEASE held-view rerun.
+Postcommit/pre-view interruption was separately qualified in the existing commit/install native run; the
+resource measurement is not another execution of that boundary.
+
+Existing evidence only:
+C:\Development\Rust\targets\task-r1-resource-native\run-20261107-v1\execution\full-profile-9e574180-release
+contains candidate-pins.json, full-index-first/full-index.result.json, noop/noop.result.json,
+queries-owned-wait-corrected/queries.result.json, sampling-summary.json and
+watch-cleanup-shared-read/watch-cleanup.result.json.
+Held-view evidence is task-r1-view-native/run-20261107-v1/native-held-qualified-result.json with its launch
+pins/stop witness. Commit/install evidence remains under task-r1-qualification-native/run-20261107-v1.
+Older resource attempts retain their original candidate/profile/status; no report was rewritten.
 
 Watch/recovery evidence, Windows debug / Rust 1.98.0:
 
@@ -158,8 +212,8 @@ R1 native qualification, Windows debug (main/fef pins, run-20261107-v1):
   generation 3 without reusing generation 2, and search returned exact 31-byte text.
 - Records are external at C:\Development\Rust\targets\task-r1-qualification-native\run-20261107-v1;
   all 27 command / 13 daemon PIDs were absent, Qdrant PID 107368 stopped (-1) and operator exited 0 at
-  07:31:41 UTC. Commit/install interruption, pinned-view lifetime and resource measurement remain NOT_RUN.
-  The 128 MiB / 1000-file corpus profile is only predeclared and unmeasured; R1 stays PARTIAL.
+  07:31:41 UTC. At that checkpoint, commit/install interruption, pinned-view lifetime and resource measurement
+  were still NOT_RUN and R1 was PARTIAL; later separately scoped boundary/RELEASE results are recorded above.
 
 R1 evidence scopes, Windows debug / Rust 1.98.0:
 
