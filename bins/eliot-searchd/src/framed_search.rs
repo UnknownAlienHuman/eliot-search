@@ -10,16 +10,17 @@ use std::time::{Duration, Instant};
 
 use search_control_redb::publication::{PublishedView, pin_published};
 use search_provider_protocol::{
-    ClientFrame, FailureCode, FrameBuffer, MAX_CLIENT_FRAME_BYTES, MAX_REMAINING_MS, ProtocolError,
-    QUERY_REQUEST_ID, QueryOutcome, RawExactRequest, SearchRequest, Terminal, decode_client_frame,
-    encode_terminal_frame, prepare_complete, prepare_raw_exact,
+    ClientFrame, DecodedUtf8Request, FailureCode, FrameBuffer, MAX_CLIENT_FRAME_BYTES,
+    MAX_REMAINING_MS, ProtocolError, QUERY_REQUEST_ID, QueryOutcome, RawExactRequest,
+    SearchRequest, Terminal, decode_client_frame, encode_terminal_frame, prepare_complete,
+    prepare_decoded_utf8, prepare_raw_exact,
 };
 use search_runtime_owner::{PlainRootGuard, open_plain};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::oneshot;
 
 use crate::{
-    raw_exact,
+    decoded_exact, raw_exact,
     verified_query::{self, QueryFailure},
 };
 
@@ -29,6 +30,7 @@ type Encoded = Result<Vec<u8>, ProtocolError>;
 enum Request {
     Search(SearchRequest),
     RawExact(RawExactRequest),
+    DecodedUtf8(DecodedUtf8Request),
 }
 impl Request {
     fn execute(
@@ -54,6 +56,12 @@ impl Request {
             Self::RawExact(request) => {
                 match raw_exact::execute(root, view, request, deadline, cancel) {
                     Ok(result) => prepare_raw_exact(QUERY_REQUEST_ID, result),
+                    Err(error) => stopped(error),
+                }
+            }
+            Self::DecodedUtf8(request) => {
+                match decoded_exact::execute(root, view, request, deadline, cancel) {
+                    Ok(result) => prepare_decoded_utf8(QUERY_REQUEST_ID, result),
                     Err(error) => stopped(error),
                 }
             }
@@ -218,6 +226,11 @@ impl Exchange {
                 request,
                 ..
             } => (remaining_ms, Request::RawExact(request)),
+            ClientFrame::DecodedUtf8 {
+                remaining_ms,
+                request,
+                ..
+            } => (remaining_ms, Request::DecodedUtf8(request)),
             ClientFrame::Cancel { .. } => {
                 if !self.admitted {
                     return Err("QUERY_CANCEL_WITHOUT_REQUEST");

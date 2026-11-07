@@ -2,7 +2,7 @@
 
 mod watch;
 
-use search_provider_protocol::RawExactRequest;
+use search_provider_protocol::{DecodedUtf8Request, RawExactRequest};
 use search_source_registry::{MAX_PREPARATION_RESPONSE_BYTES, MAX_PUBLICATION_RESPONSE_BYTES};
 use std::env;
 use std::ffi::{OsStr, OsString};
@@ -72,6 +72,11 @@ enum Parsed {
         settings: Vec<OsString>,
         daemon: Option<PathBuf>,
         request: RawExactRequest,
+    },
+    DecodedUtf8 {
+        settings: Vec<OsString>,
+        daemon: Option<PathBuf>,
+        request: DecodedUtf8Request,
     },
     Root {
         command: RootCommand,
@@ -249,7 +254,7 @@ fn standalone_invocation(arguments: &[OsString]) -> Option<Result<Parsed, &'stat
         return Some(watch::parse(arguments));
     }
     if arguments[0] == OsStr::new("exact") {
-        return Some(parse_raw_exact(arguments));
+        return Some(parse_exact(arguments));
     }
     if arguments.len() == 1 && (is_help_flag(&arguments[0]) || is_help_command(&arguments[0])) {
         return Some(Ok(Parsed::Help));
@@ -520,12 +525,12 @@ fn parse(arguments: &[OsString]) -> Result<Parsed, &'static str> {
     })
 }
 
-fn parse_raw_exact(arguments: &[OsString]) -> Result<Parsed, &'static str> {
+fn parse_exact(arguments: &[OsString]) -> Result<Parsed, &'static str> {
     let mut settings = Vec::new();
     let mut daemon = None;
     let mut data_root_seen = false;
     let mut config_seen = false;
-    let mut raw = false;
+    let mut decoded_utf8 = None;
     let mut literal = None;
     let mut source_id = None;
     let mut limit = None;
@@ -533,11 +538,13 @@ fn parse_raw_exact(arguments: &[OsString]) -> Result<Parsed, &'static str> {
     while index < arguments.len() {
         let argument = &arguments[index];
         match argument.to_str() {
-            Some("--raw") => {
-                if raw {
+            Some("--raw" | "--decoded-utf8") => {
+                if decoded_utf8
+                    .replace(argument == OsStr::new("--decoded-utf8"))
+                    .is_some()
+                {
                     return Err("USAGE_ERROR");
                 }
-                raw = true;
                 index += 1;
                 continue;
             }
@@ -593,20 +600,52 @@ fn parse_raw_exact(arguments: &[OsString]) -> Result<Parsed, &'static str> {
         }
         index += 2;
     }
-    if !raw || !data_root_seen {
+    if !data_root_seen {
         return Err("USAGE_ERROR");
     }
-    let request = RawExactRequest {
-        literal: literal.ok_or("USAGE_ERROR")?,
-        source_ids: source_id.map(|id| vec![id]),
-        limit: limit.unwrap_or(10),
-    };
-    request.validate().map_err(|_| "USAGE_ERROR")?;
-    Ok(Parsed::RawExact {
+    build_exact_request(
+        decoded_utf8.ok_or("USAGE_ERROR")?,
+        literal.ok_or("USAGE_ERROR")?,
+        source_id.map(|id| vec![id]),
+        limit.unwrap_or(10),
         settings,
         daemon,
-        request,
-    })
+    )
+}
+
+fn build_exact_request(
+    decoded_utf8: bool,
+    literal: String,
+    source_ids: Option<Vec<String>>,
+    limit: u8,
+    settings: Vec<OsString>,
+    daemon: Option<PathBuf>,
+) -> Result<Parsed, &'static str> {
+    if decoded_utf8 {
+        let request = DecodedUtf8Request {
+            literal,
+            source_ids,
+            limit,
+        };
+        request.validate().map_err(|_| "USAGE_ERROR")?;
+        Ok(Parsed::DecodedUtf8 {
+            settings,
+            daemon,
+            request,
+        })
+    } else {
+        let request = RawExactRequest {
+            literal,
+            source_ids,
+            limit,
+        };
+        request.validate().map_err(|_| "USAGE_ERROR")?;
+        Ok(Parsed::RawExact {
+            settings,
+            daemon,
+            request,
+        })
+    }
 }
 
 fn daemon_path(explicit: Option<PathBuf>) -> Result<PathBuf, &'static str> {
@@ -984,6 +1023,7 @@ fn print_help() {
         "  eliot-search watch [--interval-ms N] --qdrant-url URL [--data-root ROOT] [--config-file PATH] [--daemon PATH]\n",
         "  eliot-search search --query TEXT [--limit N] --qdrant-url URL [--data-root ROOT] [--config-file PATH] [--daemon PATH]\n",
         "  eliot-search exact --raw --literal TEXT --data-root ROOT [--source-id UUID] [--limit N] [--config-file PATH] [--daemon PATH]\n",
+        "  eliot-search exact --decoded-utf8 --literal TEXT --data-root ROOT [--source-id UUID] [--limit N] [--config-file PATH] [--daemon PATH]\n",
     ));
 }
 
@@ -1005,6 +1045,24 @@ fn run_raw_exact(
     crate::search_command::run_raw_exact(&daemon, &arguments, request, deadline)
 }
 
+fn run_decoded_utf8(
+    settings: Vec<OsString>,
+    explicit_daemon: Option<PathBuf>,
+    request: DecodedUtf8Request,
+    started: Instant,
+) -> i32 {
+    let Some(deadline) = started.checked_add(COMMAND_TIMEOUT) else {
+        return emit_error("DEADLINE_UNAVAILABLE");
+    };
+    let daemon = match daemon_path(explicit_daemon) {
+        Ok(path) => path,
+        Err(error) => return emit_error(error),
+    };
+    let mut arguments = vec![OsString::from("--search-stdio")];
+    arguments.extend(settings);
+    crate::search_command::run_decoded_utf8(&daemon, &arguments, request, deadline)
+}
+
 pub fn run_main() -> i32 {
     let started = Instant::now();
     let arguments = match capture_arguments() {
@@ -1023,6 +1081,13 @@ pub fn run_main() -> i32 {
             request,
         } => {
             return run_raw_exact(settings, daemon, request, started);
+        }
+        Parsed::DecodedUtf8 {
+            settings,
+            daemon,
+            request,
+        } => {
+            return run_decoded_utf8(settings, daemon, request, started);
         }
         Parsed::Root {
             command,

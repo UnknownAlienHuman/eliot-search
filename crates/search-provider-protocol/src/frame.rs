@@ -4,8 +4,9 @@ use serde::{Serialize, de::DeserializeOwned};
 use std::io::{self, Write};
 
 use crate::{
-    ClientFrame, FRAME_PREFIX_BYTES, MAX_BODY_BYTES, MAX_CLIENT_FRAME_BYTES, MAX_FRAME_BYTES,
-    MAX_ITEMS, ProtocolError, QueryOutcome, RawExactResult, SearchItem, StopReason, Terminal,
+    ClientFrame, DecodedUtf8Result, FRAME_PREFIX_BYTES, MAX_BODY_BYTES, MAX_CLIENT_FRAME_BYTES,
+    MAX_FRAME_BYTES, MAX_ITEMS, ProtocolError, QueryOutcome, RawExactResult, SearchItem,
+    StopReason, Terminal,
 };
 
 /// Incremental storage for exactly one length-prefixed frame.
@@ -131,6 +132,17 @@ pub fn prepare_raw_exact(
     encode_terminal_frame(&Terminal {
         request_id,
         outcome: QueryOutcome::RawExact { result },
+    })
+}
+
+/// Encodes a whole retained UTF-8 execution without clipping text or identity ranges.
+pub fn prepare_decoded_utf8(
+    request_id: u64,
+    result: DecodedUtf8Result,
+) -> Result<Vec<u8>, ProtocolError> {
+    encode_terminal_frame(&Terminal {
+        request_id,
+        outcome: QueryOutcome::DecodedUtf8 { result },
     })
 }
 

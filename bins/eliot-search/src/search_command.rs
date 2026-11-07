@@ -7,7 +7,7 @@ use std::sync::atomic::AtomicBool;
 use std::time::Instant;
 
 use search_provider_client::{ClientError, QueryClient, QueryCompletion};
-use search_provider_protocol::{QueryOutcome, RawExactRequest, SearchRequest};
+use search_provider_protocol::{DecodedUtf8Request, QueryOutcome, RawExactRequest, SearchRequest};
 
 fn failure(error: ClientError) -> i32 {
     eprintln!("{{\"error\":\"{}\"}}", error.code());
@@ -60,9 +60,30 @@ pub fn run_raw_exact(
     render(&completion)
 }
 
+pub fn run_decoded_utf8(
+    daemon: &Path,
+    arguments: &[OsString],
+    request: DecodedUtf8Request,
+    deadline: Instant,
+) -> i32 {
+    let mut client = match configured_client() {
+        Ok(client) => client,
+        Err(error) => return failure(error),
+    };
+    let cancel = AtomicBool::new(false);
+    let completion =
+        match client.decoded_utf8_owned_child(daemon, arguments, request, deadline, &cancel) {
+            Ok(completion) => completion,
+            Err(error) => return failure(error),
+        };
+    render(&completion)
+}
+
 fn render(completion: &QueryCompletion) -> i32 {
     let exit = match &completion.terminal.outcome {
-        QueryOutcome::Complete { .. } | QueryOutcome::RawExact { .. } => 0,
+        QueryOutcome::Complete { .. }
+        | QueryOutcome::RawExact { .. }
+        | QueryOutcome::DecodedUtf8 { .. } => 0,
         QueryOutcome::Cancelled => 130,
         QueryOutcome::Failed { .. } => 2,
     };

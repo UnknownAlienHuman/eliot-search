@@ -1,149 +1,21 @@
 //! Literal raw-byte matching over one pinned committed source inventory.
 
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::AtomicBool;
 use std::time::Instant;
 
-use search_contracts::SourceId;
-use search_control_redb::publication::{CapturedSource, PublishedView};
+use search_control_redb::publication::PublishedView;
 use search_provider_protocol::{
-    FailureCode, ObjectKindDto, ObjectRefDto, RawExactGap, RawExactItem, RawExactMatch,
-    RawExactRequest, RawExactResult, RawSourceRef, StopReason,
+    FailureCode, RawExactGap, RawExactItem, RawExactMatch, RawExactRequest, RawExactResult,
+    StopReason,
 };
 use search_revision_store::{ObjectStoreError, read_object};
 use search_runtime_owner::PlainRootGuard;
 use search_source_registry::{CurrentSourceRecord, MAX_SOURCE_OBJECT_BYTES};
 
+use crate::exact_literal::{Literal, check, hex, select_sources, source_ref};
 use crate::verified_query::QueryFailure;
 
 type Result<T> = std::result::Result<T, QueryFailure>;
-const BLOCK_BYTES: usize = 8192;
-
-fn check(deadline: Instant, cancel: &AtomicBool) -> Result<()> {
-    if cancel.load(Ordering::Relaxed) {
-        Err(QueryFailure::Cancelled)
-    } else if Instant::now() >= deadline {
-        Err(QueryFailure::Deadline)
-    } else {
-        Ok(())
-    }
-}
-
-// The prefix table is compiled once per request. Each scan has independent
-// source-local state that survives block boundaries and preserves overlaps.
-struct Literal<'a> {
-    bytes: &'a [u8],
-    prefix: Vec<usize>,
-}
-impl<'a> Literal<'a> {
-    fn new(bytes: &'a [u8], deadline: Instant, cancel: &AtomicBool) -> Result<Self> {
-        check(deadline, cancel)?;
-        if bytes.is_empty() {
-            return Err(QueryFailure::Code("EXACT_LITERAL_INVALID"));
-        }
-        let mut prefix = Vec::new();
-        prefix
-            .try_reserve_exact(bytes.len())
-            .map_err(|_| QueryFailure::Code("QUERY_ALLOCATION_FAILED"))?;
-        prefix.resize(bytes.len(), 0);
-        let mut matched = 0;
-        for index in 1..bytes.len() {
-            while matched != 0 && bytes[index] != bytes[matched] {
-                matched = prefix[matched - 1];
-            }
-            if bytes[index] == bytes[matched] {
-                matched += 1;
-            }
-            prefix[index] = matched;
-        }
-        check(deadline, cancel)?;
-        Ok(Self { bytes, prefix })
-    }
-
-    fn scan(
-        &self,
-        input: &[u8],
-        deadline: Instant,
-        cancel: &AtomicBool,
-        mut found: impl FnMut(usize, usize) -> Result<()>,
-    ) -> Result<()> {
-        let mut matched = 0;
-        let mut consumed = 0;
-        for block in input.chunks(BLOCK_BYTES) {
-            check(deadline, cancel)?;
-            for (index, byte) in block.iter().enumerate() {
-                while matched != 0 && *byte != self.bytes[matched] {
-                    matched = self.prefix[matched - 1];
-                }
-                if *byte == self.bytes[matched] {
-                    matched += 1;
-                }
-                if matched == self.bytes.len() {
-                    let end = consumed + index + 1;
-                    found(end - self.bytes.len(), end)?;
-                    matched = self.prefix[matched - 1];
-                }
-            }
-            consumed += block.len();
-        }
-        check(deadline, cancel)
-    }
-}
-
-fn hex(bytes: &[u8]) -> Result<String> {
-    const DIGITS: &[u8; 16] = b"0123456789abcdef";
-    let mut text = String::new();
-    text.try_reserve_exact(bytes.len() * 2)
-        .map_err(|_| QueryFailure::Code("QUERY_ALLOCATION_FAILED"))?;
-    for byte in bytes {
-        text.push(char::from(DIGITS[usize::from(*byte >> 4)]));
-        text.push(char::from(DIGITS[usize::from(*byte & 15)]));
-    }
-    Ok(text)
-}
-
-fn source_ref(source: &CurrentSourceRecord) -> Result<RawSourceRef> {
-    Ok(RawSourceRef {
-        source_namespace_id: source.source_namespace_id.to_string(),
-        source_id: source.source_id.to_string(),
-        row_revision: source.row_revision,
-        registration_revision: source.registration_revision,
-        input: ObjectRefDto {
-            version: source.object_ref.format_version,
-            kind: ObjectKindDto::Source,
-            digest: hex(source.object_ref.digest.as_bytes())?,
-            bytes: source.object_ref.byte_length,
-        },
-    })
-}
-
-fn select_sources(
-    mut inventory: Vec<CapturedSource>,
-    ids: Option<&[String]>,
-    deadline: Instant,
-    cancel: &AtomicBool,
-) -> Result<Vec<CapturedSource>> {
-    if let Some(ids) = ids {
-        let mut selected = Vec::new();
-        selected
-            .try_reserve_exact(ids.len())
-            .map_err(|_| QueryFailure::Code("QUERY_ALLOCATION_FAILED"))?;
-        for id in ids {
-            check(deadline, cancel)?;
-            let id =
-                SourceId::parse(id).map_err(|_| QueryFailure::Code("EXACT_SELECTION_INVALID"))?;
-            if inventory
-                .binary_search_by_key(&id, |entry| entry.source.source_id)
-                .is_err()
-            {
-                return Err(QueryFailure::Code("EXACT_SOURCE_NOT_PUBLISHED"));
-            }
-            selected.push(id);
-        }
-        inventory.retain(|entry| selected.contains(&entry.source.source_id));
-    }
-    check(deadline, cancel)?;
-    Ok(inventory)
-}
 
 fn scan_source(
     root: &PlainRootGuard,

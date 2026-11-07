@@ -5,7 +5,9 @@
 
 mod child;
 
-use search_provider_protocol::{ProtocolError, RawExactRequest, SearchRequest, Terminal};
+use search_provider_protocol::{
+    DecodedUtf8Request, ProtocolError, RawExactRequest, SearchRequest, Terminal,
+};
 use std::ffi::OsString;
 use std::path::Path;
 use std::sync::atomic::AtomicBool;
@@ -166,6 +168,30 @@ impl QueryClient {
             executable,
             args,
             child::Request::RawExact(request),
+            deadline,
+            cancelled,
+            self.cancel_on_ctrl_c,
+        ))
+    }
+
+    /// Owns one retained UTF-8 query child using the existing stdio and reap path.
+    ///
+    /// The decoded terminal must match the literal, selection, retained bindings
+    /// and ranges before return. No representation is decoded or prepared here.
+    pub fn decoded_utf8_owned_child(
+        &mut self,
+        executable: &Path,
+        args: &[OsString],
+        request: DecodedUtf8Request,
+        deadline: Instant,
+        cancelled: &AtomicBool,
+    ) -> Result<QueryCompletion, ClientError> {
+        synchronous()?;
+        request.validate()?;
+        self.runtime.block_on(child::query(
+            executable,
+            args,
+            child::Request::DecodedUtf8(request),
             deadline,
             cancelled,
             self.cancel_on_ctrl_c,

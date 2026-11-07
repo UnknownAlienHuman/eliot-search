@@ -75,6 +75,39 @@ impl RawExactRequest {
     }
 }
 
+/// Literal search in a saved unchanged UTF-8 representation, never live decoding.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct DecodedUtf8Request {
+    /// Exact UTF-8 literal, without normalization or case folding.
+    pub literal: String,
+    /// None selects all committed sources; Some(empty) selects none.
+    pub source_ids: Option<Vec<String>>,
+    /// Maximum whole emitted items, independent of complete input scanning.
+    pub limit: u8,
+}
+
+impl DecodedUtf8Request {
+    /// Validates literal bytes, source selection syntax and finite output bounds.
+    pub fn validate(&self) -> Result<(), ProtocolError> {
+        if self.literal.is_empty()
+            || self.literal.len() > MAX_QUERY_BYTES
+            || self.limit == 0
+            || usize::from(self.limit) > MAX_ITEMS
+        {
+            return Err(ProtocolError::InvalidMessage);
+        }
+        if let Some(ids) = &self.source_ids {
+            for (index, id) in ids.iter().enumerate() {
+                if !canonical_uuid(id) || ids[..index].contains(id) {
+                    return Err(ProtocolError::InvalidMessage);
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
 /// The only parent-to-child messages for one query.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
@@ -96,6 +129,15 @@ pub enum ClientFrame {
         remaining_ms: u64,
         /// Literal and pinned-source selection.
         request: RawExactRequest,
+    },
+    /// Search complete retained UTF-8 text on the same serviced connection.
+    DecodedUtf8 {
+        /// Exact correlation identity, currently one.
+        request_id: u64,
+        /// Remaining original execution milliseconds sampled at send.
+        remaining_ms: u64,
+        /// Literal and selected committed source identities.
+        request: DecodedUtf8Request,
     },
     /// Cancel that same query without another work slot.
     Cancel {
@@ -120,6 +162,17 @@ impl ClientFrame {
                 *request_id
             }
             Self::RawExact {
+                request_id,
+                remaining_ms,
+                request,
+            } => {
+                if *remaining_ms == 0 || *remaining_ms > MAX_REMAINING_MS {
+                    return Err(ProtocolError::InvalidMessage);
+                }
+                request.validate()?;
+                *request_id
+            }
+            Self::DecodedUtf8 {
                 request_id,
                 remaining_ms,
                 request,
@@ -600,6 +653,187 @@ impl RawExactResult {
     }
 }
 
+/// One verified literal occurrence in a retained UTF-8 representation.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct DecodedUtf8Match {
+    /// Source revision and exact retained input.
+    pub source: RawSourceRef,
+    /// Verified representation bound to this source and its pinned settings.
+    pub prepared: ObjectRefDto,
+    /// Inclusive UTF-8 representation byte start.
+    pub representation_start: u64,
+    /// Exclusive UTF-8 representation byte end.
+    pub representation_end: u64,
+    /// Inclusive source byte start, verified through the identity map.
+    pub source_start: u64,
+    /// Exclusive source byte end, verified through the identity map.
+    pub source_end: u64,
+    /// Exact matching UTF-8 text, including original BOM or line endings.
+    pub text: String,
+}
+
+/// A selected source without an available valid retained UTF-8 representation.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct DecodedUtf8Gap {
+    /// Source revision from the pinned committed inventory.
+    pub source: RawSourceRef,
+    /// Selected Ready artifact; absent only for a preparation Gap.
+    pub prepared: Option<ObjectRefDto>,
+    /// `PREPARATION_GAP`, `SOURCE_OBJECT_MISSING` or `PREPARED_OBJECT_MISSING`.
+    pub code: FailureCode,
+}
+
+/// One whole UTF-8 occurrence or unavailable-representation gap.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum DecodedUtf8Item {
+    /// Retained representation match with a verified identity source map.
+    Match(DecodedUtf8Match),
+    /// A preparation Gap or missing input/artifact; corruption fails.
+    Gap(DecodedUtf8Gap),
+}
+
+impl DecodedUtf8Item {
+    /// Source binding in the committed inventory.
+    #[must_use]
+    pub const fn source(&self) -> &RawSourceRef {
+        match self {
+            Self::Match(hit) => &hit.source,
+            Self::Gap(gap) => &gap.source,
+        }
+    }
+
+    fn validate(&self) -> Result<(), ProtocolError> {
+        self.source().validate()?;
+        match self {
+            Self::Match(hit) => {
+                hit.prepared.validate(ObjectKindDto::Prepared)?;
+                if hit.representation_start >= hit.representation_end
+                    || hit.source_start != hit.representation_start
+                    || hit.source_end != hit.representation_end
+                    || hit.source_end > hit.source.input.bytes
+                    || hit.text.len() > MAX_QUERY_BYTES
+                    || u64::try_from(hit.text.len()).ok()
+                        != hit.source_end.checked_sub(hit.source_start)
+                {
+                    return Err(ProtocolError::InvalidMessage);
+                }
+            }
+            Self::Gap(gap) => match (gap.code.as_str(), &gap.prepared) {
+                ("PREPARATION_GAP", None) => {}
+                ("SOURCE_OBJECT_MISSING" | "PREPARED_OBJECT_MISSING", Some(prepared)) => {
+                    prepared.validate(ObjectKindDto::Prepared)?;
+                }
+                _ => return Err(ProtocolError::InvalidMessage),
+            },
+        }
+        Ok(())
+    }
+}
+
+/// Complete retained UTF-8 accounting, separate from its emitted prefix.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct DecodedUtf8Result {
+    /// Exact committed generation.
+    pub generation: u64,
+    /// Selected sources, including empty and preparation-Gap inputs.
+    pub selected_sources: u64,
+    /// Fully verified and scanned retained representations.
+    pub scanned_sources: u64,
+    /// Selected sources without an available valid retained representation.
+    pub gap_sources: u64,
+    /// Actual verified representation bytes scanned.
+    pub scanned_bytes: u64,
+    /// Total occurrences, including those beyond the emitted prefix.
+    pub matches: u64,
+    /// Source/range ordered whole-item prefix, bounded during decoding.
+    #[serde(deserialize_with = "deserialize_items")]
+    pub items: Vec<DecodedUtf8Item>,
+    /// Every selected source had a verified fully scanned representation.
+    pub scan_complete: bool,
+    /// Complete scanning, zero matches and no representation gap.
+    pub complete_negative: bool,
+    /// Emitted prefix completeness, independent of scanning completeness.
+    pub stop: StopReason,
+}
+
+impl DecodedUtf8Result {
+    /// Checks the literal and the entire explicit selection denominator.
+    pub fn validate_request(&self, request: &DecodedUtf8Request) -> Result<(), ProtocolError> {
+        request.validate()?;
+        self.validate(request.limit)?;
+        if let Some(ids) = &request.source_ids
+            && (u64::try_from(ids.len()).ok() != Some(self.selected_sources)
+                || self
+                    .items
+                    .iter()
+                    .any(|item| !ids.contains(&item.source().source_id)))
+        {
+            return Err(ProtocolError::InvalidMessage);
+        }
+        for item in &self.items {
+            if let DecodedUtf8Item::Match(hit) = item
+                && hit.text != request.literal
+            {
+                return Err(ProtocolError::InvalidMessage);
+            }
+        }
+        Ok(())
+    }
+
+    /// Checks source/Prepared bindings, identity ranges, order and accounting.
+    pub fn validate(&self, requested_limit: u8) -> Result<(), ProtocolError> {
+        let total = self
+            .matches
+            .checked_add(self.gap_sources)
+            .ok_or(ProtocolError::InvalidMessage)?;
+        if self.generation == 0
+            || requested_limit == 0
+            || usize::from(requested_limit) > MAX_ITEMS
+            || self.items.len() > usize::from(requested_limit)
+            || self.scanned_sources.checked_add(self.gap_sources) != Some(self.selected_sources)
+            || self.scan_complete != (self.scanned_sources == self.selected_sources)
+            || self.complete_negative != (self.scan_complete && self.matches == 0)
+            || self.matches > self.scanned_bytes
+            || (self.scanned_sources == 0 && self.scanned_bytes != 0)
+            || self.items.len() as u64 > total
+            || (self.stop == StopReason::Complete) != (self.items.len() as u64 == total)
+        {
+            return Err(ProtocolError::InvalidMessage);
+        }
+        let mut matches = 0_u64;
+        let mut gaps = 0_u64;
+        for (index, item) in self.items.iter().enumerate() {
+            item.validate()?;
+            match item {
+                DecodedUtf8Item::Match(_) => matches += 1,
+                DecodedUtf8Item::Gap(_) => gaps += 1,
+            }
+            if let Some(previous) = index.checked_sub(1).map(|i| &self.items[i]) {
+                let left = previous.source();
+                let right = item.source();
+                if left.source_namespace_id != right.source_namespace_id
+                    || left.source_id > right.source_id
+                    || (left.source_id == right.source_id
+                        && (left != right
+                            || !matches!((previous, item),
+                            (DecodedUtf8Item::Match(a), DecodedUtf8Item::Match(b))
+                            if a.prepared == b.prepared && a.representation_start < b.representation_start)))
+                {
+                    return Err(ProtocolError::InvalidMessage);
+                }
+            }
+        }
+        if matches > self.matches || gaps > self.gap_sources {
+            return Err(ProtocolError::InvalidMessage);
+        }
+        Ok(())
+    }
+}
+
 /// Exactly one application terminal, with typed failures distinct from transport loss.
 #[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(tag = "status", rename_all = "snake_case", deny_unknown_fields)]
@@ -617,6 +851,11 @@ pub enum QueryOutcome {
     RawExact {
         /// Pinned source-based result, independent of prepared points.
         result: RawExactResult,
+    },
+    /// Completed search in saved unchanged UTF-8 representations.
+    DecodedUtf8 {
+        /// Representation-bound matches, gaps and completeness.
+        result: DecodedUtf8Result,
     },
     /// The request was cancelled before terminal output committed.
     Cancelled,
@@ -647,6 +886,9 @@ impl<'de> Deserialize<'de> for QueryOutcome {
             RawExact {
                 result: RawExactResult,
             },
+            DecodedUtf8 {
+                result: DecodedUtf8Result,
+            },
             Cancelled(EmptyOutcome),
             Failed {
                 code: FailureCode,
@@ -663,6 +905,7 @@ impl<'de> Deserialize<'de> for QueryOutcome {
                 stop,
             }),
             DecodedOutcome::RawExact { result } => Ok(Self::RawExact { result }),
+            DecodedOutcome::DecodedUtf8 { result } => Ok(Self::DecodedUtf8 { result }),
             DecodedOutcome::Cancelled(_) => Ok(Self::Cancelled),
             DecodedOutcome::Failed { code } => Ok(Self::Failed { code }),
         }
@@ -707,6 +950,9 @@ impl Terminal {
             }
         }
         if let QueryOutcome::RawExact { result } = &self.outcome {
+            result.validate(requested_limit)?;
+        }
+        if let QueryOutcome::DecodedUtf8 { result } = &self.outcome {
             result.validate(requested_limit)?;
         }
         Ok(())
