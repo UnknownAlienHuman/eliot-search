@@ -20,7 +20,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::current_preparation::{CurrentPreparation, PreparationOutcome};
 use crate::current_source::{
-    SOURCE_ROWS, SOURCE_STATE, catalogue_names, decode_record, read_namespace,
+    SOURCE_ROWS, SOURCE_STATE, SourceInventoryTotals, catalogue_names, decode_record,
+    read_namespace,
 };
 use crate::plain_control::ControlWriter;
 
@@ -538,6 +539,7 @@ fn read_corpus(
             Err(_) => return Err(PublicationError::Database),
         };
         let mut charged = 0_usize;
+        let mut source_totals = SourceInventoryTotals::default();
         for row in rows.iter().map_err(|_| PublicationError::Database)? {
             check(deadline, cancel)?;
             let (id, bytes) = row.map_err(|_| PublicationError::Database)?;
@@ -551,6 +553,10 @@ fn read_corpus(
             if id.value() != source.source_id.as_bytes() || source.source_namespace_id != ns {
                 return Err(PublicationError::Corrupt);
             }
+            source_totals
+                .add(bytes.value().len(), source.locator.len())
+                .map_err(source_error)?;
+            source_totals.check_limit().map_err(source_error)?;
             let value = preparations
                 .as_ref()
                 .ok_or(PublicationError::Unprepared)?
@@ -583,6 +589,7 @@ fn read_corpus(
                 preparation,
             });
         }
+        source_totals.verify(tx).map_err(source_error)?;
         (Some(*ns.as_bytes()), revision)
     } else {
         (None, 0)

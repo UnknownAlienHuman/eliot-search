@@ -56,7 +56,11 @@ pub struct SourceInventoryTotals {
 }
 
 impl SourceInventoryTotals {
-    fn add(&mut self, row_bytes: usize, locator_bytes: usize) -> Result<(), SourceControlError> {
+    pub(super) fn add(
+        &mut self,
+        row_bytes: usize,
+        locator_bytes: usize,
+    ) -> Result<(), SourceControlError> {
         self.count = self
             .count
             .checked_add(1)
@@ -88,9 +92,17 @@ impl SourceInventoryTotals {
         })
     }
 
-    const fn check_limit(self) -> Result<(), SourceControlError> {
+    pub(super) const fn check_limit(self) -> Result<(), SourceControlError> {
         if self.count > MAX_CURRENT_SOURCES as u64 || self.bytes > MAX_CURRENT_SOURCE_BYTES as u64 {
             return Err(SourceControlError::InventoryLimit);
+        }
+        Ok(())
+    }
+
+    pub(super) fn verify(self, transaction: &ReadTransaction) -> Result<(), SourceControlError> {
+        self.check_limit()?;
+        if read_totals(transaction)?.is_some_and(|expected| self != expected) {
+            return Err(SourceControlError::Corrupt);
         }
         Ok(())
     }
@@ -1170,15 +1182,11 @@ fn read_sources(
     if locator_count != sources.len() || !reverse.is_empty() {
         return Err(SourceControlError::Corrupt);
     }
-    if let Some(expected) = read_totals(transaction)? {
-        let actual = SourceInventoryTotals {
-            count: sources.len() as u64,
-            bytes: charged as u64,
-        };
-        if actual != expected {
-            return Err(SourceControlError::Corrupt);
-        }
+    SourceInventoryTotals {
+        count: sources.len() as u64,
+        bytes: charged as u64,
     }
+    .verify(transaction)?;
     check(deadline, cancellation)?;
     Ok(sources)
 }
