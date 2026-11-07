@@ -170,10 +170,11 @@ impl SessionCli {
         use search_provider_protocol::SessionClientFrame;
         let frame: SessionClientFrame = serde_json::from_slice(&self.line)
             .map_err(|_| search_provider_protocol::ProtocolError::InvalidMessage)?;
-        frame.validate()?;
-        let _ = search_provider_protocol::encode_session_frame(&frame)?;
         let started = self.line_started.take().ok_or(ClientError::Io)?;
         self.line.clear();
+        if let Err(error) = frame.validate() {
+            return self.local_rejection(frame.request_id(), error.code());
+        }
         let deadline = match &frame {
             SessionClientFrame::Open { remaining_ms, .. }
             | SessionClientFrame::Continue { remaining_ms, .. }
@@ -211,7 +212,13 @@ impl SessionCli {
             None
         };
         let close = matches!(frame, SessionClientFrame::Close { .. });
-        session.submit(frame, deadline)?;
+        match session.submit(frame, deadline) {
+            Ok(()) => {}
+            Err(ClientError::CommandRejected { request_id, code }) => {
+                return self.local_rejection(request_id, code);
+            }
+            Err(error) => return Err(error),
+        }
         if let Some(ttl) = ttl
             && !self.open_seen
         {
@@ -274,12 +281,32 @@ impl SessionCli {
             SessionOutcome::Cancelled {} if self.exit_code == 0 => self.exit_code = 130,
             _ => {}
         }
-        let mut frame = search_provider_protocol::encode_session_reply(reply)?;
-        frame.push(b'\n');
+        let bytes = serde_json::to_vec(reply)
+            .map_err(|_| search_provider_protocol::ProtocolError::Serialization)?;
+        self.queue_output(bytes)
+    }
+
+    fn local_rejection(&mut self, request_id: u64, code: &'static str) -> Result<(), ClientError> {
+        // Explicit local origin: this record is never claimed as a daemon reply.
+        let reply = serde_json::json!({
+            "origin": "client",
+            "request_id": request_id,
+            "outcome": search_provider_protocol::SessionOutcome::Failed {
+                code: search_provider_protocol::FailureCode::new(code)?,
+            },
+        });
+        let bytes = serde_json::to_vec(&reply)
+            .map_err(|_| search_provider_protocol::ProtocolError::Serialization)?;
+        self.exit_code = 2;
+        self.queue_output(bytes)
+    }
+
+    fn queue_output(&mut self, mut bytes: Vec<u8>) -> Result<(), ClientError> {
+        bytes.push(b'\n');
         if self.output_frame.is_none() {
-            self.output_frame = Some(frame);
-            self.output_cursor = search_provider_protocol::FRAME_PREFIX_BYTES;
-        } else if self.next_output.replace(frame).is_some() {
+            self.output_frame = Some(bytes);
+            self.output_cursor = 0;
+        } else if self.next_output.replace(bytes).is_some() {
             return Err(search_provider_protocol::ProtocolError::InvalidMessage.into());
         }
         Ok(())
@@ -345,7 +372,7 @@ impl SessionCli {
                         SessionOutput::Wrote(n) => self.output_cursor += n,
                         SessionOutput::Flushed => {
                             self.output_frame = self.next_output.take();
-                            self.output_cursor = search_provider_protocol::FRAME_PREFIX_BYTES;
+                            self.output_cursor = 0;
                         }
                     }
                 }

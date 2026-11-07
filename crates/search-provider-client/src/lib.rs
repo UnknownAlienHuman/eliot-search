@@ -30,9 +30,16 @@ pub struct QueryCompletion {
     pub diagnostics_truncated: bool,
 }
 
-/// Content-free transport/process failures; application failures remain terminals.
+/// Content-free client failures; local command rejection leaves its session usable.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ClientError {
+    /// Local command preflight refused before writing a frame; no daemon reply is implied.
+    CommandRejected {
+        /// Correlation identity supplied with the rejected command.
+        request_id: u64,
+        /// Content-free local refusal reason.
+        code: &'static str,
+    },
     /// A complete frame or DTO failed validation.
     Protocol(ProtocolError),
     /// Synchronous entry was invoked inside an async runtime.
@@ -70,6 +77,7 @@ impl ClientError {
     #[must_use]
     pub const fn code(self) -> &'static str {
         match self {
+            Self::CommandRejected { code, .. } => code,
             Self::Protocol(error) => error.code(),
             Self::AsyncContext => "QUERY_CLIENT_ASYNC_CONTEXT",
             Self::Runtime => "QUERY_CLIENT_RUNTIME_UNAVAILABLE",
@@ -241,6 +249,7 @@ impl OwnedQuerySession {
 
     /// Submits one typed data request or correlated Cancel/Close control.
     /// Data is serialized; a partial wire frame is never interleaved with control.
+    /// `CommandRejected` is local, writes nothing and leaves the session usable.
     pub fn submit(
         &mut self,
         message: search_provider_protocol::SessionClientFrame,
@@ -298,6 +307,9 @@ impl OwnedQuerySession {
         cancelled: &AtomicBool,
     ) -> Result<search_provider_protocol::SessionReply, ClientError> {
         if let Err(error) = self.submit(message, deadline) {
+            if matches!(error, ClientError::CommandRejected { .. }) {
+                return Err(error);
+            }
             self.inner.finish(deadline, false).await?;
             return Err(error);
         }

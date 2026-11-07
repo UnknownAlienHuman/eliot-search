@@ -511,41 +511,45 @@ impl Session {
         message: SessionClientFrame,
         deadline: Instant,
     ) -> Result<(), ClientError> {
-        message.validate()?;
+        let id = message.request_id();
+        message
+            .validate()
+            .map_err(|error| ClientError::CommandRejected {
+                request_id: id,
+                code: error.code(),
+            })?;
+        // A local caller error must be distinguished from malformed child output.
+        // Check serialization before changing any submitted-request state.
+        encode_session_frame(&message).map_err(|error| match error {
+            search_provider_protocol::ProtocolError::FrameTooLarge => {
+                ClientError::CommandRejected {
+                    request_id: id,
+                    code: error.code(),
+                }
+            }
+            other => ClientError::Protocol(other),
+        })?;
         if self.is_finished() || self.stdin.is_none() || Instant::now() >= deadline {
             return Err(ClientError::Deadline);
         }
-        match &message {
-            SessionClientFrame::Cancel { request_id } => {
-                if self.active.as_ref().map(|p| p.message.request_id()) != Some(*request_id)
-                    || self.closing.is_some()
-                    || self.cancelled_request == Some(*request_id)
-                {
-                    return Err(search_provider_protocol::ProtocolError::InvalidCorrelation.into());
-                }
-                self.cancelled_request = Some(*request_id);
-                self.queued_control = Some(message);
-                return Ok(());
-            }
-            SessionClientFrame::Close { request_id } => {
-                if *request_id <= self.last_id || self.closing.is_some() {
-                    return Err(search_provider_protocol::ProtocolError::InvalidCorrelation.into());
-                }
-                self.last_id = *request_id;
-                self.closing = Some(PendingSessionRequest {
-                    message: message.clone(),
-                    deadline,
-                    sent: false,
-                });
-                // Replacing an unsent Cancel is safe; a partial frame remains in outbound.
-                self.queued_control = Some(message);
-                return Ok(());
-            }
-            _ => {}
+        if self.queue_control(&message, deadline)? {
+            return Ok(());
         }
-        if self.active.is_some() || self.closing.is_some() || message.request_id() <= self.last_id {
-            return Err(search_provider_protocol::ProtocolError::InvalidCorrelation.into());
+        if self.active.is_some() || self.closing.is_some() {
+            return Err(ClientError::CommandRejected {
+                request_id: id,
+                code: "SESSION_REQUEST_IN_FLIGHT",
+            });
         }
+        if id <= self.last_id {
+            return Err(ClientError::CommandRejected {
+                request_id: id,
+                code: "SESSION_REQUEST_ID_INVALID",
+            });
+        }
+        // Consume a local data-command identity even when its preflight refuses it;
+        // the daemon simply observes a gap between transmitted request identities.
+        self.last_id = id;
         match &message {
             SessionClientFrame::Open { query, ttl_ms, .. } if self.query.is_none() => {
                 self.query = Some(query.clone());
@@ -565,32 +569,20 @@ impl Session {
                 after_bytes,
                 ..
             } if self.summary.is_some() => {
-                let item = self
-                    .emitted
-                    .get(usize::from(*item_index))
-                    .ok_or(search_provider_protocol::ProtocolError::InvalidMessage)?;
-                let (start, end) = match &item.item {
-                    search_provider_protocol::WindowItem::Search(
-                        search_provider_protocol::SearchItem::Hit(h),
-                    ) => (h.evidence.start, h.evidence.end),
-                    search_provider_protocol::WindowItem::Raw(
-                        search_provider_protocol::RawExactItem::Match(h),
-                    ) => (h.start, h.end),
-                    search_provider_protocol::WindowItem::DecodedUtf8(
-                        search_provider_protocol::DecodedUtf8Item::Match(h),
-                    ) => (h.representation_start, h.representation_end),
-                    _ => return Err(search_provider_protocol::ProtocolError::InvalidMessage.into()),
-                };
-                if end
-                    .checked_sub(start)
-                    .and_then(|n| n.checked_add(*before_bytes))
-                    .and_then(|n| n.checked_add(*after_bytes))
-                    .is_none_or(|n| n > search_provider_protocol::MAX_EXPANSION_BYTES)
-                {
-                    return Err(search_provider_protocol::ProtocolError::InvalidMessage.into());
-                }
+                self.validate_expand(id, *item_index, *before_bytes, *after_bytes)?;
             }
-            _ => return Err(search_provider_protocol::ProtocolError::InvalidMessage.into()),
+            SessionClientFrame::Open { .. } => {
+                return Err(ClientError::CommandRejected {
+                    request_id: id,
+                    code: "WINDOW_ALREADY_OPEN",
+                });
+            }
+            _ => {
+                return Err(ClientError::CommandRejected {
+                    request_id: id,
+                    code: "WINDOW_NOT_OPEN",
+                });
+            }
         }
         let remaining_ms = match &message {
             SessionClientFrame::Open { remaining_ms, .. }
@@ -601,13 +593,102 @@ impl Session {
         let sampled = Instant::now()
             .checked_add(Duration::from_millis(remaining_ms))
             .ok_or(ClientError::Deadline)?;
-        self.last_id = message.request_id();
         self.cancelled_request = None;
         self.active = Some(PendingSessionRequest {
             message,
             deadline: deadline.min(sampled),
             sent: false,
         });
+        Ok(())
+    }
+
+    fn queue_control(
+        &mut self,
+        message: &SessionClientFrame,
+        deadline: Instant,
+    ) -> Result<bool, ClientError> {
+        let id = message.request_id();
+        match message {
+            SessionClientFrame::Cancel { .. } => {
+                if self
+                    .active
+                    .as_ref()
+                    .map(|pending| pending.message.request_id())
+                    != Some(id)
+                    || self.closing.is_some()
+                    || self.cancelled_request == Some(id)
+                {
+                    return Err(ClientError::CommandRejected {
+                        request_id: id,
+                        code: "SESSION_CONTROL_INVALID",
+                    });
+                }
+                self.cancelled_request = Some(id);
+            }
+            SessionClientFrame::Close { .. } => {
+                if id <= self.last_id || self.closing.is_some() {
+                    return Err(ClientError::CommandRejected {
+                        request_id: id,
+                        code: "SESSION_REQUEST_ID_INVALID",
+                    });
+                }
+                self.last_id = id;
+                self.closing = Some(PendingSessionRequest {
+                    message: message.clone(),
+                    deadline,
+                    sent: false,
+                });
+            }
+            _ => return Ok(false),
+        }
+        // The fixed control slot may replace an unsent Cancel; outbound retains
+        // any partial frame, so these controls can never interleave its bytes.
+        self.queued_control = Some(message.clone());
+        Ok(true)
+    }
+
+    fn validate_expand(
+        &self,
+        request_id: u64,
+        item_index: u8,
+        before_bytes: u64,
+        after_bytes: u64,
+    ) -> Result<(), ClientError> {
+        let item =
+            self.emitted
+                .get(usize::from(item_index))
+                .ok_or(ClientError::CommandRejected {
+                    request_id,
+                    code: "WINDOW_ITEM_NOT_EMITTED",
+                })?;
+        let (start, end) = match &item.item {
+            search_provider_protocol::WindowItem::Search(
+                search_provider_protocol::SearchItem::Hit(hit),
+            ) => (hit.evidence.start, hit.evidence.end),
+            search_provider_protocol::WindowItem::Raw(
+                search_provider_protocol::RawExactItem::Match(hit),
+            ) => (hit.start, hit.end),
+            search_provider_protocol::WindowItem::DecodedUtf8(
+                search_provider_protocol::DecodedUtf8Item::Match(hit),
+            ) => (hit.representation_start, hit.representation_end),
+            _ => {
+                return Err(ClientError::CommandRejected {
+                    request_id,
+                    code: "WINDOW_ITEM_UNAVAILABLE",
+                });
+            }
+        };
+        if end
+            .checked_sub(start)
+            .and_then(|n| n.checked_add(before_bytes))
+            .and_then(|n| n.checked_add(after_bytes))
+            .is_none_or(|n| n > search_provider_protocol::MAX_EXPANSION_BYTES)
+        {
+            return Err(ClientError::CommandRejected {
+                request_id,
+                code: "WINDOW_EXPANSION_LIMIT",
+            });
+        }
         Ok(())
     }
 

@@ -36,17 +36,24 @@ struct Output {
     deadline: Instant,
 }
 
+struct Deferred {
+    message: SessionClientFrame,
+    started: Instant,
+    cancelled: bool,
+}
+
 struct Exchange {
     input: FrameBuffer,
     frame_started: Option<Instant>,
     opened: bool,
     last_id: u64,
+    completed_id: Option<u64>,
     expires: Option<Instant>,
     active: Option<Active>,
     output: Option<Output>,
     // A complete next request can arrive after peer decode but before local
     // flush. Keep exactly one frame until that flush commits the previous page.
-    deferred: Option<(SessionClientFrame, Instant)>,
+    deferred: Option<Deferred>,
 }
 
 impl Drop for Exchange {
@@ -62,6 +69,7 @@ impl Exchange {
             frame_started: None,
             opened: false,
             last_id: 0,
+            completed_id: None,
             expires: None,
             active: None,
             output: None,
@@ -89,6 +97,18 @@ impl Exchange {
     }
 
     fn cancel(&mut self, id: u64) -> Result<(), &'static str> {
+        // Cancel is control for existing work, never a second reply slot after
+        // the corresponding operation's complete response has flushed.
+        if self.completed_id.is_some_and(|completed| id <= completed) {
+            return Ok(());
+        }
+        if let Some(deferred) = &mut self.deferred
+            && deferred.message.request_id() == id
+            && !matches!(deferred.message, SessionClientFrame::Close { .. })
+        {
+            deferred.cancelled = true;
+            return Ok(());
+        }
         if let Some(active) = &mut self.active {
             if active.id != id {
                 return Err("QUERY_RESPONSE_MISMATCH");
@@ -143,7 +163,11 @@ impl Exchange {
                 if self.deferred.is_some() && !close {
                     return Err("SESSION_REQUEST_IN_FLIGHT");
                 }
-                self.deferred = Some((message, started));
+                self.deferred = Some(Deferred {
+                    message,
+                    started,
+                    cancelled: false,
+                });
                 return Ok(());
             }
         }
@@ -293,11 +317,25 @@ impl Exchange {
                 .send(Command::Commit { expected, next })
                 .map_err(|_| "QUERY_WORKER_PANICKED")?;
         }
+        self.completed_id = Some(output.id);
         if output.ready.end {
             return Ok(true);
         }
-        if let Some((message, started)) = self.deferred.take() {
-            self.accept(message, started, commands)?;
+        if let Some(deferred) = self.deferred.take() {
+            if deferred.cancelled {
+                let id = deferred.message.request_id();
+                self.last_id = id;
+                self.output = Some(Output {
+                    id,
+                    ready: worker::failure(id, QueryFailure::Cancelled)?,
+                    cursor: 0,
+                    deadline: Instant::now()
+                        .checked_add(CLEANUP_ALLOWANCE)
+                        .ok_or("QUERY_DEADLINE")?,
+                });
+            } else {
+                self.accept(deferred.message, deferred.started, commands)?;
+            }
         }
         Ok(false)
     }
