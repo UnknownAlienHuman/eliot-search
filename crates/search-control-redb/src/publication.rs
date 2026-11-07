@@ -1,7 +1,10 @@
 //! Fixed corpus inputs, upload pages, evidence and conditional generation visibility.
 
 mod codec;
+mod collection;
 mod verify;
+
+pub(super) use collection::mark_objects;
 
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};

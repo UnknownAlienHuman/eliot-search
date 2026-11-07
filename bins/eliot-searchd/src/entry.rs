@@ -3,6 +3,7 @@
 #![forbid(unsafe_code)]
 
 mod app;
+mod collect_objects;
 mod decoded_exact;
 mod exact_literal;
 mod framed_search;

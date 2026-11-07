@@ -123,7 +123,7 @@ Persisted unknown Insert/ABA, postcommit/pre-view and held-query exclusion/clean
 native scopes; the resource run does not relabel them. Fixed-input RELEASE measurement passed the declared
 profile with sampled/OS-reported counters; complete unsampled product peaks and generation-replacement peak
 remain UNKNOWN/NOT_RUN. DEBUG query performance is not qualified. See the registry for exact boundaries.
-X1 is DONE in its selected Windows/Release scope; M1 collect-objects implementation is READY, not delivered.
+X1 is DONE in its selected Windows/Release scope; M1 collector is connected/PARTIAL; archive/import are not delivered.
 Archive/import and V1 relevance/scale/installed-release work remain unfinished.
 Search stays read-only; query and writer share exclusive root exclusion through flush, so a concurrent view
 manager is not the next prerequisite.
@@ -172,11 +172,15 @@ See the [window owner](../../crates/search-query/search-continuation/FUNCTIONS.m
 
 ### 5. Maintenance and selected product depth
 
-M1 is READY for concrete implementation, not complete. First implement collect-objects through the existing
-[stopped-root collection recipe](../../crates/search-runtime/search-retention/FUNCTIONS.md#stopped-root-local-object-collection):
-exclusive root guard, one supported consistent metadata snapshot, complete typed-reference mark before sweep,
-and no deletion on incomplete/corrupt/unknown input. Busy refuses rather than killing another process.
-Owners #302/#244/#281/#227/#335; optional #219/#239/#248/#334/#336. Then add archive/import,
+M1 is PARTIAL: collect-objects is connected at f01809bc in its recorded Windows/Release scope. The owned child
+takes open_plain_with_recovery/root exclusion, one consistent CONTROL snapshot and typed disk-backed marks;
+it verifies Prepared bindings/embedded Source closure and every Source before one final-object streaming sweep.
+Only proven canonical current-format unmarked leaves may be deleted; foreign/unknown entries are preserved.
+Every-32 scratch durability checkpoints bound engine bookkeeping, not object count; this is source proof,
+not universal native RAM measurement. Current root.importing is unsupported/refused, not an import flow.
+See the [collector rule/checks](../../crates/search-runtime/search-retention/FUNCTIONS.md#implemented-checks-and-remaining-m1).
+
+Archive/import remain unimplemented and are next. Owners #302/#244/#281/#227/#335; optional #219/#239/#248/#334/#336 implement those consumers first,
 then selected source-backed orientation/comparison/Git/document capabilities. Optional donors join existing
 consumers. No encryption or restricted-user phase. Qdrant Edge, if studied later, is a replacement experiment.
 

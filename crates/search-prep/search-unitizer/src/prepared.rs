@@ -7,7 +7,7 @@ use std::time::Instant;
 
 use search_materializer::{LineSpan, MaterializationLimits, materialize_utf8};
 use search_source_registry::{
-    CurrentSourceRecord, MAX_SOURCE_OBJECT_BYTES, ObjectKind, PreparationSettings,
+    CurrentSourceRecord, MAX_SOURCE_OBJECT_BYTES, ObjectKind, ObjectRef, PreparationSettings,
     SOURCE_OBJECT_FORMAT_VERSION,
 };
 
@@ -73,6 +73,22 @@ pub struct PreparedUtf8<'a> {
     units: Vec<UnitSpan>,
 }
 
+/// Actual saved identity accepted by the same artifact codec used by queries.
+/// Collection uses it when cleanup legitimately removed source-row bindings.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PreparedBinding {
+    /// Retained source namespace bytes from the artifact header.
+    pub source_namespace_id: [u8; 16],
+    /// Retained logical source identity from the artifact header.
+    pub source_id: [u8; 16],
+    /// Original source registration revision.
+    pub registration_revision: u64,
+    /// Exact retained input carried by the saved header.
+    pub input: ObjectRef,
+    /// Supported output-affecting settings stored in the artifact.
+    pub settings: PreparationSettings,
+}
+
 impl PreparedUtf8<'_> {
     /// Borrows the exact unchanged representation without copying its text.
     #[must_use]
@@ -121,7 +137,7 @@ pub fn prepare_utf8(
     if u64::try_from(verified_bytes.len()).ok() != Some(source.object_ref.byte_length) {
         return Err(PreparationError::BindingMismatch);
     }
-    verify_digest(source, &verified_bytes, deadline, cancelled)?;
+    verify_digest(source.object_ref, &verified_bytes, deadline, cancelled)?;
     let product = materialize_utf8(
         verified_bytes,
         MaterializationLimits {
@@ -174,6 +190,25 @@ pub fn decode_prepared_utf8<'a>(
     )
 }
 
+/// Accepts a retained artifact and returns its saved binding for stopped-root collection.
+///
+/// The caller first verifies its Prepared `ObjectRef`, then checks the returned binding
+/// against CONTROL and includes/verifies its Source input in the collection closure.
+///
+/// # Errors
+/// Refuses unsupported framing/settings, input mismatch, corrupt coverage/digest,
+/// owner limits, cancellation and expiration; no transformation or repair occurs.
+pub fn inspect_prepared_utf8<'a>(
+    artifact: &'a [u8],
+    limits: PreparationLimits,
+    deadline: Instant,
+    cancelled: &AtomicBool,
+) -> Result<(PreparedBinding, PreparedUtf8<'a>), PreparationError> {
+    check(deadline, cancelled)?;
+    limits.validate()?;
+    decode::inspect(artifact, limits, deadline, cancelled)
+}
+
 fn validate(
     source: &CurrentSourceRecord,
     settings: PreparationSettings,
@@ -209,7 +244,7 @@ pub fn check(deadline: Instant, cancelled: &AtomicBool) -> Result<(), Preparatio
 }
 
 fn verify_digest(
-    source: &CurrentSourceRecord,
+    input: ObjectRef,
     bytes: &[u8],
     deadline: Instant,
     cancelled: &AtomicBool,
@@ -220,7 +255,7 @@ fn verify_digest(
         hasher.update(chunk);
     }
     check(deadline, cancelled)?;
-    if hasher.finalize().as_bytes() != source.object_ref.digest.as_bytes() {
+    if hasher.finalize().as_bytes() != input.digest.as_bytes() {
         return Err(PreparationError::IntegrityFailure);
     }
     Ok(())

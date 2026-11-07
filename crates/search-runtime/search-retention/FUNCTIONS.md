@@ -2,8 +2,8 @@
 
 This recipe owns local-object reachability, archive and import. [Publication](../../search-index-qdrant/search-publication/FUNCTIONS.md)
 owns live Qdrant retirement. [Local scope](../../../docs/architecture/LOCAL_SCOPE.md) selects plain storage, not key migration.
-The unused coordinator Rust package, manifest and exclusive fixtures are removed. Maintenance is not implemented;
-this is policy for its later actual stopped-root consumer.
+The unused coordinator Rust package, manifest and exclusive fixtures remain removed. The stopped-root
+collect-objects slice is connected at source f01809bc; archive/import are not implemented. M1 is PARTIAL.
 
 ## No maintenance scan in the query path
 
@@ -13,25 +13,46 @@ Disk pressure pauses writes and reports maintenance; it does not authorize onlin
 
 ## Stopped-root local-object collection
 
-Stop the daemon and all application readers/writers; acquire the same exclusive root guard. Busy means refuse,
-not kill another process. Open one supported consistent control snapshot before marking.
+Stop watch/daemon readers and writers before this explicit maintenance operation:
+
+    eliot-search collect-objects [ROOT] [--data-root ROOT] [--config-file PATH] [--daemon PATH]
+    eliot-searchd --collect-objects [--data-root ROOT] [--config-file PATH]
+
+The CLI uses its owned child and closed collected summary. [collect_objects.rs](../../../bins/eliot-searchd/src/collect_objects.rs)
+opens open_plain_with_recovery and retains the existing exclusive root guard through output. Busy refuses,
+not kills another process. One supported consistent CONTROL snapshot seeds typed disk-backed ObjectMarks in
+disposable redb scratch outside final objects; no new CONTROL table, format or durable collection ledger is added.
+The existing original deadline/cancellation applies throughout.
 
 ### One complete mark
 
-Enumerate current source/retained revisions, preparation outcomes/artifacts, every retained published generation,
-fixed build input/pending pages, unresolved cleanup references and any supported incomplete import. No process-local
-window remains under stopped-root exclusion. Do not reconstruct liveness from operation history or supplied manifests.
+Mark current Source heads plus stale/Gap preparation inputs and Ready artifacts, all remaining published/
+pending/partial-retirement/unresolved source/page/evidence references. Inspect every rooted Prepared artifact
+with the real codec/binding checks and include its embedded Source ObjectRef before verifying all Source leaves.
+Do not substitute a newer current head for an older artifact's input. No process-local window remains under
+stopped-root exclusion, and marks are not reconstructed from history or supplied manifests.
+root.importing is currently reserved/unsupported: ordinary opening refuses it before collection. This is not
+an implemented import flow; future supported import marking remains subject to the complete-reference rule.
 
 Validate all typed tables/references; missing/corrupt/unknown/unreadable or over-limit input stops before deletion.
 Mark exact ObjectRefs once in disposable bounded scratch data outside final objects. Raw bodies are leaves.
-Complete the entire mark before sweep. An incomplete mark does not authorize deletion of an apparently safe subset.
+An Immediate checkpoint after every 32 successful scratch commits releases pending redb bookkeeping;
+this cadence never limits/omits marked objects and is not an object quota. The fixed f018 bound is source-reviewed,
+not a universal native RAM-peak benchmark. Normal object/storage/encoder/preparation/query formats are unchanged.
+Complete the entire metadata/Prepared closure and verify every marked object before sweep. Missing/corrupt
+rooted references stop before deleting any final object; a partial mark authorizes no safe-subset deletion.
 
 ### One sweep
 
-Scan final objects once. Delete only known store-owned current-format objects absent from the complete mark;
-preserve foreign files, unsupported formats, uncertain identities and required sole copies. Owned temporary stages
-may be removed only when no producer exists. Before-sweep interruption deletes no final object. During-sweep failure
-may leave garbage; the next run rebuilds marks. No sweep journal, legal-hold or erasure-proof platform.
+Perform one streaming enumeration of final objects. Delete only unmarked canonical known-version regular
+non-reparse leaves after identity, length and BLAKE3 ownership checks. Preserve foreign/future-version files,
+directories, wrong-hash candidates and uncertain identities; an unmarked integrity mismatch does not establish
+ownership. Rooted corruption above is a failure, not a preserved-unmarked shortcut.
+Close/remove only owned scratch on ordinary success/error. Before-sweep interruption deletes no final object;
+a sweep-time filesystem failure may leave garbage and the next run rebuilds marks. No sweep journal or erasure proof.
+
+This is cooperative stopped-root exclusion in account-private storage. The final unlink is pathname-based;
+the guard/checks do not make check/unlink atomic against a noncooperating same-account external rename/reparse.
 
 ## Backup is a completed archive, not a runnable clone
 
@@ -75,7 +96,16 @@ Application encryption is not selected. Reject unsupported encrypted archives/ro
 and keys intact. Do not silently downgrade, generate replacement keys, reset counters, rewrap or migrate them.
 An explicit real user-data export request is separate work, not a prerequisite for the plain product.
 
-## Future consumer
+## Implemented checks and remaining M1
 
-Implement maintenance only with its explicit command and actual retained-data owners. Preserve the root guard,
-object identity/path checks and original files. No deletion or archive capability is delivered by this recipe.
+Sol SOURCE PASS at f01809bc follows the rejected old dbf bookkeeping bound; current control/store/unitizer/
+both-bin locked checks and strict Clippy plus RELEASE builds passed. Windows/Release native A used an independent
+read-only oracle for 15 rooted refs, including stale C/D revision-1 inputs behind current revision 2. One valid
+store-created Source orphan was deleted (deleted=1, preserved=19); rooted data, foreign entries and CONTROL
+were retained and Raw reopened. Missing C1 Source (27 bytes) returned OBJECT_MISSING before further deletes;
+corrupt D1 Prepared (296 bytes) returned OBJECT_INTEGRITY_FAILURE before changes, preserving the orphan.
+Observed waits/both EOF/OS absence belong to the recorded native scopes. Additional guard/refusal checks are
+recorded in the [registry](../../../docs/audit/ANALYSIS_REGISTRY.md#evidence-status); older dbf runs stay older evidence.
+
+Only the collector slice is delivered. Next implement archive/import through the rules above and actual consumers,
+preserving originals. M1 remains PARTIAL; V1/installed final-head and whole-product qualification remain NOT_RUN.

@@ -25,6 +25,7 @@ pub enum RootCommand {
     Index,
     Search,
     Session,
+    CollectObjects,
 }
 
 impl RootCommand {
@@ -40,6 +41,7 @@ impl RootCommand {
             Self::Index => "index",
             Self::Search => "search",
             Self::Session => "session",
+            Self::CollectObjects => "collect-objects",
         }
     }
 }
@@ -96,6 +98,7 @@ fn print_help() {
         "  eliot-searchd --index [--index-path PATH] --qdrant-url URL [--data-root ROOT] [--config-file PATH]\n",
         "  eliot-searchd --search-stdio [--qdrant-url URL] [--data-root ROOT] [--config-file PATH]\n",
         "  eliot-searchd --session-stdio [--qdrant-url URL] [--data-root ROOT] [--config-file PATH]\n",
+        "  eliot-searchd --collect-objects [--data-root ROOT] [--config-file PATH]\n",
     ));
 }
 

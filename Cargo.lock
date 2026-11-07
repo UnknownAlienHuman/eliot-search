@@ -981,6 +981,8 @@ dependencies = [
  "search-contracts",
  "search-runtime-owner",
  "search-source-registry",
+ "winapi-util",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -1013,6 +1015,7 @@ name = "search-unitizer"
 version = "0.0.0"
 dependencies = [
  "blake3",
+ "search-contracts",
  "search-materializer",
  "search-source-registry",
 ]

@@ -9,25 +9,27 @@ replacement-workload, platform or whole-product qualification. FIRST RAW at sour
 c9a5f1c101e8e0828f913edd6c5769499454716f retains its source/native scope. Final Sol incremental X1 PASS on
 source-equivalent 473447af/main 5906107080c0c567721afb66d6a2f947f488eaca closes the selected Windows/Release
 window gates below. Executed binaries retain their 473447af build provenance; no fresh 590 rebuild is claimed.
-X1 is DONE in that scope; M1 is READY for implementation. Whole-project/installed final-head qualification
-remains NOT_RUN.
+X1 is DONE in that scope. Collector source f01809bc9826314cf1850e6e4e92b970105908ab has Sol SOURCE PASS,
+changed-owner gates and scoped Windows/Release A/B/C plus Busy/import-marker refusal proof below; M1 is PARTIAL.
+Archive/import are not implemented. Whole-project/installed final-head qualification remains NOT_RUN.
 
 <a id="resume"></a>
 <a id="resume-after-interruption"></a>
 ## Next task
 
-**M1 next: implement collect-objects.** Follow the existing
-[stopped-root collection rule](../../crates/search-runtime/search-retention/FUNCTIONS.md#stopped-root-local-object-collection)
-with a real CLI/daemon consumer: stop readers/writers, hold the same exclusive root guard (Busy refuses),
-open one supported consistent metadata snapshot and mark all current/preparation/published/pending/unresolved
-references before any sweep. Unknown/corrupt/unreadable/incomplete marks authorize no deletion. Sweep only
-known store-owned current-format objects absent from the complete mark; preserve originals/foreign data.
+**M1 next: implement archive creation and fresh-destination import.** The stopped-root collect-objects slice
+is connected; follow the existing [archive rule](../../crates/search-runtime/search-retention/FUNCTIONS.md#backup-is-a-completed-archive-not-a-runnable-clone)
+and [import rule](../../crates/search-runtime/search-retention/FUNCTIONS.md#explicit-restoreimport-into-a-fresh-destination)
+with actual consumers. Preserve originals, verify copied CONTROL/required objects from the copy and publish the
+non-runnable archive completion marker last. Copied pending/cleanup records authorize no original backend effects.
+Do not create a new ledger/service or treat reserved root.importing refusal as implemented import support.
 
-X1 selected Windows/Release qualification is complete; do not turn SDK-only unread or exact pre-exit release
-timing into additional gates. They remain NOT_PROVEN/UNKNOWN. New extracted/parser/nonidentity routes are not
-selected prerequisites before M1; only saved UTF-8 identity is the current prepared-representation producer.
-M1 READY means work can start, not that collection/archive/import are implemented. V1/installed final-head
-qualification remains NOT_RUN.
+M1 remains PARTIAL: the collector has only its recorded source/native scope; archive/import do not exist yet.
+Busy-root refusal/release and reserved import-marker refusal native checks are closed at their recorded scope.
+The scratch bookkeeping bound is source-reviewed, not a universal native RAM benchmark. Cooperating root
+exclusion does not make unlink atomic against external same-account renames.
+X1's selected Windows/Release scope remains DONE. Stronger UNKNOWN/NOT_PROVEN limits remain unchanged.
+V1/installed final head and the whole project are not qualified.
 
 R1's persisted unknown Insert/ABA, postcommit/pre-view interruption and fef held-view exclusion/cleanup are
 separately pinned native evidence. The 9e RELEASE resource run does not relabel those cases. Complete unsampled
@@ -54,7 +56,7 @@ DONE below is the named delivered scope, not completion of the product.
 | U1 / DONE, Windows debug scope | Q1 | CONTROL resolver, daemon/CLI, protocol/client | Read-only verified full retained units/citations; c843 targeted final-pin scope and earlier evidence below. |
 | R1 / ACCEPTED, recorded functional + RELEASE fixed-input scopes | U1 | CLI/daemon index helpers, source CONTROL and publication | Recorded owner gates include unknown Insert/ABA, postcommit boundary, held-query exclusion/cleanup and ordinary-repo-1 RELEASE fixed-input resource PASS; stronger unclaimed boundaries remain below. |
 | X1 / DONE, Windows/Release selected scope | R1 | CLI/OwnedQuerySession/daemon window owner | Final Sol PASS: Raw/Decoded/ranked, lifetime/held-output/selection and real 63+1 frame cut at recorded scopes. |
-| M1 / READY, implementation pending | X1 | Stopped-root maintenance owner and actual CLI/daemon consumer | Implement collect-objects complete-mark/guarded sweep first, then archive/import preserving originals. |
+| M1 / PARTIAL, collector scope | X1 | Stopped-root collector and archive/import owner | collect-objects source f01809bc/Windows Release delivered at recorded scope; archive/import implementation is next. |
 | O1 / DEFERRED | Connected baseline + actual need | [Selected depth](../product/AGENT_ANALYSIS_FRAMEWORK.md#optional-depth) | Add only an actual source-backed consumer; remove unused scaffolds. |
 | V1 / WAIT | X1/M1 shipped paths | [Qualification](../implementation/TEST_CUTOVER.md), #215 | Measured relevance/scale/platform/release and installed-baseline evidence. |
 
@@ -99,6 +101,36 @@ hydration reuse. No application encryption, grants, OS-secret platform or second
 <a id="evidence-status"></a>
 <a id="execution-evidence"></a>
 ## Verification and known blockers
+
+### Stopped-root collector evidence, source f01809bc
+
+- Sol SOURCE PASS at f01809bc after the old dbf RAM/bookkeeping-bound P2 rejection. Current CONTROL/store/
+  unitizer/both-bin locked checks and strict Clippy plus RELEASE builds exited 0. Storage/encoder/preparation/
+  query formats are unchanged. Periodic scratch checkpoint cadence is source proof, not native peak-RAM qualification.
+- f018 A: an independent read-only oracle established all 15 rooted ObjectRefs, including stale C/D revision-1
+  inputs behind current revision 2. One valid Source orphan created by the real store API was deleted:
+  deleted=1, preserved=19. All 15 rooted refs plus user notes, future-version entry, canonical wrong-hash leaf,
+  directory and CONTROL were preserved; Raw reopened. CLI/daemon PIDs 66636/36116 exited 0.
+- f018 B: missing C1 Source (27 bytes) returned OBJECT_MISSING, zero additional deletes/changes
+  (CLI/daemon 106196/99132 exit 2). f018 C: corrupt D1 Prepared (296 bytes) returned
+  OBJECT_INTEGRITY_FAILURE, zero changes and orphan preserved (119476/23908 exit 2).
+  Actual wait, both EOF and OS absence were observed; no survivors remained in these cases.
+- f018 Busy guard PASS: collect CLI 109528 returned exit 2/busy while a live window held the root;
+  CONTROL/object hashsets stayed unchanged. Session Close CLI 116236/daemon 74248 exited 0. After release,
+  collect CLI 99484/daemon 8260 exited 0 (marked=15, verified=15, deleted=0), Raw 65964 exited 0;
+  hashsets remained unchanged.
+- f018 sentinel PASS on the owned u1/a fixture: public collect CLI 78752 returned exit 2/incomplete_import;
+  marker, production-created orphan, all 21 post-setup files and CONTROL bytes were preserved. Wait/both EOF/
+  OS absence were observed; the fast-daemon witness remains UNKNOWN where not captured. Original old roots
+  were unchanged, with no remaining owned handles/processes. Import-marker refusal is not import implementation.
+  Additional precondition artifacts remain at C:\Development\Rust\targets\task-m1-collect-native\run-20261107-v1\fixed-f01809bc-preconditions-v1:
+  busy/result.json, sentinel/result.json and summary.json.
+- Old dbf baseline/orphan observations retain their old source scope; the fixed f018 results above do not
+  relabel them. Init/fast-child observer remains UNKNOWN where no actual observer evidence exists.
+  Root exclusion coordinates cooperating application processes; final pathname unlink is not atomic against
+  a noncooperating same-account external rename/reparse replacement.
+- M1 is PARTIAL: only this collector/source+Windows Release scope is delivered. Archive/import, universal
+  native RAM bounds, V1/installed final-head and the whole product are not qualified.
 
 ### Session-window qualification, Windows/Release
 

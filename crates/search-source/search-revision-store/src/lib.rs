@@ -13,6 +13,10 @@ use search_runtime_owner::{PlainRootError, PlainRootGuard};
 pub use search_source_registry::MAX_SOURCE_OBJECT_BYTES;
 use search_source_registry::{ObjectKind, ObjectRef, SOURCE_OBJECT_FORMAT_VERSION};
 
+mod collect;
+
+pub use collect::{collection_candidate, remove_unreferenced_object};
+
 /// Closed immutable-object storage failures.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ObjectStoreError {
@@ -30,7 +34,7 @@ pub enum ObjectStoreError {
     ImmutableConflict,
     /// The root publisher refused the file operation.
     PublishFailed,
-    /// An object read failed.
+    /// An object filesystem operation failed.
     Io,
     /// The operation deadline expired.
     Deadline,
@@ -169,13 +173,22 @@ pub fn read_object(
             ObjectStoreError::Io
         }
     })?;
-    if !metadata.is_file() || metadata.file_type().is_symlink() {
+    if !collect::regular(&metadata) {
         return Err(ObjectStoreError::NotRegularFile);
     }
     if metadata.len() != reference.byte_length || metadata.len() > maximum_bytes {
         return Err(ObjectStoreError::IntegrityFailure);
     }
     let file = File::open(path).map_err(|_| ObjectStoreError::Io)?;
+    read_open_object(&file, reference, deadline, cancellation)
+}
+
+fn read_open_object(
+    file: &File,
+    reference: ObjectRef,
+    deadline: Instant,
+    cancellation: &AtomicBool,
+) -> Result<Vec<u8>, ObjectStoreError> {
     let mut reader = file.take(
         reference
             .byte_length

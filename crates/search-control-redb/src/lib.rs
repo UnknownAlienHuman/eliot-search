@@ -5,5 +5,6 @@
 
 pub mod current_preparation;
 pub mod current_source;
+pub mod object_marks;
 pub mod plain_control;
 pub mod publication;
