@@ -7,8 +7,10 @@ compact object/range/point reference pages and evidence, then commits a short gu
 Publication/recovery validates the complete graph; ordinary search pins the committed snapshot and validates
 returned evidence plus retained objects. [FUNCTIONS.md](FUNCTIONS.md) owns the concrete APIs and boundaries.
 
-Explicit refresh uses guarded current-inventory removal and an unchanged-key/ObjectRef no-op. Saved generation
-evidence and immutable objects survive current membership removal. Unresolved old builds retain their complete
+Durable File/Tree admissions share source_state; native read-only capture defaults to no admissions on legacy
+roots. Explicit PATH refreshes only its admission; bare index reloads their unique union. Confirmed absence
+uses guarded current-inventory removal; ignored presence does not. Saved generation evidence, admission/kind
+and immutable objects survive membership removal. Unchanged-key/ObjectRef remains a logical no-op. Unresolved old builds retain their complete
 header/rows in retired obligations while a fresh successor may proceed; cleanup cannot erase those obligations.
 
 Source/Prepared immutable objects and external Qdrant effects belong to their existing owners; no writer

@@ -5,14 +5,16 @@ The CLI owns local help/version, native argument capture, daemon selection, owne
 <a id="capture-and-dispatch"></a>
 ## Index and refresh
 
-    eliot-search index PATH --qdrant-url URL [--data-root ROOT] [--config-file PATH] [--daemon PATH]
+    eliot-search index [PATH] --qdrant-url URL [--data-root ROOT] [--config-file PATH] [--daemon PATH]
 
-PATH is one explicit file or ignore-aware tree. Initialize a new data root once with initialize-data-root;
-index requires an existing current root. The owned child retains/prepares the selected files, refreshes
-confirmed in-scope membership and publishes using typed helpers under one root guard/original deadline.
-Success is the closed index/refreshed result; use search for actual verified cards. Repeat index to refresh,
-without manually assembling SourceIds or a separate refresh command. Link/incomplete observations fail;
-unchanged native key plus ObjectRef does not advance the logical source head or create another collection.
+Initialize a new root once with initialize-data-root. PATH admits and refreshes only that explicit File/Tree;
+bare index reloads all stored admissions in the new process and refreshes the unique union. Explicit File wins
+over Tree ignores; overlap is processed once. Admission/kind persist through deletion/re-add. Bare index with
+no admissions returns INDEX_SELECTION_REQUIRED; old retain-file rows are not inferred admissions.
+The owned child uses one guard/deadline and typed retain/prepare/publication helpers. Only confirmed absence
+removes current membership; an ignored still-present source remains. Link/incomplete observations fail.
+Unrelated unprepared current rows still cause PUBLICATION_SOURCE_NOT_PREPARED. Success is the closed
+index/refreshed result; use search for cards. Unchanged key/ObjectRef preserves logical revisions/collection.
 
 ## Syntax
 

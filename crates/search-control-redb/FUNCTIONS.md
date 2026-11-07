@@ -6,7 +6,7 @@ The retained CONTROL implementation owns control/control.redb through vendored r
 
 current_source adds three ordinary current tables on the first successful retained-source commit:
 
-- source_state stores the source-row schema version, persisted root-local SourceNamespaceId and non-reset wanted_corpus_revision.
+- source_state stores the source-row schema version, persisted root-local SourceNamespaceId and non-reset wanted_corpus_revision, plus durable admitted-selection records.
 - current_source_rows stores typed CurrentSourceRecord values by independently generated SourceId.
 - current_source_locators maps exact OS-native path bytes to a stored SourceId.
 
@@ -21,8 +21,20 @@ Current source tables are ordinary Current-root user data. They do not change th
 capture_current_sources reads the current inventory natively read-only for explicit refresh.
 remove_current_sources compares the captured full source rows/namespace/locator bindings, atomically removes
 their current source/locator/preparation entries and advances the wanted-corpus guard. It does not delete
-immutable objects or saved generation source/page/evidence rows. Only the complete-scan owner selects confirmed
-in-scope deletion/exclusion; incomplete observations cannot authorize removal.
+immutable objects, admission records or saved generation source/page/evidence rows. Only confirmed filesystem
+absence in the refreshed scopes authorizes removal; excluded-but-present and inaccessible observations do not.
+
+## Durable selections
+
+AdmittedSelection { path, kind: SelectionKind::File|Tree } records desired filesystem scope independently of
+observed source rows. admit_selection persists bounded versioned native-locator/kind records in the existing
+source_state table; identical admission is a logical no-op. Deletion does not clear admission or change its
+known kind. No new table/database or root format is introduced.
+
+capture_selections uses native read-only CONTROL. Legacy roots with no records return no admissions and are
+not migrated by reading. Bare index turns that absence into INDEX_SELECTION_REQUIRED. A retain-file source row
+is not an implicit admission. Admissions also do not prepare or hide unrelated current source rows from the
+publication owner's full matching-preparation check.
 
 ## Current preparation
 

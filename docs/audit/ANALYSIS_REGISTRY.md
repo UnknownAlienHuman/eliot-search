@@ -1,26 +1,25 @@
 # Work register
 
-Current checkpoint, 2026-11-06: U1 is merged at main f45a0f6e in its recorded Windows debug scopes.
-R1 source a492442e971978d4dea94fdc5a7d44b9d9275bd4 connects explicit file/tree index and refresh to retained
-preparation/publication/search. Source review and scoped native cases passed; R1 remains PARTIAL.
-Durable admission/reload, periodic triggering, later Exact/windows and installed-baseline work remain open.
+Current checkpoint, 2026-11-07: U1 and the explicit-index R1 slice are merged through main 86822d10.
+R1 source ec9fb6f09b84ea30c1413c0f0177800f58fd857e adds durable File/Tree selections and bare-index reload.
+Source and scoped native checks passed; R1 remains PARTIAL. Periodic triggering/lifetime/interval, later
+Exact/windows and installed-baseline work remain unfinished.
 
 <a id="resume"></a>
 <a id="resume-after-interruption"></a>
 ## Next task
 
-**R1 next: durable file/tree admission → writable-index startup reload.** The current
-[CLI index command](../../bins/eliot-search/FUNCTIONS.md#index-and-refresh) refreshes an explicit PATH through the
-[existing daemon helpers](../../bins/eliot-searchd/FUNCTIONS.md#index-and-refresh-path).
-Persist the admitted selection in existing owner state and reload it at writable startup; do not make search
-write or infer a complete inventory from inaccessible observations. Periodic policy remains required, but no
-resident trigger/lifetime/interval is implemented yet.
+**R1 next: implement the actual foreground periodic-refresh consumer.** Durable admission and writable-startup
+reload now exist: [index PATH](../../bins/eliot-search/FUNCTIONS.md#index-and-refresh) admits/refreshes only that
+scope; bare index reloads all stored selections through the existing daemon read/scan plan. Add the concrete
+foreground trigger with its real lifetime/interval; periodic policy alone is not an implemented consumer.
+No resident watcher/interval currently exists.
 
-Confirmed in-scope deletion/exclusion already changes new-generation membership while retaining immutable bytes
-and published evidence. Unknown Create/Insert obligations remain preserved; only the active pending slot can
-move to a never-reused successor. No manual settlement/reset is required or authorized.
-Both query and writer hold the same exclusive root guard through output flush. A concurrent view manager is
-not the next requirement. Keep these changes in the concrete owners, without a new service/database/framework.
+Keep explicit File precedence, union deduplication, known selection kind through absence/re-add and only
+confirmed absence removal. A still-present ignored file is not removal. Legacy source rows neither create
+admissions nor disappear from publication validation. Search stays read-only. Query and writer retain the
+same exclusive root guard through output flush; a concurrent view manager is not the next prerequisite.
+Unknown Create/Insert obligations and retained/pinned evidence remain preserved; no manual settlement/reset.
 
 <a id="work-register"></a>
 <a id="delivery-remaining"></a>
@@ -38,7 +37,7 @@ DONE below is the named delivered scope, not completion of the product.
 | P1 / DONE, Windows debug scope | S1 | Materializer/unitizer, shared writer, CONTROL and actual prepare-source child | Complete artifact/current outcome with actual stored text/ranges, empty/Gap and guarded CAS; source d2ccb596 scopes below. |
 | Q1 / DONE, Windows debug scope | P1 | Actual daemon publisher, CONTROL and concrete bridge | Full corpus → exact backend/readback/canary → guarded current/evidence → validated PublishedView; source 3c33d831. |
 | U1 / DONE, Windows debug scope | Q1 | CONTROL resolver, daemon/CLI, protocol/client | Read-only verified full retained units/citations; c843 targeted final-pin scope and earlier evidence below. |
-| R1 / PARTIAL, scoped Windows debug | U1 | CLI/daemon index helpers, source CONTROL and publication | Explicit file/tree refresh works; next durable admission and writable-startup reload, then actual periodic triggering/convergence. |
+| R1 / PARTIAL, scoped Windows debug | U1 | CLI/daemon index helpers, source CONTROL and publication | Durable selection and scoped/bare union refresh work; next actual foreground periodic consumer with lifetime/interval and convergence. |
 | X1 / WAIT | R1 | Exact/query window and client owners | Retained exact denominator, same-session paging/expansion and expiry. |
 | M1 / WAIT | R1 | Retention and future stopped-root maintenance caller | Conservative collection/archive/import preserving originals. |
 | O1 / DEFERRED | Connected baseline + actual need | [Selected depth](../product/AGENT_ANALYSIS_FRAMEWORK.md#optional-depth) | Add only an actual source-backed consumer; remove unused scaffolds. |
@@ -85,6 +84,31 @@ hydration reuse. No application encryption, grants, OS-secret platform or second
 <a id="evidence-status"></a>
 <a id="execution-evidence"></a>
 ## Verification and known blockers
+
+Selection-reload evidence, Windows debug / Rust 1.98.0:
+
+- Final source ec9fb6f: reviewed admissions and bounded per-pass union/root-kind-missing metadata; no per-scope
+  full file-list copies. Memory/performance improvement is source-reviewed, not performance-qualified.
+  The 4a scope passed checks/strict Clippy and both builds; the e9 daemon correction passed locked check,
+  strict Clippy and build. Final CLI bytes are carried unchanged and verified, not a fresh CLI rerun.
+- 4a fresh-process bare index PID 23864 discovered C (50 bytes). Scoped PATH PID 101352 updated A while D
+  stayed at 68 bytes; bare PID 96104 refreshed D to 59 bytes. Unchanged PID 66848 preserved generation/revisions
+  with zero new collections. Explicit ignored X returned one 37-byte card; deletion/re-add preserved admission
+  and old objects. A missing/restored admitted Tree retained its Tree kind.
+- 4a incomplete PID 65516 returned a typed failure without removing C, partially updating D or publishing.
+  Legacy bare/no-admission returned INDEX_SELECTION_REQUIRED; unrelated unprepared current rows returned
+  PUBLICATION_SOURCE_NOT_PREPARED rather than promotion, implicit preparation or silent omission.
+- ec9 nested admission/bare/no-op PIDs 47908/11800/44864 all exited 0: four admissions, four unique sources/
+  points, generation 11, unchanged revisions and no extra collections. Search PID 99336 returned one exact
+  50-byte card. Incomplete union PID 120388 failed with state/backend unchanged.
+- Operator Qdrant PID 41668 ended (exit -1), operator exited 0, zero owned processes remained and storage/roots
+  were preserved. Unknown INSERT-header recovery, cancellation and watcher/lifecycle native coverage remain
+  NOT_RUN. No periodic consumer or complete R1/product qualification is claimed.
+
+Native records and exact binary provenance remain under
+C:\Development\Rust\targets\task-r1-selection-native\run-20261106-v1: logs/selection-*.exit.json and
+bin/ec9fb/pins.json. Executed flow: initialize-data-root → index PATH → a new process's bare index → search.
+The older explicit-index and recovery evidence below retains its original scope.
 
 R1 evidence scopes, Windows debug / Rust 1.98.0:
 

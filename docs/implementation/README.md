@@ -106,13 +106,15 @@ Retention, preparation and publication retain their root-owned argv child. Searc
 <a id="3a-fresh-generation-convergence"></a>
 ### 3A. Fresh-generation convergence
 
-R1 now connects index PATH to the existing source/preparation/publication helpers under one root guard and
-original deadline. Repeat index to refresh that explicit scope; unchanged native key/ObjectRef is a no-op.
-Confirmed in-scope deletion/exclusion changes new-generation membership while retained bytes/pinned evidence
-remain; partial/inaccessible inventory is not removal.
+R1 connects index [PATH] to existing source/preparation/publication helpers under one root guard and original
+deadline. PATH admits/refreshes only that File/Tree scope; bare index reloads all stored admissions and scans
+their bounded deduplicated union. Explicit File wins over Tree ignores. Unchanged key/ObjectRef is a no-op.
+Admission/kind survive absence/re-add. Only confirmed in-scope absence removes current membership; ignored but
+present sources remain, as do retained bytes/pinned evidence. Incomplete inventory is not removal.
 
-R1 remains partial. Next persist admitted file/tree selection and reload it at writable-index startup.
-Periodic refresh is required policy, but an actual resident trigger/lifetime/interval is not implemented.
+R1 remains partial. Durable admission and writable-startup reload are implemented; next connect the concrete
+foreground periodic-refresh consumer under this selection/read plan. Its trigger/lifetime/interval do not
+exist yet. Periodic policy is required, not runtime qualification.
 Search stays read-only; query and writer share exclusive root exclusion through flush, so a concurrent view
 manager is not the next prerequisite.
 
