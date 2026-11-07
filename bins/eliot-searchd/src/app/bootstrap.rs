@@ -33,6 +33,7 @@ pub(super) struct RootCli {
     unit: Option<usize>,
     publication: Option<PublicationRequest>,
     search_endpoint: Option<String>,
+    archive_path: Option<PathBuf>,
 }
 
 #[derive(Default)]
@@ -115,6 +116,7 @@ fn is_command(value: &OsStr) -> Option<RootCommand> {
         "--search-stdio" => Some(RootCommand::Search),
         "--session-stdio" => Some(RootCommand::Session),
         "--collect-objects" => Some(RootCommand::CollectObjects),
+        "--archive-export" => Some(RootCommand::ArchiveExport),
         _ => None,
     }
 }
@@ -248,6 +250,7 @@ pub(super) fn parse(arguments: &[OsString]) -> Result<Parsed, String> {
     let mut data_root = None;
     let mut config_file = None;
     let mut source_file = None;
+    let mut archive_path = None;
     let mut index_options = IndexOptions::default();
     let mut source_id = None;
     let mut unit = None;
@@ -269,6 +272,9 @@ pub(super) fn parse(arguments: &[OsString]) -> Result<Parsed, String> {
             index += 2;
         } else if argument == OsStr::new("--config-file") {
             select_path_option(&mut config_file, arguments, index, "config_file")?;
+            index += 2;
+        } else if argument == OsStr::new("--archive-path") {
+            select_path_option(&mut archive_path, arguments, index, "archive_path")?;
             index += 2;
         } else if argument == OsStr::new("--source-file") {
             select_path_option(&mut source_file, arguments, index, "source_file")?;
@@ -307,6 +313,9 @@ pub(super) fn parse(arguments: &[OsString]) -> Result<Parsed, String> {
     }
 
     let command = command.ok_or_else(|| "UNKNOWN_ARGUMENT".to_owned())?;
+    if matches!(command, RootCommand::ArchiveExport) != archive_path.is_some() {
+        return Err(invalid("archive_path_required"));
+    }
     let (publication, search_endpoint) = publication.finish(command)?;
     validate_source_selection(
         command,
@@ -332,6 +341,7 @@ pub(super) fn parse(arguments: &[OsString]) -> Result<Parsed, String> {
         unit,
         publication,
         search_endpoint,
+        archive_path,
     })))
 }
 
@@ -423,5 +433,8 @@ pub(super) fn resolve(cli: RootCli, startup_cwd: &Path) -> Result<RootInvocation
         unit: cli.unit,
         publication: cli.publication,
         search_endpoint: cli.search_endpoint,
+        archive_path: cli
+            .archive_path
+            .map(|path| resolve_layer_path(&path, startup_cwd)),
     })
 }

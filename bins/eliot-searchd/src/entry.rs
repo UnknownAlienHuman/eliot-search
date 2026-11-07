@@ -3,6 +3,7 @@
 #![forbid(unsafe_code)]
 
 mod app;
+mod archive_export;
 mod collect_objects;
 mod decoded_exact;
 mod exact_literal;
@@ -11,6 +12,7 @@ mod native_root_command;
 mod prepared_source;
 mod published_corpus;
 mod raw_exact;
+mod retained_objects;
 mod verified_query;
 
 fn main() -> std::process::ExitCode {

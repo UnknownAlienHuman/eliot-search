@@ -5,16 +5,14 @@ use std::io::Write;
 use std::path::Path;
 use std::process::ExitCode;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::AtomicBool;
 use std::time::Instant;
 
-use search_control_redb::object_marks::{MarkError, ObjectMarks, PreparedExpectation};
-use search_revision_store::{
-    ObjectStoreError, collection_candidate, read_object, remove_unreferenced_object,
-};
+use search_control_redb::object_marks::MarkError;
+use search_revision_store::{ObjectStoreError, collection_candidate, remove_unreferenced_object};
 use search_runtime_owner::{PlainRootError, PlainRootGuard, open_plain_with_recovery};
-use search_source_registry::{MAX_SOURCE_OBJECT_BYTES, ObjectKind};
-use search_unitizer::{PreparationError, PreparationLimits, inspect_prepared_utf8};
+
+use crate::retained_objects::{self, check};
 
 struct Summary {
     marked: u64,
@@ -23,51 +21,24 @@ struct Summary {
     preserved: u64,
 }
 
-fn check(deadline: Instant, cancel: &AtomicBool) -> Result<(), &'static str> {
-    if cancel.load(Ordering::Relaxed) {
-        Err("COLLECTION_CANCELLED")
-    } else if Instant::now() >= deadline {
-        Err("COLLECTION_DEADLINE")
-    } else {
-        Ok(())
-    }
-}
-
 fn collect(
     root: &PlainRootGuard,
     deadline: Instant,
     cancel: &AtomicBool,
 ) -> Result<Summary, &'static str> {
     let parent = root.path().parent().ok_or("COLLECTION_SCRATCH_PATH")?;
-    let mut marks = ObjectMarks::build(&root.control_path(), parent, deadline, cancel)
-        .map_err(MarkError::code)?;
+    let marks = retained_objects::verify(
+        &root.control_path(),
+        &root.object_dir(),
+        parent,
+        deadline,
+        cancel,
+    )?;
     let collected = (|| {
-        let prepared = close_prepared_inputs(root, &mut marks, deadline, cancel)?;
-        let mut verified = 0_u64;
-        let mut prepared_count = 0_u64;
-        let mut previous = None;
-        while let Some(reference) = marks
-            .next(previous, deadline, cancel)
-            .map_err(MarkError::code)?
-        {
-            check(deadline, cancel)?;
-            if reference.kind == ObjectKind::Source {
-                let bytes = read_object(root, reference, MAX_SOURCE_OBJECT_BYTES, deadline, cancel)
-                    .map_err(ObjectStoreError::code)?;
-                drop(bytes);
-            } else {
-                prepared_count += 1;
-            }
-            verified = verified.checked_add(1).ok_or("COLLECTION_INPUT_LIMIT")?;
-            previous = Some(reference);
-        }
-        if verified != marks.len() || prepared_count != prepared {
-            return Err("COLLECTION_MARK_INCOMPLETE");
-        }
         check(deadline, cancel)?;
         let mut summary = Summary {
             marked: marks.len(),
-            verified,
+            verified: marks.len(),
             deleted: 0,
             preserved: 0,
         };
@@ -112,54 +83,6 @@ fn collect(
     let closed = marks.close(deadline, cancel).map_err(MarkError::code);
     closed?;
     collected
-}
-
-fn close_prepared_inputs(
-    root: &PlainRootGuard,
-    marks: &mut ObjectMarks,
-    deadline: Instant,
-    cancel: &AtomicBool,
-) -> Result<u64, &'static str> {
-    let limits = PreparationLimits {
-        max_input_bytes: 8 * 1024 * 1024,
-        max_output_bytes: 8 * 1024 * 1024,
-        max_lines: 1_000_000,
-        max_units: 1_000_000,
-        max_encoded_bytes: 64 * 1024 * 1024,
-    };
-    let mut prepared = 0_u64;
-    let mut previous = None;
-    while let Some(reference) = marks
-        .next(previous, deadline, cancel)
-        .map_err(MarkError::code)?
-    {
-        previous = Some(reference);
-        if reference.kind != ObjectKind::Prepared {
-            continue;
-        }
-        let bytes = read_object(root, reference, 64 * 1024 * 1024, deadline, cancel)
-            .map_err(ObjectStoreError::code)?;
-        let (binding, view) = inspect_prepared_utf8(&bytes, limits, deadline, cancel)
-            .map_err(PreparationError::code)?;
-        marks
-            .include_prepared_input(
-                reference,
-                PreparedExpectation {
-                    source_namespace_id: binding.source_namespace_id,
-                    source_id: binding.source_id,
-                    input: binding.input,
-                    revision_settings: Some((binding.registration_revision, binding.settings)),
-                },
-                deadline,
-                cancel,
-            )
-            .map_err(MarkError::code)?;
-        drop(view);
-        prepared = prepared.checked_add(1).ok_or("COLLECTION_INPUT_LIMIT")?;
-    }
-    // Embedded inputs sort before Prepared marks. The next complete verification
-    // pass starts from zero, so newly included Source leaves cannot be skipped.
-    Ok(prepared)
 }
 
 pub fn run(path: &Path, deadline: Instant, cancel: &Arc<AtomicBool>) -> ExitCode {

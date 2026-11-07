@@ -27,7 +27,8 @@ const MAX_ROOT_ENTRIES: usize = 32;
 const MAX_CONTROL_ENTRIES: usize = 16;
 const MAX_MANIFEST_BYTES: u64 = 4096;
 const MAX_MARKER_BYTES: u64 = 256;
-const ARCHIVE_COMPLETE_MARKER: &str = "archive.complete";
+/// Reserved completed-archive marker; ordinary root opening refuses its presence.
+pub const ARCHIVE_COMPLETE_MARKER: &str = "archive.complete";
 const INIT_MARKER_STAGE: &str = "root.initializing.stage";
 const MANIFEST_STAGE: &str = "root.toml.stage";
 
@@ -1049,18 +1050,53 @@ fn publish_noclobber(
     sync_parent_directory(destination, operation)
 }
 
-#[cfg(unix)]
 fn sync_parent_directory(path: &Path, operation: OperationContext<'_>) -> PlainRootResult<()> {
     let parent = path.parent().ok_or(PlainRootError::InvalidPath)?;
-    operation.check()?;
-    let directory = after_io(File::open(parent), operation)?;
-    operation.check()?;
-    after_io(directory.sync_all(), operation).map(|()| ())
+    sync_directory_path(parent, operation)
 }
 
-#[cfg(not(unix))]
-fn sync_parent_directory(_path: &Path, operation: OperationContext<'_>) -> PlainRootResult<()> {
-    operation.check()
+/// Flushes an actual plain directory handle; unsupported platform/filesystem errors are failures.
+/// Archive export uses the same primitive as ordinary no-clobber publication.
+///
+/// # Errors
+/// Refuses non-directory/reparse paths, I/O, cancellation and original-deadline expiry.
+pub fn sync_directory(
+    path: &Path,
+    deadline: Instant,
+    cancellation: &AtomicBool,
+) -> PlainRootResult<()> {
+    check_absolute(path)?;
+    sync_directory_path(path, OperationContext::new(deadline, cancellation))
+}
+
+fn sync_directory_path(path: &Path, operation: OperationContext<'_>) -> PlainRootResult<()> {
+    operation.check()?;
+    if path_kind(path, operation)? != Some(EntryKind::Directory) {
+        return Err(PlainRootError::Unsupported);
+    }
+    #[cfg(unix)]
+    let directory = after_io(File::open(path), operation)?;
+    #[cfg(windows)]
+    let directory = {
+        use std::os::windows::fs::OpenOptionsExt;
+        // Proven on the target NTFS: BACKUP_SEMANTICS | OPEN_REPARSE_POINT.
+        // GENERIC_WRITE is requested by write(true), as FlushFileBuffers requires.
+        after_io(
+            OpenOptions::new()
+                .read(true)
+                .write(true)
+                .custom_flags(0x0220_0000)
+                .open(path),
+            operation,
+        )?
+    };
+    #[cfg(not(any(unix, windows)))]
+    return Err(PlainRootError::Unsupported);
+    #[cfg(any(unix, windows))]
+    {
+        operation.check()?;
+        after_io(directory.sync_all(), operation)
+    }
 }
 
 fn ensure_store_directory(
