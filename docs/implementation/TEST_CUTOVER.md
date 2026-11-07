@@ -45,8 +45,12 @@ p95 <=500 ms / max 2000 ms and at least 2 queries/s; full throughput at least 1.
 Product combined CLI+daemon average CPU <=8.0 core-equivalents, Qdrant <=16.0; whole-machine utilization
 <=80% average on 32 logical cores is an environment-validity condition, not product-regression proof.
 Working set / handles: product combined <=4 GiB / 512, Qdrant <=8 GiB / 1024. Disk for Source/Prepared/CONTROL
-<=2x corpus + 1 GiB. Stable known cleanup backlog is 0 beyond the current generation after 10 min; no partial
-generation is visible. Retained caps remain the existing source caps; no application/model quota changes.
+<=2x corpus + 1 GiB. Separately, Qdrant storage <=8x corpus + 1 GiB after convergence and 10 min of cleanup;
+transient replacement storage high-water <=16x corpus + 2 GiB. These backend bounds cover all current and
+retained generations, WAL/index/payload and any snapshots. Measure on dedicated, initially empty benchmark
+storage; report total Qdrant storage and all generations, not only live point count. These bounds are NOT measured.
+Stable known cleanup backlog is 0 beyond the current generation after 10 min; no partial generation is visible.
+Retained caps remain the existing source caps; no application/model quota changes.
 
 Resource counters use actual available peaks where possible and are reported as sampled maxima; an unknown peak
 is UNKNOWN, never verified. Only failed declared Stage 3A budgets justify implementing/testing
