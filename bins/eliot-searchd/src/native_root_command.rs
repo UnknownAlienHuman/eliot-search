@@ -184,7 +184,7 @@ fn scan_index_path(
         Ok(metadata) => metadata,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
             return Ok(IndexScan {
-                root: index_path.to_path_buf(),
+                root: index_path.clone(),
                 is_directory,
                 root_missing: true,
                 files: Vec::new(),
@@ -238,7 +238,7 @@ fn scan_index_path(
             files.push(path.to_path_buf());
         }
     } else {
-        files.push(index_path.to_path_buf());
+        files.push(index_path.clone());
     }
     files.sort_by(|left, right| {
         left.as_os_str()
@@ -251,7 +251,7 @@ fn scan_index_path(
         locators.insert(source_locator_bytes(path).map_err(SourceControlError::code)?);
     }
     Ok(IndexScan {
-        root: index_path.to_path_buf(),
+        root: index_path.clone(),
         is_directory,
         root_missing: false,
         files,
