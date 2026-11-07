@@ -9,7 +9,7 @@ use std::time::Instant;
 use redb_plain::backends::FileBackend;
 use redb_plain::{
     Database, Durability, ReadOnlyDatabase, ReadableDatabase, ReadableTable, ReadableTableMetadata,
-    TableDefinition, TableHandle,
+    TableDefinition, TableHandle, WriteTransaction,
 };
 use search_contracts::Blake3Digest32;
 use search_source_registry::{MAX_SOURCE_OBJECT_BYTES, ObjectKind, ObjectRef, PreparationSettings};
@@ -18,6 +18,9 @@ const MARKS: TableDefinition<&[u8], u64> = TableDefinition::new("object_marks");
 const META: TableDefinition<&str, u64> = TableDefinition::new("plain_control_meta");
 const HEX: &[u8; 16] = b"0123456789abcdef";
 const PREPARED: TableDefinition<&[u8], &[u8]> = TableDefinition::new("prepared_inputs");
+// Scratch bookkeeping only, matching the existing bounded publication-row batch
+// granularity. This cadence never limits or omits marked objects.
+const CHECKPOINT_COMMITS: u8 = 32;
 
 /// Source binding known from typed CONTROL rows, or inspected in a rooted artifact.
 /// Registration/settings may be absent only when cleanup removed their original source row.
@@ -197,6 +200,7 @@ pub struct ObjectMarks {
     path: Option<PathBuf>,
     metadata_bytes: u64,
     marked: u64,
+    pending_commits: u8,
 }
 
 impl Drop for ObjectMarks {
@@ -308,6 +312,7 @@ impl ObjectMarks {
             path: Some(path),
             metadata_bytes: 0,
             marked: 0,
+            pending_commits: 0,
         };
         let backend = FileBackend::new(file).map_err(|_| MarkError::Database)?;
         let mut builder = redb_plain::Builder::new();
@@ -317,20 +322,44 @@ impl ObjectMarks {
                 .create_with_backend(backend)
                 .map_err(|_| MarkError::Database)?,
         );
-        let mut tx = marks
+        let tx = marks
             .database()?
             .begin_write()
             .map_err(|_| MarkError::Database)?;
-        tx.set_durability(Durability::None)
-            .map_err(|_| MarkError::Database)?;
         drop(tx.open_table(MARKS).map_err(|_| MarkError::Database)?);
         drop(tx.open_table(PREPARED).map_err(|_| MarkError::Database)?);
-        tx.commit().map_err(|_| MarkError::Database)?;
+        marks.commit(tx, deadline, cancel)?;
         Ok(marks)
     }
 
     fn database(&self) -> Result<&Database, MarkError> {
         self.database.as_ref().ok_or(MarkError::Database)
+    }
+
+    fn commit(
+        &mut self,
+        mut tx: WriteTransaction,
+        deadline: Instant,
+        cancel: &AtomicBool,
+    ) -> Result<(), MarkError> {
+        check(deadline, cancel)?;
+        let checkpoint = self.pending_commits == CHECKPOINT_COMMITS - 1;
+        tx.set_durability(if checkpoint {
+            Durability::Immediate
+        } else {
+            Durability::None
+        })
+        .map_err(|_| MarkError::Database)?;
+        tx.commit().map_err(|_| MarkError::Database)?;
+        // Count every successful scratch commit, including binding rewrites and
+        // schema creation. redb releases pending non-durable bookkeeping on the
+        // Immediate commit; aborted/no-op transactions consume no batch slot.
+        self.pending_commits = if checkpoint {
+            0
+        } else {
+            self.pending_commits + 1
+        };
+        check(deadline, cancel)
     }
 
     pub(super) fn charge(&mut self, bytes: usize) -> Result<(), MarkError> {
@@ -349,11 +378,9 @@ impl ObjectMarks {
     ) -> Result<(), MarkError> {
         check(deadline, cancel)?;
         let key = identity(reference)?;
-        let mut tx = self
+        let tx = self
             .database()?
             .begin_write()
-            .map_err(|_| MarkError::Database)?;
-        tx.set_durability(Durability::None)
             .map_err(|_| MarkError::Database)?;
         let mut table = tx.open_table(MARKS).map_err(|_| MarkError::Database)?;
         let existing = table
@@ -381,7 +408,7 @@ impl ObjectMarks {
             .map_err(|_| MarkError::Database)?;
         drop(table);
         check(deadline, cancel)?;
-        tx.commit().map_err(|_| MarkError::Database)?;
+        self.commit(tx, deadline, cancel)?;
         self.marked = count;
         Ok(())
     }
@@ -399,11 +426,9 @@ impl ObjectMarks {
         self.insert(expected.input, deadline, cancel)?;
         self.insert(artifact, deadline, cancel)?;
         let key = identity(artifact)?;
-        let mut tx = self
+        let tx = self
             .database()?
             .begin_write()
-            .map_err(|_| MarkError::Database)?;
-        tx.set_durability(Durability::None)
             .map_err(|_| MarkError::Database)?;
         let mut table = tx.open_table(PREPARED).map_err(|_| MarkError::Database)?;
         let previous = table
@@ -429,7 +454,7 @@ impl ObjectMarks {
             .map_err(|_| MarkError::Database)?;
         drop(table);
         check(deadline, cancel)?;
-        tx.commit().map_err(|_| MarkError::Database)
+        self.commit(tx, deadline, cancel)
     }
 
     /// Includes a verified rooted artifact's Source leaf in the mark closure.
