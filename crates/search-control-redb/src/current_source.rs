@@ -4,7 +4,7 @@
 #![deny(missing_docs)]
 
 use std::collections::{HashMap, HashSet};
-#[cfg(windows)]
+#[cfg(any(unix, windows))]
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
