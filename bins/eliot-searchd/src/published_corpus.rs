@@ -606,7 +606,7 @@ pub fn api_key() -> Result<Option<String>, &'static str> {
 }
 
 /// Publishes and opens the validated view under an already-held root guard.
-pub(super) fn publish(
+pub fn publish(
     root: &PlainRootGuard,
     request: &PublicationRequest,
     deadline: Instant,

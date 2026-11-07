@@ -146,14 +146,14 @@ fn ready_response(
     Ok(response)
 }
 /// Verified current preparation returned to in-process command composition.
-pub(super) struct PreparedSource {
+pub struct PreparedSource {
     source: CurrentSourceRecord,
     current: CurrentPreparation,
     stored_artifact: Option<(ObjectRef, Vec<u8>)>,
 }
 
 /// Reuses or creates the selected source's verified preparation without CLI serialization.
-pub(super) fn prepare(
+pub fn prepare(
     root: &PlainRootGuard,
     id: SourceId,
     deadline: Instant,

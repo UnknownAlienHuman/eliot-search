@@ -299,8 +299,7 @@ const fn source_error(error: crate::current_source::SourceControlError) -> Publi
         E::Stale => PublicationError::Stale,
         E::Deadline => PublicationError::Deadline,
         E::Cancelled => PublicationError::Cancelled,
-        E::RevisionExhausted => PublicationError::Limit,
-        E::InventoryLimit => PublicationError::Limit,
+        E::RevisionExhausted | E::InventoryLimit => PublicationError::Limit,
         E::RandomUnavailable => PublicationError::Random,
         E::Corrupt | E::InvalidLocator | E::UnsupportedPlatform => PublicationError::Corrupt,
     }

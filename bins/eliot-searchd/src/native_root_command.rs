@@ -10,15 +10,15 @@ use std::time::{Duration, Instant};
 
 use ignore::WalkBuilder;
 use search_control_redb::current_source::{
-    MAX_CURRENT_SOURCES, capture_current_source, capture_current_sources, commit_current_source,
-    remove_current_sources, source_locator_bytes, source_path_from_locator,
+    MAX_CURRENT_SOURCES, SourceControlError, capture_current_source, capture_current_sources,
+    commit_current_source, remove_current_sources, source_locator_bytes, source_path_from_locator,
 };
 use search_revision_store::store_object;
 use search_runtime_owner::{
     PlainRootError, PlainRootGuard, PlainRootStatus, discard_incomplete_plain, initialize_plain,
     inspect_plain, open_plain,
 };
-use search_safe_reader::{MAX_SOURCE_FILE_BYTES, acquire_file};
+use search_safe_reader::{MAX_SOURCE_FILE_BYTES, SourceReadError, acquire_file};
 use search_source_registry::{CurrentSourceRecord, ObjectKind};
 
 use crate::app::{RootCommand, RootInvocation};
@@ -98,9 +98,9 @@ fn retain_file(
     deadline: Instant,
 ) -> Result<CurrentSourceRecord, &'static str> {
     let capture = capture_current_source(&root.control_path(), file_path, deadline, &CANCELLED)
-        .map_err(|error| error.code())?;
+        .map_err(SourceControlError::code)?;
     let acquired = acquire_file(file_path, MAX_SOURCE_FILE_BYTES, deadline, &CANCELLED)
-        .map_err(|error| error.code())?;
+        .map_err(SourceReadError::code)?;
     let (bytes, file_key, acquired_length) = acquired.into_parts();
     let object_ref = match store_object(
         root,
@@ -123,7 +123,7 @@ fn retain_file(
         deadline,
         &CANCELLED,
     )
-    .map_err(|error| error.code())
+    .map_err(SourceControlError::code)
 }
 
 fn retain_file_command(data_root: &Path, file_path: &Path, deadline: Instant) -> ExitCode {
@@ -199,9 +199,7 @@ fn scan_index_path(
     }
     let is_directory = metadata.is_dir();
     let mut files = Vec::new();
-    if !is_directory {
-        files.push(index_path.to_path_buf());
-    } else {
+    if is_directory {
         let excluded_root = data_root.to_path_buf();
         let mut builder = WalkBuilder::new(index_path);
         builder
@@ -213,6 +211,9 @@ fn scan_index_path(
         for entry in builder.build() {
             check_index(deadline)?;
             let entry = entry.map_err(|_| "INDEX_SCAN_INCOMPLETE")?;
+            if entry.error().is_some() {
+                return Err("INDEX_SCAN_INCOMPLETE");
+            }
             let path = entry.path();
             let file_type = entry.file_type().ok_or("INDEX_SCAN_INCOMPLETE")?;
             if file_type.is_symlink() {
@@ -229,6 +230,8 @@ fn scan_index_path(
             }
             files.push(path.to_path_buf());
         }
+    } else {
+        files.push(index_path.to_path_buf());
     }
     files.sort_by(|left, right| {
         left.as_os_str()
@@ -238,7 +241,7 @@ fn scan_index_path(
     let mut locators = HashSet::with_capacity(files.len());
     for path in &files {
         check_index(deadline)?;
-        locators.insert(source_locator_bytes(path).map_err(|error| error.code())?);
+        locators.insert(source_locator_bytes(path).map_err(SourceControlError::code)?);
     }
     Ok(IndexScan {
         root: index_path.to_path_buf(),
@@ -265,7 +268,7 @@ fn confirmed_removals(
     let mut removals = Vec::new();
     for source in inventory {
         check_index(deadline)?;
-        let path = source_path_from_locator(&source.locator).map_err(|error| error.code())?;
+        let path = source_path_from_locator(&source.locator).map_err(SourceControlError::code)?;
         if !source_is_in_scope(&path, scan) || scan.locators.contains(&source.locator) {
             continue;
         }
@@ -273,7 +276,6 @@ fn confirmed_removals(
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
                 removals.push(source.clone());
             }
-            Err(_) => return Err("INDEX_SCAN_INCOMPLETE"),
             Ok(metadata) if metadata.file_type().is_symlink() => {
                 return Err("INDEX_REPARSE_REFUSED");
             }
@@ -282,7 +284,7 @@ fn confirmed_removals(
                 // outside this refresh's selected source set.
                 removals.push(source.clone());
             }
-            Ok(_) => return Err("INDEX_SCAN_INCOMPLETE"),
+            Err(_) | Ok(_) => return Err("INDEX_SCAN_INCOMPLETE"),
         }
     }
     if scan.missing_file && removals.is_empty() {
@@ -299,8 +301,8 @@ fn index_sources(
     deadline: Instant,
 ) -> Result<(), &'static str> {
     let control = root.control_path();
-    let inventory =
-        capture_current_sources(&control, deadline, &CANCELLED).map_err(|error| error.code())?;
+    let inventory = capture_current_sources(&control, deadline, &CANCELLED)
+        .map_err(SourceControlError::code)?;
     let scan = scan_index_path(index_path, data_root, deadline)?;
     for file in &scan.files {
         check_index(deadline)?;
@@ -317,7 +319,7 @@ fn index_sources(
     }
     let removals = confirmed_removals(&inventory, &scan, deadline)?;
     remove_current_sources(&control, &removals, deadline, &CANCELLED)
-        .map_err(|error| error.code())?;
+        .map_err(SourceControlError::code)?;
 
     let view = crate::published_corpus::publish(root, request, deadline, &CANCELLED)?;
     view.close().map_err(|_| "PUBLICATION_CLOSE_FAILED")?;

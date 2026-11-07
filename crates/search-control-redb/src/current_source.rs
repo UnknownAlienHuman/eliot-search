@@ -115,6 +115,10 @@ fn random_id() -> Result<[u8; 16], SourceControlError> {
 }
 
 /// Encodes an absolute native locator using the current-source table format.
+///
+/// # Errors
+/// Returns `InvalidLocator` for a relative, empty, or oversized locator and
+/// `UnsupportedPlatform` when native locator encoding is unavailable.
 pub fn source_locator_bytes(path: &Path) -> Result<Vec<u8>, SourceControlError> {
     if !path.is_absolute() {
         return Err(SourceControlError::InvalidLocator);
@@ -142,6 +146,10 @@ pub fn source_locator_bytes(path: &Path) -> Result<Vec<u8>, SourceControlError> 
 }
 
 /// Decodes a locator previously produced by [`source_locator_bytes`].
+///
+/// # Errors
+/// Returns `InvalidLocator` for an empty or oversized encoding, `Corrupt` for
+/// malformed or relative paths, and `UnsupportedPlatform` without native decoding.
 pub fn source_path_from_locator(locator: &[u8]) -> Result<PathBuf, SourceControlError> {
     if locator.is_empty() || locator.len() > MAX_LOCATOR_BYTES {
         return Err(SourceControlError::InvalidLocator);
@@ -153,13 +161,15 @@ pub fn source_path_from_locator(locator: &[u8]) -> Result<PathBuf, SourceControl
     };
     #[cfg(windows)]
     let value = {
-        if locator.len() % 2 != 0 {
+        use std::os::windows::ffi::OsStringExt;
+        let (units, remainder) = locator.as_chunks::<2>();
+        if !remainder.is_empty() {
             return Err(SourceControlError::Corrupt);
         }
-        use std::os::windows::ffi::OsStringExt;
-        let wide = locator
-            .chunks_exact(2)
-            .map(|bytes| u16::from_le_bytes([bytes[0], bytes[1]]))
+        let wide = units
+            .iter()
+            .copied()
+            .map(u16::from_le_bytes)
             .collect::<Vec<_>>();
         OsString::from_wide(&wide)
     };
@@ -544,6 +554,10 @@ pub fn capture_current_source(
 }
 
 /// Captures every current source and validates its reverse locator binding in one read snapshot.
+///
+/// # Errors
+/// Refuses unsupported schemas, corrupt bindings, inventory limits, cancellation,
+/// deadline expiry, and database failures without writing.
 pub fn capture_current_sources(
     control_path: &Path,
     deadline: Instant,
@@ -742,7 +756,7 @@ pub fn commit_current_source(
             .map_err(|_| SourceControlError::Database)?
             .ok_or(SourceControlError::Stale)?;
         let current = decode_record(current.value())?;
-        if current.object_ref == object_ref {
+        if current.object_ref == object_ref && current.file_key == file_key {
             return Ok(current);
         }
     }
@@ -794,6 +808,10 @@ pub fn commit_current_source(
 }
 
 /// Removes captured source rows, locator bindings, and preparation outcomes atomically.
+///
+/// # Errors
+/// Returns `Stale` for changed registrations or duplicate selections, or a limit,
+/// revision, corruption, cancellation, deadline, or database error.
 pub fn remove_current_sources(
     control_path: &Path,
     expected: &[CurrentSourceRecord],

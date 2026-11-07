@@ -273,17 +273,33 @@ fn unit_option(
         .ok_or("USAGE_ERROR")?;
     Ok((value, unit))
 }
-const fn valid_source_selection(
+const fn validate_request_selection(
     command: RootCommand,
     file: bool,
-    request: &PreparationRequest,
-) -> bool {
-    let id = request.source_id.is_some();
-    match command {
+    index_path: bool,
+    preparation: &PreparationRequest,
+    publication: &PublicationRequest,
+) -> Result<(), &'static str> {
+    let id = preparation.source_id.is_some();
+    let valid_source = match command {
         RootCommand::RetainFile => file && !id,
         RootCommand::PrepareSource => id && !file,
         _ => !file && !id,
+    };
+    if !valid_source {
+        return Err("USAGE_ERROR");
     }
+    if matches!(
+        command,
+        RootCommand::PublishPrepared | RootCommand::Index | RootCommand::Search
+    ) != publication.endpoint.is_some()
+        || (matches!(command, RootCommand::Index) != index_path)
+        || (publication.limit.is_some() && publication.query.is_none())
+        || (matches!(command, RootCommand::Search) && publication.query.is_none())
+    {
+        return Err("USAGE_ERROR");
+    }
+    Ok(())
 }
 
 impl PreparationRequest {
@@ -442,10 +458,10 @@ fn parse(arguments: &[OsString]) -> Result<Parsed, &'static str> {
             || publication.take_option(root_command, arguments, index, &mut settings)?
         {
             index += 2;
-        } else if argument
-            .to_str()
-            .is_some_and(|value| value.starts_with("--"))
-            && !(matches!(root_command, RootCommand::Index) && !index_path_seen)
+        } else if (index_path_seen || !matches!(root_command, RootCommand::Index))
+            && argument
+                .to_str()
+                .is_some_and(|value| value.starts_with("--"))
         {
             return Err("UNKNOWN_ARGUMENT");
         } else {
@@ -456,30 +472,23 @@ fn parse(arguments: &[OsString]) -> Result<Parsed, &'static str> {
                 }
                 index_path_seen = true;
                 settings.push(OsString::from("--index-path"));
-                settings.push(argument.clone());
             } else {
                 if positional_root_seen || data_root_seen {
                     return Err("USAGE_ERROR");
                 }
                 positional_root_seen = true;
-                settings.push(argument.clone());
             }
+            settings.push(argument.clone());
             index += 1;
         }
     }
-    if !valid_source_selection(root_command, source_file_seen, &preparation) {
-        return Err("USAGE_ERROR");
-    }
-    if matches!(
+    validate_request_selection(
         root_command,
-        RootCommand::PublishPrepared | RootCommand::Index | RootCommand::Search
-    ) != publication.endpoint.is_some()
-        || (matches!(root_command, RootCommand::Index) != index_path_seen)
-        || (publication.limit.is_some() && publication.query.is_none())
-        || (matches!(root_command, RootCommand::Search) && publication.query.is_none())
-    {
-        return Err("USAGE_ERROR");
-    }
+        source_file_seen,
+        index_path_seen,
+        &preparation,
+        &publication,
+    )?;
     Ok(Parsed::Root {
         command: root_command,
         settings,
