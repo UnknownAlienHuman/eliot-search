@@ -17,6 +17,8 @@ path = "src/entry.rs"
 [dependencies]
 serde_json.workspace = true
 search-source-registry.workspace = true
+search-provider-protocol.workspace = true
+search-provider-client.workspace = true
 
 [lints]
 workspace = true

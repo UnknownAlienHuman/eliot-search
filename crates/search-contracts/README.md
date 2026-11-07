@@ -1,13 +1,9 @@
-# search-contracts
+# Shared values for the current search path
 
-Keep only small immutable values shared by real producers and consumers. This package is not a catalogue of
-planned recipes, grants, proofs, lifecycle states or backend schemas.
+SourceId and SourceNamespaceId retain distinct 16-byte identities and canonical lowercase UUID parsing.
+Blake3Digest32 carries the exact 32 digest bytes used by immutable object references.
+MAX_FRAME_BYTES is the shared complete query-frame ceiling, including its four-byte prefix.
 
-[FUNCTIONS.md](FUNCTIONS.md) owns the cutover and shared-data boundary. [Indexed navigation](INDEXED_CONTRACT.md)
-points to concrete index/evidence owners. Runtime guards, execution contexts, redb rows, vendor SDK types and
-window contents stay private to their owners.
-
-Add each request/result family with its handler; baseline Search does not wait for Exact, sessions or optional
-operations. Stage 2/3A does not require sequence/validity/incarnation fields. Ordinary DTOs use Serde, not another
-versioned canonical protocol. Move consumers and delete displaced types/fixtures together; merge this package
-into the application/protocol boundary if no meaningful shared core remains.
+Actual object hashing/verification belongs to the object owner. Protocol DTOs and frame validation
+belong to search-provider-protocol; publication rows and state belong to CONTROL.
+See [FUNCTIONS.md](FUNCTIONS.md).

@@ -2,11 +2,13 @@
 
 The four root operator commands are qualified for Windows debug artifacts with Rust 1.98.0 at source
 ad8cc9e8fa498d43b644246af3b7f4900890317a. S1 final Windows debug checks, strict Clippy, builds and basic retained-file
-execution passed at 06bb6877487d7e3caac9d955be855c86dec1a1b5. This is not an installed baseline or a connected Search product.
+execution passed at 06bb6877487d7e3caac9d955be855c86dec1a1b5. These remain separate qualification scopes.
 P1 adds retained-only preparation: core native cases ran with 88e00ef binaries; the d2ccb596 CLI passed the
 focused request-binding regressions and a nonzero unit selection using the unchanged daemon/libraries.
 Q1 at 3c33d831 passed actual Windows debug CLI publication/current/evidence/view qualification with Qdrant 1.20.0.
-It returns backend nominations and stored range metadata; read-only verified excerpt search remains U1.
+U1 now connects read-only search returning verified full retained units and citations. Targeted final-pin cases
+passed at c843171; initial Unicode publications at 20c31 and earlier 2ae transport/budget cases retain their
+separate scopes. This is Windows debug qualification, not an installed baseline or the complete product.
 See the [exact source, artifacts and verification scope](docs/audit/ANALYSIS_REGISTRY.md#evidence-status).
 
 ## Root operator commands
@@ -79,23 +81,41 @@ gRPC endpoint is port 6334; the application neither starts nor stops that servic
 root whose selected sources already have matching preparation outcomes:
 
     eliot-search publish-prepared --qdrant-url http://127.0.0.1:6334 --data-root "C:\example\root"
-    eliot-search publish-prepared --qdrant-url http://127.0.0.1:6334 --query "identifier" --limit 10 --data-root "C:\example\root"
-    eliot-searchd --publish-prepared --qdrant-url http://127.0.0.1:6334 --query "identifier" --data-root "C:\example\root"
+    eliot-searchd --publish-prepared --qdrant-url http://127.0.0.1:6334 --data-root "C:\example\root"
 
 If that operator service requires an existing key, supply ELIOT_QDRANT_API_KEY in the environment; never pass
 it in argv. Publication reads retained artifacts only. Deleted-original qualification uses private fixtures,
 not a requirement to remove user input.
 
-The result reports exact collection/generation, complete source/Gap/point/page counts and optional SDK
-point/evidence metadata. Readiness uses a separate checked saved-point canary; the user query may have no hits.
+The result reports exact collection/generation and complete source/Gap/point/page counts. It accepts no
+--query or --limit. Readiness uses an independent checked saved-point canary; publication stores compact
+reference pages and hydrates actual upload/readback text from immutable Prepared objects.
 Missing preparation/backend/current data, corrupt evidence and unresolved effects remain errors, not empty success.
-This command does not emit retained excerpts or citations.
 
 The Windows native run used a fresh 48-character operator storage root. Controlled 76/49-character storage-path
 cases showed depth sensitivity during Gridstore index creation; this is not a universal MAX_PATH threshold or
 an application path/name/profile workaround. See [operator storage](crates/search-runtime/search-runtime-owner/FUNCTIONS.md#operator-qdrant-storage)
 and [exact evidence](docs/audit/ANALYSIS_REGISTRY.md#evidence-status). The original failed root remains preserved
 with an unresolved target; do not reset it to claim recovery.
+
+## Search retained text
+
+    eliot-search search --query "identifier" --limit 10 --qdrant-url http://127.0.0.1:6334 --data-root "C:\example\root"
+
+Search opens the committed generation read-only and preserves Qdrant order. Each returned card contains the
+complete stored unit, score and citation: generation/point, namespace/source, Source/Prepared ObjectRefs,
+ordinal and byte/line ranges. The original file may be changed or absent; search neither opens it nor prepares
+or publishes anything. In native qualification only owned scratch inputs were deleted; do not remove user files.
+
+Queries contain 1..4096 UTF-8 bytes without NUL. Limit defaults to 10 and is 1..64. A unit is at most 64 KiB;
+the entire framed JSON terminal is at most 8 MiB, including its length prefix. OutputLimit retains whole cards
+and reports the omitted tail without clipping text. Missing returned objects produce explicit gaps; corruption
+is an error. Unreturned sources are not scanned or read. No result is an exhaustive negative proof.
+
+The CLI uses one owned framed daemon child; root/view guards remain live through terminal flush, and the client
+observes child exit/reap. CONTROL and backend collections are unchanged by search. See the
+[query evidence rule](crates/search-query/search-candidate-validator/FUNCTIONS.md) and
+[wire bounds](crates/search-provider-protocol/FUNCTIONS.md#framing-and-bounded-output).
 
 ## File, environment and CLI settings
 
@@ -138,6 +158,7 @@ the ad8 recovery/config batch and records the exact checked revisions.
 One explicit file connects through no-execute acquisition, verified plain ObjectRef storage and a guarded
 CurrentSourceRecord. prepare-source consumes retained bytes and stores the complete representation/ranges/current
 outcome. publish-prepared connects those stored inputs to actual Qdrant/current/evidence/PublishedView.
-Next U1 returns a verified retained search excerpt through a read-only command. The
-[one-file product path](docs/implementation/README.md#2-walking-skeleton--one-file-to-one-cli-result)
-and installed-baseline qualification remain unfinished.
+Read-only search returns verified retained units and citations from that pinned generation. Next R1 connects
+direct file/repository index and refresh without manual SourceId assembly; restart/inventory convergence and
+installed-baseline qualification remain unfinished. Confirmed filesystem deletion excludes membership from
+new generations while preserving retained objects and pinned views. Inaccessible or partial inventory is not removal.

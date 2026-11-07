@@ -1,9 +1,26 @@
 # Evidence resolution — pinned truth, real bytes, explicit domains
 
 This file owns excerpt truth and evidence failure scope. [Windowing](../search-continuation/FUNCTIONS.md) owns
-page progress and item lifetime. The replacement is not connected in the normal product path yet.
+future page progress and item lifetime. The current implementation is
+[verified_query.rs](../../../bins/eliot-searchd/src/verified_query.rs) with
+[PublishedView::resolve_point](../../search-control-redb/src/publication.rs) and the
+[shared object reader](../../search-source/search-revision-store/FUNCTIONS.md).
+The former crate/manifest and raw result-projector callers/fixtures are removed; this path retains the rule.
 
-## Inspected current behavior
+## Current U1 consumer
+
+Search uses bounded pin_published rather than the publication/recovery full-graph validator. Backend nominations
+retain their order; each point ID resolves evidence and CapturedSource in the same read-only snapshot. Group only
+returned hits by captured input/prepared binding, read both immutable objects with length/BLAKE3 verification,
+decode the saved representation with captured source/registration/settings and compare source/prepared bytes.
+Every returned ordinal, byte/line range and boundary flag must equal its saved descriptor before full unit text
+and citation are emitted. Latest preparation and the live source path are never consulted.
+
+Missing returned objects become explicit gaps; corrupt objects or contradictory bindings fail. Unreturned
+source bodies are not read. The protocol preserves whole cards under its 8 MiB frame cap; this is bounded top-k,
+not an exhaustive negative. Complete transformed-coordinate/window rules below remain later obligations.
+
+## Retired behavior (historical)
 
 At `44d7416c`, `search-candidate-validator` accepts public nominations and expected digest/profile/residency/
 assurance fields, copies those expectations into a readback request and compares them with metadata returned

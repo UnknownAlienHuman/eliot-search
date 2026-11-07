@@ -1,13 +1,6 @@
-<a id="working-on-search-qdrant-supervisor"></a>
-# Working on the legacy Qdrant supervisor
+# Working on this policy
 
-Read [FUNCTIONS.md](FUNCTIONS.md). The baseline needs a bridge connection to the operator-started local server,
-not this package. Do not implement launch receipts, artifact qualification, secret leases, quarantine/restart
-state or a Windows containment platform merely because their types exist.
-
-Before deletion, trace current source/feature/target callers and move any useful behavior to its real consumer.
-Preserve shared OS/file helpers and user data. CLI-owned daemon cleanup is separate; never kill the external
-Qdrant process. A future managed-server request needs a small concrete owner, not restoration of this framework.
-
-Use the [working guide](../../../docs/implementation/WORKING_GUIDE.md#minimal-production-checks) for the affected
-production closure. Package fixtures and old source findings do not prove current product reachability.
+Read [FUNCTIONS.md](FUNCTIONS.md) and the selected receiving owner's real callers.
+The unused Rust package, manifest and exclusive fixtures are removed. This directory retains product policy only.
+Add behavior beside an actual consumer when its delivery stage is selected. Do not restore the old package,
+DTO catalogue, receipts or test-only adapters.

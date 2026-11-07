@@ -1,21 +1,27 @@
 # Work register
 
-Current checkpoint, 2026-11-06: S1/P1 are merged and qualified in their separately recorded Windows debug scopes.
-Q1 candidate 3c33d8316ce7edf19b3100387bdaed04e5642813 connects the full prepared corpus to actual Qdrant
-publication, guarded current/evidence and validated PublishedView. Sol SOURCE review and Windows debug publisher
-native acceptance passed; PR #628 merge is pending. U1 read-only retained-excerpt search is next.
+Current checkpoint, 2026-11-06: S1/P1/Q1 are merged in their separately recorded Windows debug scopes.
+U1 connects read-only search to verified full retained units and citations. Source c843171fc430e794180d476168a9382add743736
+passed bounded source re-review and targeted final-pin native qualification. Earlier 2ae transport/budget
+evidence and initial 20c31 Unicode publications retain their own scopes below. U1 merge is next; R1 follows.
+The full product, convergence, later Exact/windows and installed baseline remain unfinished.
 
 <a id="resume"></a>
 <a id="resume-after-interruption"></a>
 ## Next task
 
-**U1: connect read-only search to a verified retained excerpt/citation after Q1 merge.** Pin the existing
-PublishedView, call the concrete Backend query, resolve each point and captured decoder binding from that same
-snapshot, then verify retained object length/BLAKE3 and exact saved unit/range before emitting text.
-Use the [evidence recipe](../../crates/search-query/search-candidate-validator/FUNCTIONS.md),
-[protocol](../../crates/search-provider-protocol/FUNCTIONS.md), client and actual CLI/daemon.
-No implicit publish/reprepare, latest-preparation lookup, live-source fallback or local BM25. Q1 routing metadata
-is not an excerpt/citation. The full product remains unfinished.
+**R1 after U1 merge: direct file/repository index and refresh through existing helpers.** Connect a real
+operator command to current source acquisition/retention, preparation and complete-generation publication
+without manual UUID assembly. Start from the [source rules](../../crates/search-source/AGENTS.md#connected-path-rules),
+[actual daemon caller](../../bins/eliot-searchd/src/native_root_command.rs) and
+[desired-state publication rule](../../crates/search-index-qdrant/search-publication/FUNCTIONS.md#desired-state).
+Use private concrete helpers; do not restore the removed reconciliation platform or add a new service/database.
+
+Confirmed filesystem deletion must exclude registered membership from new generations without waiting for
+unregister. Preserve retained objects and already pinned views. Partial or inaccessible inventory is not
+confirmed removal. Add the smallest guarded membership mutation in existing CONTROL ownership; keep non-reset
+source/registration/wanted guards and perform acquisition/backend I/O outside writers. Ordinary search remains
+read-only and never reconciles or reparses a live source. Restart/inventory convergence is R1 work, not U1 proof.
 
 <a id="work-register"></a>
 <a id="delivery-remaining"></a>
@@ -31,9 +37,9 @@ DONE below is the named delivered scope, not completion of the product.
 | F2 / DONE, Windows debug root scope | F1 | daemon native_root_command; [root](../../crates/search-runtime/search-runtime-owner/FUNCTIONS.md), [control](../../crates/search-control-redb/FUNCTIONS.md) | Four plain root operations, stable exclusion, actual control format and bounded factual output. |
 | S1 / DONE, Windows debug scope | F2 | current daemon/CLI + [source owners](../../crates/search-source/README.md#ownership), root, object store, control | One bounded file read → verified ObjectRef → guarded CurrentSourceRecord; final source 06bb6877 and distinct native scopes below. |
 | P1 / DONE, Windows debug scope | S1 | Materializer/unitizer, shared writer, CONTROL and actual prepare-source child | Complete artifact/current outcome with actual stored text/ranges, empty/Gap and guarded CAS; source d2ccb596 scopes below. |
-| Q1 / ACCEPTED, Windows debug; merge pending | P1 | Actual daemon publisher, CONTROL and concrete bridge | Full corpus → exact backend/readback/canary → guarded current/evidence → validated PublishedView; source 3c33d831. |
-| U1 / READY after Q1 merge | Q1 | CONTROL resolver, daemon/CLI, protocol/client | Read-only owned-child search returning verified retained text/citation from the pinned snapshot. |
-| R1 / WAIT | U1 | Source reconciliation, control and publication | Restart/inventory convergence and whole-generation lifetime/cleanup. |
+| Q1 / DONE, Windows debug scope | P1 | Actual daemon publisher, CONTROL and concrete bridge | Full corpus → exact backend/readback/canary → guarded current/evidence → validated PublishedView; source 3c33d831. |
+| U1 / ACCEPTED, Windows debug; merge pending | Q1 | CONTROL resolver, daemon/CLI, protocol/client | Read-only verified full retained units/citations; c843 targeted final-pin scope and earlier evidence below. |
+| R1 / READY after U1 merge | U1 | Existing source/preparation/publication helpers and CONTROL | Direct file/repository index/refresh, confirmed-deletion membership and restart/inventory convergence; preserve pinned generations. |
 | X1 / WAIT | R1 | Exact/query window and client owners | Retained exact denominator, same-session paging/expansion and expiry. |
 | M1 / WAIT | R1 | Retention and future stopped-root maintenance caller | Conservative collection/archive/import preserving originals. |
 | O1 / DEFERRED | Connected baseline + actual need | [Selected depth](../product/AGENT_ANALYSIS_FRAMEWORK.md#optional-depth) | Add only an actual source-backed consumer; remove unused scaffolds. |
@@ -69,9 +75,60 @@ Q1 records 157 deleted files with --no-renames against main base 7ba271ac throug
 loss. Old bridge qualification/oracle/live-launch/sparse families, lexical Rust, reclaimer/overlay/executor
 source/manifests/exclusive fixtures and LexicalEncoderPort callers were retired. Canonical policy recipes remain.
 
+U1 initially retired 72 files with --no-renames against merged Q1 base 8dc48ea4 through source 2ae05262,
+including the replaced validator/projector and legacy query/transport callers. The separate simplification
+commit 20c31b12 deleted 244 files in that commit, not net loss: 18 dormant package source/manifests/fixtures
+and obsolete contracts APIs were removed, leaving 13 active workspace packages. Their retained policy recipes
+are not requirements to restore crates. Compact reference pages, lazy query pinning, Unicode canary and removal
+of publication's shadow query route accompany that cut. c843171 changes only per-source/per-pass Prepared
+hydration reuse. No application encryption, grants, OS-secret platform or second database was introduced.
+
 <a id="evidence-status"></a>
 <a id="execution-evidence"></a>
 ## Verification and known blockers
+
+U1 evidence scopes, Windows debug / Rust 1.98.0:
+
+- Source c843171fc430e794180d476168a9382add743736: Sol bounded re-review PASS after the sole repeatwork fix.
+  Initial U1 source review at 2ae05262 and alignment review of the simplification remain separate scopes.
+  Matching frozen code passed contracts/CONTROL/bridge/client and real-bin locked checks/strict Clippy;
+  both builds exited 0 with zero warnings. The per-pass reuse correction passed one daemon-only locked
+  check, strict Clippy and build, with unchanged source hash across those commands. These commands were
+  run on frozen precommit bytes matching the committed source, not relabelled fresh c843 gate executions.
+- Final pins: CLI 46B4A768EDC3B4A2AA60909B49F5C3423E310C6CFA992E810ACC2764ACE7BD84;
+  daemon 3D4BB3D8DD1CE3123AB2DBE06219E60AD2227DE606B4A16DC33A8D501B1F3815.
+  Lock SHA256 A6EBCC43DB1392E9617CC81F8EC11012CBE7188020A2D5B0DC1F7098636723F7.
+  The retirement lock delta removed 27 records and added/upgraded none; active qdrant-client 1.20.0,
+  tonic 0.14.6, prost/prost-types 0.14.3, rustls 0.23.46 and Tokio 1.53.1 remain.
+- Actual c843 publication without --query/--limit and search exited 0 with original input paths absent.
+  Search returned the exact complete 16360-byte unit 1 [65536,81896) with independently verified citation.
+  CONTROL and corresponding remote inventory/schema/payload hashes were unchanged by search.
+- Cyrillic/Chinese/compact-JSON initial publications ran at 20c31. c843 reuse-publication/search on those
+  existing roots exited 0 and returned exact 36/20/68-byte text. They are not fresh c843 publications.
+  Actual ELSUPG02 rows were 196/1252 bytes, exactly 20 + 176 per point, with no stored unit text;
+  upload/readback text was resolved through the immutable Prepared objects.
+- On owned fault copies, missing unhit B Prepared did not affect query A (exit 0). Query B returned exit 0
+  with explicit PREPARED_OBJECT_MISSING Gap; publication reuse returned exit 2 OBJECT_MISSING.
+  Corrupt unhit B likewise left A successful; B and publication reuse returned exit 2
+  OBJECT_INTEGRITY_FAILURE. Search did not rebuild, read live sources or modify CONTROL/backend state.
+- Fresh c843 multipage publication/search exited 0: one source, 17 units, two pages, complete 65536-byte card;
+  compact reference rows were 1428/1604 bytes. Per-source hydration reuses one verified artifact/decoded view
+  across adjacent pages in each upload/readback pass. Source review proves the reuse boundary; this native
+  run is functional readback evidence, not an I/O-count benchmark.
+- Earlier 2ae basic/budget and unchanged transport/lifecycle cases keep their original binary scope.
+  The budget run delivered 63 complete 64 KiB cards with OutputLimit: 8296372 total frame bytes;
+  the next complete card would produce 8428055, exceeding the 8388608-byte cap. Ten protocol tests passed.
+  No fresh c843 cancellation coverage is claimed; parent partial-request cancellation remains unproved.
+  Full product scale/relevance, other platforms, installed baseline and R1 convergence remain NOT_RUN.
+- The native handoff confirmed matched hashes, no pending assigned cases and zero owned live processes.
+
+Evidence remains in C:\Development\Rust\targets\task-u1-native\run-20261106-v1\logs:
+c843-main-after.json, c843-multipage-after.json, Unicode/fault observations and c843-*.exit.json.
+The observer JSON candidate label remains 20c31; final execution provenance comes from the matching
+c843 exit records and pinned binary hashes above. No artifact was relabelled.
+Gate logs are in C:\Development\Rust\targets\eliot-search-product-runtime:
+candidate-U1-cut-consumers-initial-check.log, candidate-U1-cut-consumers-corrected-clippy.log,
+candidate-U1-cut-realbins-build.log and candidate-U1-cut-P2-daemon-{check,clippy,build}.log.
 
 Q1 evidence scopes, Windows debug / Rust 1.98.0:
 
@@ -111,7 +168,7 @@ Q1 evidence scopes, Windows debug / Rust 1.98.0:
 - NOT_RUN: unexpected-zero/misroute readiness-canary fault injection, independent wrong-version server,
   concurrent publication stale-CAS/namespace/settings/outcome ABA races, power-loss/kill recovery, other
   platforms and installed baseline. The original unknown-dispatch root's recovery remains PENDING, without reset.
-  No U1 retained-excerpt/citation command is qualified.
+  At this Q1 checkpoint, no U1 retained-excerpt/citation command was yet qualified; see the later U1 scope above.
 
 Q1 publisher report: C:\Development\Rust\targets\task-q1-publisher-native\run-20261106-v1\native-publisher-3c33-report.json.
 Failed-root observer: the same run's logs/readonly-control-plato-3c33.json.
@@ -229,8 +286,8 @@ The ad8 recovery/config artifact SHA-256 values are:
     daemon  F71ABD97C1A051709D8F7E8871139EED2F153900A044FF850932C024D60E03D0
 
 Actual process-kill/power-loss recovery, other platforms and installed baseline remain NOT_RUN.
-[Quickstart](../../QUICKSTART.md) names root, retention, preparation and actual corpus publication commands.
-Q1 is accepted only in its recorded Windows debug scope; U1 verified retained search and the full product remain open.
+[Quickstart](../../QUICKSTART.md) names root, retention, preparation, publication and read-only search commands.
+U1 is accepted only in its recorded Windows debug scopes; R1 and the full product remain open.
 
 ## Update and finish a task
 

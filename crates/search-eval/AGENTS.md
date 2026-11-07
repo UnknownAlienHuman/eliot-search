@@ -1,5 +1,6 @@
-# Working on the legacy evaluation package
+# Working on this policy
 
-Follow [root instructions](../../AGENTS.md) and [test cutover](../../docs/implementation/TEST_CUTOVER.md).
-This package still exists on main; removal work in PR #610 is separate. Trace current callers before deletion,
-keep its included README until its source is removed, and do not build new receipts, gates or evaluation services.
+Read [FUNCTIONS.md](FUNCTIONS.md) and the selected receiving owner's real callers.
+The unused Rust package, manifest and exclusive fixtures are removed. This directory retains product policy only.
+Add behavior beside an actual consumer when its delivery stage is selected. Do not restore the old package,
+DTO catalogue, receipts or test-only adapters.

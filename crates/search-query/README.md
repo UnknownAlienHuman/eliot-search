@@ -1,7 +1,12 @@
 # Query and source-backed results
 
-New Search/Exact pins one published view and resolves the local user's selected sources. Continue/Expand retain
-their existing window view and final order. There is no authentication/grant/revocation system in
+Current one-shot search pins the committed published snapshot, queries its exact Qdrant collection and verifies
+only returned retained evidence/objects before emitting complete units/citations. It does not scan the corpus,
+prepare, publish or reopen live paths. The actual consumers are
+[framed_search](../../bins/eliot-searchd/src/framed_search.rs) and
+[verified_query](../../bins/eliot-searchd/src/verified_query.rs); there is no validator/projector Rust crate.
+
+Later Exact scans retained inventory; Continue/Expand will keep their original window view and order. There is no authentication/grant/revocation system in
 [the local product](../../docs/architecture/LOCAL_SCOPE.md).
 
 <a id="direct-operations-not-a-recipe-operating-system"></a>

@@ -11,7 +11,8 @@ use super::{
 const MAX_PAGE_BYTES: usize = 1_048_576;
 const MAX_PAGE_POINTS: usize = 128;
 const MAX_TEXT_BYTES: usize = 65_536;
-const PAGE_MAGIC: &[u8; 8] = b"ELSUPG01";
+const PAGE_MAGIC: &[u8; 8] = b"ELSUPG02";
+const LEGACY_PAGE_MAGIC: &[u8; 8] = b"ELSUPG01";
 const EVIDENCE_BYTES: usize = 160;
 
 struct Cursor<'a> {
@@ -148,20 +149,10 @@ pub(super) fn page_size(page: &UploadPage) -> Result<usize> {
     if page.points.is_empty() || page.points.len() > MAX_PAGE_POINTS {
         return Err(E::Limit);
     }
-    let mut size = 12_usize;
+    let mut size = 20_usize;
     for point in &page.points {
-        let e = &point.evidence;
-        if point.retrieval_text.is_empty()
-            || point.retrieval_text.len() > MAX_TEXT_BYTES
-            || u64::try_from(point.retrieval_text.len()).ok() != e.end.checked_sub(e.start)
-        {
-            return Err(E::Corrupt);
-        }
-        validate_evidence(e)?;
-        size = size
-            .checked_add(16 + EVIDENCE_BYTES + 4)
-            .and_then(|n| n.checked_add(point.retrieval_text.len()))
-            .ok_or(E::Limit)?;
+        validate_evidence(&point.evidence)?;
+        size = size.checked_add(16 + EVIDENCE_BYTES).ok_or(E::Limit)?;
         if size > MAX_PAGE_BYTES {
             return Err(E::Limit);
         }
@@ -170,24 +161,23 @@ pub(super) fn page_size(page: &UploadPage) -> Result<usize> {
 }
 pub(super) fn encode_page(page: &UploadPage) -> Result<Vec<u8>> {
     let size = page_size(page)?;
+    let request_bytes = page
+        .request_bytes
+        .filter(|n| *n > 0 && *n <= MAX_PAGE_BYTES as u64)
+        .ok_or(E::Corrupt)?;
     let mut out = Vec::new();
     out.try_reserve_exact(size).map_err(|_| E::Allocation)?;
     out.extend_from_slice(PAGE_MAGIC);
-    out.extend_from_slice(&1_u16.to_le_bytes());
+    out.extend_from_slice(&2_u16.to_le_bytes());
     out.extend_from_slice(
         &u16::try_from(page.points.len())
             .map_err(|_| E::Limit)?
             .to_le_bytes(),
     );
+    out.extend_from_slice(&request_bytes.to_le_bytes());
     for point in &page.points {
         out.extend_from_slice(&point.id);
         put_evidence(&mut out, &point.evidence);
-        out.extend_from_slice(
-            &u32::try_from(point.retrieval_text.len())
-                .map_err(|_| E::Limit)?
-                .to_le_bytes(),
-        );
-        out.extend_from_slice(point.retrieval_text.as_bytes());
     }
     Ok(out)
 }
@@ -196,37 +186,47 @@ pub(super) fn decode_page(bytes: &[u8]) -> Result<UploadPage> {
         return Err(E::Corrupt);
     }
     let mut cursor = Cursor::new(bytes);
-    if cursor.take(8)? != PAGE_MAGIC || cursor.u16()? != 1 {
+    let magic = cursor.take(8)?;
+    let version = cursor.u16()?;
+    let legacy = magic == LEGACY_PAGE_MAGIC && version == 1;
+    if !(legacy || magic == PAGE_MAGIC && version == 2) {
         return Err(E::Corrupt);
     }
     let count = usize::from(cursor.u16()?);
     if count == 0 || count > MAX_PAGE_POINTS {
         return Err(E::Corrupt);
     }
+    let request_bytes = if legacy {
+        None
+    } else {
+        let size = cursor.u64()?;
+        if size == 0 || size > MAX_PAGE_BYTES as u64 {
+            return Err(E::Corrupt);
+        }
+        Some(size)
+    };
     let mut points = Vec::new();
     points.try_reserve_exact(count).map_err(|_| E::Allocation)?;
     for _ in 0..count {
         let id = cursor.array()?;
         let evidence = evidence(&mut cursor)?;
-        let size = usize::try_from(cursor.u32()?).map_err(|_| E::Corrupt)?;
-        if size > MAX_TEXT_BYTES {
-            return Err(E::Corrupt);
+        if legacy {
+            // Existing roots remain readable without rewriting their pages. The old
+            // redundant text is framing-checked and discarded, never used for upload.
+            let size = usize::try_from(cursor.u32()?).map_err(|_| E::Corrupt)?;
+            if size > MAX_TEXT_BYTES || size as u64 != evidence.end - evidence.start {
+                return Err(E::Corrupt);
+            }
+            std::str::from_utf8(cursor.take(size)?).map_err(|_| E::Corrupt)?;
         }
-        let text = std::str::from_utf8(cursor.take(size)?).map_err(|_| E::Corrupt)?;
-        let mut retrieval_text = String::new();
-        retrieval_text
-            .try_reserve_exact(size)
-            .map_err(|_| E::Allocation)?;
-        retrieval_text.push_str(text);
-        points.push(UploadPoint {
-            id,
-            evidence,
-            retrieval_text,
-        });
+        points.push(UploadPoint { id, evidence });
     }
     cursor.done()?;
-    let page = UploadPage { points };
-    if page_size(&page)? != bytes.len() {
+    let page = UploadPage {
+        points,
+        request_bytes,
+    };
+    if !legacy && page_size(&page)? != bytes.len() {
         return Err(E::Corrupt);
     }
     Ok(page)

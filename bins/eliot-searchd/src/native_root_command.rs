@@ -143,6 +143,7 @@ pub fn run(invocation: RootInvocation, started: Instant) -> ExitCode {
         source_id,
         unit,
         publication,
+        search_endpoint,
     } = invocation;
     match command {
         RootCommand::Inspect => match inspect_plain(&data_root, deadline, &CANCELLED) {
@@ -184,6 +185,10 @@ pub fn run(invocation: RootInvocation, started: Instant) -> ExitCode {
         RootCommand::PublishPrepared => publication.map_or_else(
             || emit_source_error("PUBLICATION_ARGUMENT_REQUIRED"),
             |request| crate::published_corpus::run(&data_root, &request, deadline, &CANCELLED),
+        ),
+        RootCommand::Search => search_endpoint.map_or_else(
+            || emit_source_error("QUERY_ENDPOINT_REQUIRED"),
+            |endpoint| crate::framed_search::run(&data_root, &endpoint),
         ),
     }
 }

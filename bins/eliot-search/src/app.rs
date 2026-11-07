@@ -27,6 +27,7 @@ enum RootCommand {
     RetainFile,
     PrepareSource,
     PublishPrepared,
+    Search,
 }
 
 impl RootCommand {
@@ -39,6 +40,7 @@ impl RootCommand {
             Self::RetainFile => "retain-file",
             Self::PrepareSource => "prepare-source",
             Self::PublishPrepared => "publish-prepared",
+            Self::Search => "search",
         }
     }
 
@@ -51,6 +53,7 @@ impl RootCommand {
             Self::RetainFile => "--retain-file",
             Self::PrepareSource => "--prepare-source",
             Self::PublishPrepared => "--publish-prepared",
+            Self::Search => "--search-stdio",
         }
     }
 }
@@ -185,6 +188,7 @@ fn command(value: &OsStr) -> Option<RootCommand> {
         "retain-file" => Some(RootCommand::RetainFile),
         "prepare-source" => Some(RootCommand::PrepareSource),
         "publish-prepared" => Some(RootCommand::PublishPrepared),
+        "search" => Some(RootCommand::Search),
         _ => None,
     }
 }
@@ -200,6 +204,7 @@ fn is_daemon_root_flag(value: &OsStr) -> bool {
                 | "--retain-file"
                 | "--prepare-source"
                 | "--publish-prepared"
+                | "--search-stdio"
         )
     )
 }
@@ -322,7 +327,10 @@ impl PublicationRequest {
         {
             return Ok(false);
         }
-        if !matches!(command, RootCommand::PublishPrepared) {
+        if !matches!(command, RootCommand::PublishPrepared | RootCommand::Search) {
+            return Err("USAGE_ERROR");
+        }
+        if !matches!(command, RootCommand::Search) && argument != OsStr::new("--qdrant-url") {
             return Err("USAGE_ERROR");
         }
         let value = arguments
@@ -352,8 +360,10 @@ impl PublicationRequest {
                 return Err("USAGE_ERROR");
             }
         }
-        settings.push(argument.clone());
-        settings.push(OsString::from(value));
+        if !matches!(command, RootCommand::Search) || argument == OsStr::new("--qdrant-url") {
+            settings.push(argument.clone());
+            settings.push(OsString::from(value));
+        }
         Ok(true)
     }
 }
@@ -440,8 +450,12 @@ fn parse(arguments: &[OsString]) -> Result<Parsed, &'static str> {
     if !valid_source_selection(root_command, source_file_seen, &preparation) {
         return Err("USAGE_ERROR");
     }
-    if matches!(root_command, RootCommand::PublishPrepared) != publication.endpoint.is_some()
+    if matches!(
+        root_command,
+        RootCommand::PublishPrepared | RootCommand::Search
+    ) != publication.endpoint.is_some()
         || (publication.limit.is_some() && publication.query.is_none())
+        || (matches!(root_command, RootCommand::Search) && publication.query.is_none())
     {
         return Err("USAGE_ERROR");
     }
@@ -669,7 +683,10 @@ fn validated_snapshot(bytes: &[u8], command: RootCommand) -> Option<&str> {
     }
     let states: &[&str] = match command {
         RootCommand::Initialize | RootCommand::CheckExistingOwner => &["current"],
-        RootCommand::RetainFile | RootCommand::PrepareSource | RootCommand::PublishPrepared => {
+        RootCommand::RetainFile
+        | RootCommand::PrepareSource
+        | RootCommand::PublishPrepared
+        | RootCommand::Search => {
             return None;
         }
         RootCommand::Inspect | RootCommand::DiscardIncomplete => &[
@@ -773,16 +790,10 @@ fn validated_response<'a>(
     output: &'a ChildOutput,
     command: RootCommand,
     preparation: &PreparationRequest,
-    publication: &PublicationRequest,
 ) -> Option<DaemonResponse<'a>> {
     if output.stderr.bytes.is_empty() {
         if matches!(command, RootCommand::PublishPrepared) {
-            crate::published_response::validate(
-                &output.stdout.bytes,
-                publication.query.is_some(),
-                publication.limit.unwrap_or(10),
-            )
-            .map(DaemonResponse::Published)
+            crate::published_response::validate(&output.stdout.bytes).map(DaemonResponse::Published)
         } else if matches!(command, RootCommand::PrepareSource) {
             crate::prepared_response::validate(
                 &output.stdout.bytes,
@@ -822,7 +833,8 @@ fn print_help() {
         "  eliot-search discard-incomplete-data-root [ROOT] [--data-root ROOT] [--config-file PATH] [--daemon PATH]\n",
         "  eliot-search retain-file --file PATH [ROOT] [--data-root ROOT] [--config-file PATH] [--daemon PATH]\n",
         "  eliot-search prepare-source --source-id UUID [--unit N] [--data-root ROOT] [--config-file PATH] [--daemon PATH]\n",
-        "  eliot-search publish-prepared --qdrant-url URL [--query TEXT] [--limit N] [--data-root ROOT] [--config-file PATH] [--daemon PATH]\n",
+        "  eliot-search publish-prepared --qdrant-url URL [--data-root ROOT] [--config-file PATH] [--daemon PATH]\n",
+        "  eliot-search search --query TEXT [--limit N] --qdrant-url URL [--data-root ROOT] [--config-file PATH] [--daemon PATH]\n",
     ));
 }
 
@@ -864,13 +876,29 @@ pub fn run_main() -> i32 {
         Ok(path) => path,
         Err(error) => return emit_error(error),
     };
+    if matches!(command, RootCommand::Search) {
+        let Some(query) = publication.query else {
+            return emit_error("USAGE_ERROR");
+        };
+        let Ok(limit) = u8::try_from(publication.limit.unwrap_or(10)) else {
+            return emit_error("USAGE_ERROR");
+        };
+        let mut arguments = vec![OsString::from("--search-stdio")];
+        arguments.extend(settings);
+        return crate::search_command::run(
+            &daemon,
+            &arguments,
+            search_provider_protocol::SearchRequest { query, limit },
+            deadline,
+        );
+    }
     let output = match capture_child(&daemon, command, &settings, deadline) {
         Ok(output) => output,
         Err(failure) => {
             return emit_error_status(failure.code(), failure.exit_code());
         }
     };
-    let Some(response) = validated_response(&output, command, &preparation, &publication) else {
+    let Some(response) = validated_response(&output, command, &preparation) else {
         return emit_error("DAEMON_RESULT_UNKNOWN");
     };
     let (written, exit_code) = match (output.status.success(), response) {

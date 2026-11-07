@@ -4,9 +4,11 @@ Local search for codebases and documents: ranked locations, retained-source exce
 One OS account, plain local storage, same-host Qdrant and an owned CLI/daemon connection.
 No application encryption, key management, pairing or multi-user access platform.
 
-**Status: retained-file → stored preparation → Qdrant publication is connected and qualified for Windows debug
-at source 3c33d831.** The CLI returns actual backend point/evidence metadata. U1 must still connect a read-only
-search command returning verified retained text and citations; the full product and installed baseline remain open.
+**Status: retained-file → stored preparation → Qdrant publication → read-only search is connected.**
+Search returns full retained units and citations after verifying the published snapshot's source and prepared
+objects. Publication returns generation state; user queries use `search`. U1 source review and targeted Windows
+debug native qualification passed at c843171; earlier transport/budget evidence has its own scope in the work
+register. The full product and installed baseline remain open.
 
 | Need | Start here |
 |---|---|
@@ -17,7 +19,8 @@ search command returning verified retained text and citations; the full product 
 | Find a specific rule | [Documentation index](docs/README.md) |
 | Run | [Quickstart](QUICKSTART.md), with exact qualification scopes in the work register |
 
-Next implement U1 retained excerpts through the pinned published snapshot, then restart/inventory convergence.
+Next connect file/repository index and refresh to the existing helpers, then verify restart/inventory convergence.
+Confirmed deletion excludes a source from new generations while preserving retained objects and pinned views.
 Do not build optional systems first or restore the retired source/qualification frameworks.
 
 ## License
