@@ -15,9 +15,9 @@ use search_source_registry::{
 };
 
 use crate::current_source::{
-    NAMESPACE_KEY, PREPARATION_TABLE_NAME, SCHEMA_VERSION_KEY, SOURCE_ROWS, SOURCE_SCHEMA_VERSION,
-    SOURCE_STATE, SourceControlError, catalogue_names, decode_record, read_namespace,
-    read_source_by_id,
+    NAMESPACE_KEY, PREPARATION_TABLE_NAME, SCHEMA_VERSION_KEY, SOURCE_ROWS, SOURCE_STATE,
+    SourceControlError, catalogue_names, decode_record, read_namespace, read_source_by_id,
+    supported_source_schema,
 };
 use crate::plain_control::ControlWriter;
 
@@ -537,7 +537,7 @@ fn write_source(tx: &WriteTransaction, id: SourceId) -> Result<CurrentSourceReco
         .get(SCHEMA_VERSION_KEY)
         .map_err(|_| PreparationControlError::Database)?
         .ok_or(PreparationControlError::Corrupt)?;
-    if version.value() != SOURCE_SCHEMA_VERSION {
+    if !supported_source_schema(version.value()) {
         return Err(PreparationControlError::UnsupportedSchema);
     }
     let ns = state

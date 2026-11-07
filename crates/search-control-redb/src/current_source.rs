@@ -6,13 +6,14 @@
 use std::collections::{HashMap, HashSet};
 #[cfg(any(unix, windows))]
 use std::ffi::OsString;
+use std::ops::Bound;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 
 use redb_plain::{
-    Database, ReadOnlyDatabase, ReadTransaction, ReadableDatabase, ReadableTable, TableDefinition,
-    TableHandle, WriteTransaction,
+    Database, ReadOnlyDatabase, ReadTransaction, ReadableDatabase, ReadableTable,
+    ReadableTableMetadata, TableDefinition, TableHandle, WriteTransaction,
 };
 use search_contracts::{Blake3Digest32, SourceId, SourceNamespaceId};
 use search_source_registry::{
@@ -27,11 +28,14 @@ const META_TABLE_NAME: &str = "plain_control_meta";
 const SOURCE_STATE_NAME: &str = "source_state";
 const SOURCE_ROWS_NAME: &str = "current_source_rows";
 const SOURCE_LOCATORS_NAME: &str = "current_source_locators";
-pub(super) const SOURCE_SCHEMA_VERSION: &[u8] = &[1];
+const LEGACY_SOURCE_SCHEMA_VERSION: &[u8] = &[1];
+pub(super) const SOURCE_SCHEMA_VERSION: &[u8] = &[2];
 pub(super) const SCHEMA_VERSION_KEY: &str = "schema_version";
 pub(super) const NAMESPACE_KEY: &str = "source_namespace_id";
 pub(super) const PREPARATION_TABLE_NAME: &str = "current_preparations";
 const WANTED_REVISION_KEY: &str = "wanted_corpus_revision";
+const TOTALS_KEY: &str = "current_source_totals";
+const SOURCE_RECORD_FIXED_BYTES: usize = 113;
 const MAX_LOCATOR_BYTES: usize = 32 * 1024;
 const SELECTION_PREFIX: &str = "admitted_selection:";
 /// Maximum current sources accepted by one bounded inventory or publication.
@@ -43,6 +47,316 @@ pub(super) const SOURCE_STATE: TableDefinition<&str, &[u8]> =
 pub(super) const SOURCE_ROWS: TableDefinition<&[u8], &[u8]> =
     TableDefinition::new(SOURCE_ROWS_NAME);
 const SOURCE_LOCATORS: TableDefinition<&[u8], &[u8]> = TableDefinition::new(SOURCE_LOCATORS_NAME);
+
+/// Exact current catalogue accounting, also used by Index's removal preflight.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct SourceInventoryTotals {
+    count: u64,
+    bytes: u64,
+}
+
+impl SourceInventoryTotals {
+    fn add(&mut self, row_bytes: usize, locator_bytes: usize) -> Result<(), SourceControlError> {
+        self.count = self
+            .count
+            .checked_add(1)
+            .ok_or(SourceControlError::InventoryLimit)?;
+        self.bytes = self
+            .bytes
+            .checked_add(
+                u64::try_from(
+                    row_bytes
+                        .checked_add(locator_bytes)
+                        .ok_or(SourceControlError::InventoryLimit)?,
+                )
+                .map_err(|_| SourceControlError::InventoryLimit)?,
+            )
+            .ok_or(SourceControlError::InventoryLimit)?;
+        Ok(())
+    }
+
+    fn subtract(self, other: Self) -> Result<Self, SourceControlError> {
+        Ok(Self {
+            count: self
+                .count
+                .checked_sub(other.count)
+                .ok_or(SourceControlError::Corrupt)?,
+            bytes: self
+                .bytes
+                .checked_sub(other.bytes)
+                .ok_or(SourceControlError::Corrupt)?,
+        })
+    }
+
+    const fn check_limit(self) -> Result<(), SourceControlError> {
+        if self.count > MAX_CURRENT_SOURCES as u64 || self.bytes > MAX_CURRENT_SOURCE_BYTES as u64 {
+            return Err(SourceControlError::InventoryLimit);
+        }
+        Ok(())
+    }
+
+    /// Adds actual encoded-row and reverse-locator bytes, without imposing a new quota.
+    ///
+    /// # Errors
+    /// Refuses malformed source records and arithmetic overflow.
+    pub fn include(&mut self, sources: &[CurrentSourceRecord]) -> Result<(), SourceControlError> {
+        for source in sources {
+            self.add(encode_record(source)?.len(), source.locator.len())?;
+        }
+        Ok(())
+    }
+
+    fn encode(self) -> [u8; 16] {
+        let mut bytes = [0; 16];
+        bytes[..8].copy_from_slice(&self.count.to_le_bytes());
+        bytes[8..].copy_from_slice(&self.bytes.to_le_bytes());
+        bytes
+    }
+}
+
+pub(super) fn supported_source_schema(version: &[u8]) -> bool {
+    version == LEGACY_SOURCE_SCHEMA_VERSION || version == SOURCE_SCHEMA_VERSION
+}
+
+fn decode_totals(bytes: &[u8]) -> Result<SourceInventoryTotals, SourceControlError> {
+    let bytes: &[u8; 16] = bytes.try_into().map_err(|_| SourceControlError::Corrupt)?;
+    let totals = SourceInventoryTotals {
+        count: u64::from_le_bytes(
+            bytes[..8]
+                .try_into()
+                .map_err(|_| SourceControlError::Corrupt)?,
+        ),
+        bytes: u64::from_le_bytes(
+            bytes[8..]
+                .try_into()
+                .map_err(|_| SourceControlError::Corrupt)?,
+        ),
+    };
+    if totals.count == 0 && totals.bytes != 0
+        || totals
+            .count
+            .checked_mul(SOURCE_RECORD_FIXED_BYTES as u64)
+            .is_none_or(|minimum| totals.bytes < minimum)
+    {
+        return Err(SourceControlError::Corrupt);
+    }
+    Ok(totals)
+}
+
+fn read_totals(tx: &ReadTransaction) -> Result<Option<SourceInventoryTotals>, SourceControlError> {
+    let state = tx
+        .open_table(SOURCE_STATE)
+        .map_err(|_| SourceControlError::Corrupt)?;
+    let version = state
+        .get(SCHEMA_VERSION_KEY)
+        .map_err(|_| SourceControlError::Database)?
+        .ok_or(SourceControlError::Corrupt)?;
+    let totals = state
+        .get(TOTALS_KEY)
+        .map_err(|_| SourceControlError::Database)?;
+    if version.value() == LEGACY_SOURCE_SCHEMA_VERSION && totals.is_none() {
+        return Ok(None);
+    }
+    if version.value() != SOURCE_SCHEMA_VERSION {
+        return Err(SourceControlError::UnsupportedSchema);
+    }
+    let totals = decode_totals(totals.ok_or(SourceControlError::Corrupt)?.value())?;
+    let rows = tx
+        .open_table(SOURCE_ROWS)
+        .map_err(|_| SourceControlError::Corrupt)?;
+    let locators = tx
+        .open_table(SOURCE_LOCATORS)
+        .map_err(|_| SourceControlError::Corrupt)?;
+    if rows.len().map_err(|_| SourceControlError::Database)? != totals.count
+        || locators.len().map_err(|_| SourceControlError::Database)? != totals.count
+    {
+        return Err(SourceControlError::Corrupt);
+    }
+    Ok(Some(totals))
+}
+
+fn write_totals(tx: &WriteTransaction) -> Result<SourceInventoryTotals, SourceControlError> {
+    let state = tx
+        .open_table(SOURCE_STATE)
+        .map_err(|_| SourceControlError::Database)?;
+    let version = state
+        .get(SCHEMA_VERSION_KEY)
+        .map_err(|_| SourceControlError::Database)?;
+    let totals = state
+        .get(TOTALS_KEY)
+        .map_err(|_| SourceControlError::Database)?;
+    let totals = match (version, totals) {
+        (None, None) => SourceInventoryTotals::default(),
+        (Some(version), Some(totals)) if version.value() == SOURCE_SCHEMA_VERSION => {
+            decode_totals(totals.value())?
+        }
+        _ => return Err(SourceControlError::Corrupt),
+    };
+    let rows = tx
+        .open_table(SOURCE_ROWS)
+        .map_err(|_| SourceControlError::Database)?;
+    let locators = tx
+        .open_table(SOURCE_LOCATORS)
+        .map_err(|_| SourceControlError::Database)?;
+    if rows.len().map_err(|_| SourceControlError::Database)? != totals.count
+        || locators.len().map_err(|_| SourceControlError::Database)? != totals.count
+    {
+        return Err(SourceControlError::Corrupt);
+    }
+    Ok(totals)
+}
+
+fn store_totals(
+    tx: &WriteTransaction,
+    totals: SourceInventoryTotals,
+) -> Result<(), SourceControlError> {
+    tx.open_table(SOURCE_STATE)
+        .map_err(|_| SourceControlError::Database)?
+        .insert(TOTALS_KEY, totals.encode().as_slice())
+        .map_err(|_| SourceControlError::Database)?;
+    Ok(())
+}
+
+fn scan_totals(
+    tx: &ReadTransaction,
+    deadline: Instant,
+    cancel: &AtomicBool,
+) -> Result<SourceInventoryTotals, SourceControlError> {
+    let namespace = read_namespace(tx)?.ok_or(SourceControlError::Corrupt)?;
+    let rows = tx
+        .open_table(SOURCE_ROWS)
+        .map_err(|_| SourceControlError::Corrupt)?;
+    let locators = tx
+        .open_table(SOURCE_LOCATORS)
+        .map_err(|_| SourceControlError::Corrupt)?;
+    let mut totals = SourceInventoryTotals::default();
+    for row in rows.iter().map_err(|_| SourceControlError::Database)? {
+        check(deadline, cancel)?;
+        let (id, bytes) = row.map_err(|_| SourceControlError::Database)?;
+        if bytes.value().len() > SOURCE_RECORD_FIXED_BYTES + MAX_LOCATOR_BYTES {
+            return Err(SourceControlError::Corrupt);
+        }
+        let source = decode_record(bytes.value())?;
+        if source.source_namespace_id != namespace
+            || source.source_id.as_bytes() != id.value()
+            || locators
+                .get(source.locator.as_slice())
+                .map_err(|_| SourceControlError::Database)?
+                .is_none_or(|value| value.value() != id.value())
+        {
+            return Err(SourceControlError::Corrupt);
+        }
+        totals.add(bytes.value().len(), source.locator.len())?;
+    }
+    for item in locators.iter().map_err(|_| SourceControlError::Database)? {
+        check(deadline, cancel)?;
+        let (locator, id) = item.map_err(|_| SourceControlError::Database)?;
+        let bytes = rows
+            .get(id.value())
+            .map_err(|_| SourceControlError::Database)?
+            .ok_or(SourceControlError::Corrupt)?;
+        if decode_record(bytes.value())?.locator != locator.value() {
+            return Err(SourceControlError::Corrupt);
+        }
+    }
+    if locators.len().map_err(|_| SourceControlError::Database)? != totals.count {
+        return Err(SourceControlError::Corrupt);
+    }
+    check(deadline, cancel)?;
+    Ok(totals)
+}
+
+fn initialize_accounting(
+    database: &Database,
+    deadline: Instant,
+    cancel: &AtomicBool,
+) -> Result<(), SourceControlError> {
+    check(deadline, cancel)?;
+    let read = database
+        .begin_read()
+        .map_err(|_| SourceControlError::Database)?;
+    if !read_source_schema(&read)? || read_totals(&read)?.is_some() {
+        return Ok(());
+    }
+    let namespace = read_namespace(&read)?.ok_or(SourceControlError::Corrupt)?;
+    let revision = wanted_revision(&read)?;
+    {
+        let state = read
+            .open_table(SOURCE_STATE)
+            .map_err(|_| SourceControlError::Corrupt)?;
+        let mut selections = 0_usize;
+        let mut charged = 0_usize;
+        for item in state.iter().map_err(|_| SourceControlError::Database)? {
+            check(deadline, cancel)?;
+            let (key, value) = item.map_err(|_| SourceControlError::Database)?;
+            match key.value() {
+                SCHEMA_VERSION_KEY | NAMESPACE_KEY | WANTED_REVISION_KEY => {}
+                key if key.starts_with(SELECTION_PREFIX) => {
+                    selections = selections
+                        .checked_add(1)
+                        .ok_or(SourceControlError::InventoryLimit)?;
+                    charged = charged
+                        .checked_add(key.len() + value.value().len())
+                        .ok_or(SourceControlError::InventoryLimit)?;
+                    if selections > MAX_CURRENT_SOURCES || charged > MAX_CURRENT_SOURCE_BYTES {
+                        return Err(SourceControlError::InventoryLimit);
+                    }
+                    decode_selection(key, value.value())?;
+                }
+                _ => return Err(SourceControlError::UnsupportedSchema),
+            }
+        }
+    }
+    let totals = scan_totals(&read, deadline, cancel)?;
+    drop(read);
+    let tx = database
+        .begin_write()
+        .map_err(|_| SourceControlError::Database)?;
+    {
+        let mut state = tx
+            .open_table(SOURCE_STATE)
+            .map_err(|_| SourceControlError::Database)?;
+        if state
+            .get(SCHEMA_VERSION_KEY)
+            .map_err(|_| SourceControlError::Database)?
+            .is_none_or(|v| v.value() != LEGACY_SOURCE_SCHEMA_VERSION)
+            || state
+                .get(NAMESPACE_KEY)
+                .map_err(|_| SourceControlError::Database)?
+                .is_none_or(|v| v.value() != namespace.as_bytes())
+            || state
+                .get(TOTALS_KEY)
+                .map_err(|_| SourceControlError::Database)?
+                .is_some()
+        {
+            return Err(SourceControlError::Stale);
+        }
+        if tx
+            .open_table(SOURCE_ROWS)
+            .map_err(|_| SourceControlError::Database)?
+            .len()
+            .map_err(|_| SourceControlError::Database)?
+            != totals.count
+            || tx
+                .open_table(SOURCE_LOCATORS)
+                .map_err(|_| SourceControlError::Database)?
+                .len()
+                .map_err(|_| SourceControlError::Database)?
+                != totals.count
+        {
+            return Err(SourceControlError::Stale);
+        }
+        state
+            .insert(SCHEMA_VERSION_KEY, SOURCE_SCHEMA_VERSION)
+            .map_err(|_| SourceControlError::Database)?;
+    }
+    if write_wanted_revision(&tx)? != revision {
+        return Err(SourceControlError::Stale);
+    }
+    store_totals(&tx, totals)?;
+    check(deadline, cancel)?;
+    tx.commit().map_err(|_| SourceControlError::Database)
+}
 
 /// Content-free source-control failures.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -253,6 +567,12 @@ fn ensure_admission_schema(transaction: &WriteTransaction) -> Result<(), SourceC
         state
             .insert(NAMESPACE_KEY, random_id()?.as_slice())
             .map_err(|_| SourceControlError::Database)?;
+        state
+            .insert(
+                TOTALS_KEY,
+                SourceInventoryTotals::default().encode().as_slice(),
+            )
+            .map_err(|_| SourceControlError::Database)?;
         transaction
             .open_table(SOURCE_ROWS)
             .map_err(|_| SourceControlError::Database)?;
@@ -270,6 +590,7 @@ fn admit_selection_database(
     cancellation: &AtomicBool,
 ) -> Result<bool, SourceControlError> {
     check(deadline, cancellation)?;
+    initialize_accounting(database, deadline, cancellation)?;
     let locator = source_locator_bytes(&selection.path)?;
     let key = selection_key(&locator);
     let bytes = serde_json::to_vec(&StoredSelection {
@@ -498,7 +819,7 @@ pub(super) fn encode_record(record: &CurrentSourceRecord) -> Result<Vec<u8>, Sou
     }
     let locator_length =
         u32::try_from(record.locator.len()).map_err(|_| SourceControlError::Corrupt)?;
-    let mut bytes = Vec::with_capacity(113 + record.locator.len());
+    let mut bytes = Vec::with_capacity(SOURCE_RECORD_FIXED_BYTES + record.locator.len());
     bytes.push(1);
     bytes.extend_from_slice(record.source_namespace_id.as_bytes());
     bytes.extend_from_slice(record.source_id.as_bytes());
@@ -591,7 +912,8 @@ pub(super) fn read_namespace(
         .map_err(|_| SourceControlError::Database)?;
     match (version, namespace) {
         (None, None) => Ok(None),
-        (Some(version), Some(namespace)) if version.value() == SOURCE_SCHEMA_VERSION => {
+        (Some(version), Some(namespace)) if supported_source_schema(version.value()) => {
+            read_totals(transaction)?;
             Ok(Some(SourceNamespaceId::from_bytes(
                 namespace
                     .value()
@@ -778,34 +1100,6 @@ fn capture_source_database(
     })
 }
 
-/// Captures every current source and validates its reverse locator binding in one read snapshot.
-///
-/// # Errors
-/// Refuses unsupported schemas, corrupt bindings, inventory limits, cancellation,
-/// deadline expiry, and database failures without writing.
-pub fn capture_current_sources(
-    control_path: &Path,
-    deadline: Instant,
-    cancellation: &AtomicBool,
-) -> Result<Vec<CurrentSourceRecord>, SourceControlError> {
-    check(deadline, cancellation)?;
-    let database =
-        ReadOnlyDatabase::open(control_path).map_err(|_| SourceControlError::Database)?;
-    capture_sources_database(&database, deadline, cancellation)
-}
-
-fn capture_sources_database(
-    database: &impl ReadableDatabase,
-    deadline: Instant,
-    cancellation: &AtomicBool,
-) -> Result<Vec<CurrentSourceRecord>, SourceControlError> {
-    check(deadline, cancellation)?;
-    let transaction = database
-        .begin_read()
-        .map_err(|_| SourceControlError::Database)?;
-    read_sources(&transaction, deadline, cancellation)
-}
-
 fn read_sources(
     transaction: &ReadTransaction,
     deadline: Instant,
@@ -876,6 +1170,15 @@ fn read_sources(
     if locator_count != sources.len() || !reverse.is_empty() {
         return Err(SourceControlError::Corrupt);
     }
+    if let Some(expected) = read_totals(transaction)? {
+        let actual = SourceInventoryTotals {
+            count: sources.len() as u64,
+            bytes: charged as u64,
+        };
+        if actual != expected {
+            return Err(SourceControlError::Corrupt);
+        }
+    }
     check(deadline, cancellation)?;
     Ok(sources)
 }
@@ -911,7 +1214,10 @@ pub(super) fn mark_objects(
         crate::object_marks::check(deadline, cancel)?;
         let (key, value) = row.map_err(|_| E::Database)?;
         match key.value() {
-            SCHEMA_VERSION_KEY if value.value() == SOURCE_SCHEMA_VERSION => {}
+            SCHEMA_VERSION_KEY if supported_source_schema(value.value()) => {}
+            TOTALS_KEY => {
+                decode_totals(value.value()).map_err(mapped)?;
+            }
             NAMESPACE_KEY if value.value().len() == 16 => {}
             WANTED_REVISION_KEY if value.value().len() == 8 => {}
             key if key.starts_with(SELECTION_PREFIX) => {
@@ -1042,11 +1348,14 @@ fn commit_source_database(
     cancellation: &AtomicBool,
 ) -> Result<(CurrentSourceRecord, bool), SourceControlError> {
     check(deadline, cancellation)?;
+    initialize_accounting(database, deadline, cancellation)?;
     let transaction = database
         .begin_write()
         .map_err(|_| SourceControlError::Database)?;
     check(deadline, cancellation)?;
     let (row_revision, registration_revision) = source_revisions(&transaction, &capture)?;
+    let mut totals = write_totals(&transaction)?;
+    totals.check_limit()?;
     let mut state = transaction
         .open_table(SOURCE_STATE)
         .map_err(|_| SourceControlError::Database)?;
@@ -1062,10 +1371,14 @@ fn commit_source_database(
             .get(capture.source_id.as_bytes().as_slice())
             .map_err(|_| SourceControlError::Database)?
             .ok_or(SourceControlError::Stale)?;
+        let current_bytes = current.value().len();
         let current = decode_record(current.value())?;
         if current.object_ref == object_ref && current.file_key == file_key {
             return Ok((current, true));
         }
+        let mut previous = SourceInventoryTotals::default();
+        previous.add(current_bytes, current.locator.len())?;
+        totals = totals.subtract(previous)?;
     }
 
     let record = CurrentSourceRecord {
@@ -1078,6 +1391,8 @@ fn commit_source_database(
         object_ref,
     };
     let encoded = encode_record(&record)?;
+    totals.add(encoded.len(), record.locator.len())?;
+    totals.check_limit()?;
     if capture.expected_namespace.is_none() {
         state
             .insert(SCHEMA_VERSION_KEY, SOURCE_SCHEMA_VERSION)
@@ -1100,6 +1415,7 @@ fn commit_source_database(
     drop(locators);
     drop(rows);
     drop(state);
+    store_totals(&transaction, totals)?;
     advance_wanted_revision(&transaction)?;
     check(deadline, cancellation)?;
     Ok((record, transaction.commit().is_ok()))
@@ -1129,10 +1445,12 @@ fn remove_sources_database(
         return Err(SourceControlError::InventoryLimit);
     }
     check(deadline, cancellation)?;
+    initialize_accounting(database, deadline, cancellation)?;
     let transaction = database
         .begin_write()
         .map_err(|_| SourceControlError::Database)?;
     check(deadline, cancellation)?;
+    let mut totals = write_totals(&transaction)?;
 
     let state = transaction
         .open_table(SOURCE_STATE)
@@ -1164,6 +1482,7 @@ fn remove_sources_database(
         .map_err(|_| SourceControlError::Database)?;
     let mut ids = HashSet::new();
     let mut locator_keys = HashSet::new();
+    let mut removed = SourceInventoryTotals::default();
     for source in expected {
         check(deadline, cancellation)?;
         if source.source_namespace_id != namespace
@@ -1186,7 +1505,9 @@ fn remove_sources_database(
         if locator.value() != source.source_id.as_bytes() {
             return Err(SourceControlError::Stale);
         }
+        removed.add(row.value().len(), source.locator.len())?;
     }
+    totals = totals.subtract(removed)?;
 
     for source in expected {
         check(deadline, cancellation)?;
@@ -1206,6 +1527,7 @@ fn remove_sources_database(
     drop(locators);
     drop(rows);
     drop(state);
+    store_totals(&transaction, totals)?;
     advance_wanted_revision(&transaction)?;
     check(deadline, cancellation)?;
     Ok(transaction.commit().is_ok())
@@ -1251,6 +1573,108 @@ fn load_current_source_database(
 }
 
 impl ControlWriter {
+    /// Reads one bounded source-ID ordered page, including legacy over-cap inventory.
+    /// Migrates validated legacy accounting once; no transaction survives this call.
+    ///
+    /// # Errors
+    /// Refuses unknown/corrupt metadata, cancellation, deadline and ambiguous migration commits.
+    pub fn current_source_page(
+        &self,
+        after: Option<SourceId>,
+        deadline: Instant,
+        cancellation: &AtomicBool,
+    ) -> Result<Vec<CurrentSourceRecord>, SourceControlError> {
+        initialize_accounting(self.database(), deadline, cancellation)?;
+        let tx = self
+            .database()
+            .begin_read()
+            .map_err(|_| SourceControlError::Database)?;
+        if !read_source_schema(&tx)? {
+            return Ok(Vec::new());
+        }
+        let namespace = read_namespace(&tx)?.ok_or(SourceControlError::Corrupt)?;
+        let rows = tx
+            .open_table(SOURCE_ROWS)
+            .map_err(|_| SourceControlError::Corrupt)?;
+        let locators = tx
+            .open_table(SOURCE_LOCATORS)
+            .map_err(|_| SourceControlError::Corrupt)?;
+        let start = after.as_ref().map_or(Bound::Unbounded, |id| {
+            Bound::Excluded(id.as_bytes().as_slice())
+        });
+        let mut sources = Vec::new();
+        let mut charged = 0_usize;
+        for item in rows
+            .range::<&[u8]>((start, Bound::Unbounded))
+            .map_err(|_| SourceControlError::Database)?
+        {
+            check(deadline, cancellation)?;
+            let (id, bytes) = item.map_err(|_| SourceControlError::Database)?;
+            if bytes.value().len() > SOURCE_RECORD_FIXED_BYTES + MAX_LOCATOR_BYTES {
+                return Err(SourceControlError::Corrupt);
+            }
+            let source = decode_record(bytes.value())?;
+            if source.source_namespace_id != namespace
+                || source.source_id.as_bytes() != id.value()
+                || locators
+                    .get(source.locator.as_slice())
+                    .map_err(|_| SourceControlError::Database)?
+                    .is_none_or(|value| value.value() != id.value())
+            {
+                return Err(SourceControlError::Corrupt);
+            }
+            charged = charged
+                .checked_add(bytes.value().len() + source.locator.len())
+                .ok_or(SourceControlError::InventoryLimit)?;
+            if charged > MAX_CURRENT_SOURCE_BYTES || sources.len() >= MAX_CURRENT_SOURCES {
+                break;
+            }
+            sources
+                .try_reserve(1)
+                .map_err(|_| SourceControlError::InventoryLimit)?;
+            sources.push(source);
+        }
+        check(deadline, cancellation)?;
+        Ok(sources)
+    }
+
+    /// Checks Index's complete projected union before source membership mutations.
+    /// Selected paths add only absent locators; outside-scope rows remain included.
+    ///
+    /// # Errors
+    /// Refuses changed accounting, malformed bindings, existing caps and operation failures.
+    pub fn preflight_current_sources(
+        &self,
+        selected: &[&Path],
+        observed: SourceInventoryTotals,
+        removed: SourceInventoryTotals,
+        deadline: Instant,
+        cancellation: &AtomicBool,
+    ) -> Result<(), SourceControlError> {
+        check(deadline, cancellation)?;
+        let tx = self
+            .database()
+            .begin_read()
+            .map_err(|_| SourceControlError::Database)?;
+        let current = if read_source_schema(&tx)? {
+            read_totals(&tx)?.ok_or(SourceControlError::Corrupt)?
+        } else {
+            SourceInventoryTotals::default()
+        };
+        if current != observed {
+            return Err(SourceControlError::Corrupt);
+        }
+        let mut projected = current.subtract(removed)?;
+        for path in selected {
+            check(deadline, cancellation)?;
+            let locator = source_locator_bytes(path)?;
+            if current.count == 0 || load_locator_row(&tx, &locator)?.is_none() {
+                projected.add(SOURCE_RECORD_FIXED_BYTES + locator.len(), locator.len())?;
+            }
+        }
+        projected.check_limit()
+    }
+
     /// Captures one source registration in a short read transaction on this owner.
     ///
     /// # Errors
