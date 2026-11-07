@@ -34,6 +34,7 @@ pub(super) struct RootCli {
     publication: Option<PublicationRequest>,
     search_endpoint: Option<String>,
     archive_path: Option<PathBuf>,
+    import_retry: bool,
 }
 
 #[derive(Default)]
@@ -117,6 +118,7 @@ fn is_command(value: &OsStr) -> Option<RootCommand> {
         "--session-stdio" => Some(RootCommand::Session),
         "--collect-objects" => Some(RootCommand::CollectObjects),
         "--archive-export" => Some(RootCommand::ArchiveExport),
+        "--archive-import" => Some(RootCommand::ArchiveImport),
         _ => None,
     }
 }
@@ -197,8 +199,10 @@ impl PublicationOptions {
         if matches!(command, RootCommand::Search | RootCommand::Session) {
             return Ok((None, self.endpoint));
         }
-        if matches!(command, RootCommand::PublishPrepared | RootCommand::Index)
-            != self.endpoint.is_some()
+        if matches!(
+            command,
+            RootCommand::PublishPrepared | RootCommand::Index | RootCommand::ArchiveImport
+        ) != self.endpoint.is_some()
         {
             return Err(invalid("publication_selection"));
         }
@@ -241,6 +245,59 @@ fn local_invocation(arguments: &[OsString]) -> Option<Parsed> {
     None
 }
 
+fn validate_maintenance_options(
+    command: RootCommand,
+    archive: bool,
+    retry: bool,
+    index: &IndexOptions,
+) -> Result<(), String> {
+    if matches!(
+        command,
+        RootCommand::ArchiveExport | RootCommand::ArchiveImport
+    ) != archive
+    {
+        return Err(invalid("archive_path_required"));
+    }
+    if retry && command != RootCommand::ArchiveImport {
+        return Err(invalid("import_retry"));
+    }
+    if (index.path.is_some() || index.owner_stdio) && command != RootCommand::Index {
+        return Err(invalid("index_path"));
+    }
+    Ok(())
+}
+
+fn take_archive_option(
+    arguments: &[OsString],
+    index: usize,
+    path: &mut Option<PathBuf>,
+    retry: &mut bool,
+) -> Result<Option<usize>, String> {
+    if arguments[index] == OsStr::new("--archive-path") {
+        select_path_option(path, arguments, index, "archive_path")?;
+        Ok(Some(2))
+    } else if arguments[index] == OsStr::new("--retry") {
+        if *retry {
+            return Err(invalid("retry_duplicate"));
+        }
+        *retry = true;
+        Ok(Some(1))
+    } else {
+        Ok(None)
+    }
+}
+
+fn select_root_path(
+    explicit: Option<PathBuf>,
+    positional: Option<PathBuf>,
+) -> Result<Option<PathBuf>, String> {
+    if explicit.is_some() && positional.is_some() {
+        Err(invalid("data_root_duplicate"))
+    } else {
+        Ok(explicit.or(positional))
+    }
+}
+
 pub(super) fn parse(arguments: &[OsString]) -> Result<Parsed, String> {
     if let Some(local) = local_invocation(arguments) {
         return Ok(local);
@@ -251,6 +308,7 @@ pub(super) fn parse(arguments: &[OsString]) -> Result<Parsed, String> {
     let mut config_file = None;
     let mut source_file = None;
     let mut archive_path = None;
+    let mut import_retry = false;
     let mut index_options = IndexOptions::default();
     let mut source_id = None;
     let mut unit = None;
@@ -273,9 +331,10 @@ pub(super) fn parse(arguments: &[OsString]) -> Result<Parsed, String> {
         } else if argument == OsStr::new("--config-file") {
             select_path_option(&mut config_file, arguments, index, "config_file")?;
             index += 2;
-        } else if argument == OsStr::new("--archive-path") {
-            select_path_option(&mut archive_path, arguments, index, "archive_path")?;
-            index += 2;
+        } else if let Some(consumed) =
+            take_archive_option(arguments, index, &mut archive_path, &mut import_retry)?
+        {
+            index += consumed;
         } else if argument == OsStr::new("--source-file") {
             select_path_option(&mut source_file, arguments, index, "source_file")?;
             index += 2;
@@ -313,9 +372,12 @@ pub(super) fn parse(arguments: &[OsString]) -> Result<Parsed, String> {
     }
 
     let command = command.ok_or_else(|| "UNKNOWN_ARGUMENT".to_owned())?;
-    if matches!(command, RootCommand::ArchiveExport) != archive_path.is_some() {
-        return Err(invalid("archive_path_required"));
-    }
+    validate_maintenance_options(
+        command,
+        archive_path.is_some(),
+        import_retry,
+        &index_options,
+    )?;
     let (publication, search_endpoint) = publication.finish(command)?;
     validate_source_selection(
         command,
@@ -323,16 +385,9 @@ pub(super) fn parse(arguments: &[OsString]) -> Result<Parsed, String> {
         source_id.is_some(),
         unit.is_some(),
     )?;
-    if (index_options.path.is_some() || index_options.owner_stdio) && command != RootCommand::Index
-    {
-        return Err(invalid("index_path"));
-    }
-    if data_root.is_some() && positional_root.is_some() {
-        return Err(invalid("data_root_duplicate"));
-    }
     Ok(Parsed::Root(Box::new(RootCli {
         command,
-        data_root: data_root.or(positional_root),
+        data_root: select_root_path(data_root, positional_root)?,
         config_file,
         source_file,
         index_path: index_options.path,
@@ -342,6 +397,7 @@ pub(super) fn parse(arguments: &[OsString]) -> Result<Parsed, String> {
         publication,
         search_endpoint,
         archive_path,
+        import_retry,
     })))
 }
 
@@ -436,5 +492,6 @@ pub(super) fn resolve(cli: RootCli, startup_cwd: &Path) -> Result<RootInvocation
         archive_path: cli
             .archive_path
             .map(|path| resolve_layer_path(&path, startup_cwd)),
+        import_retry: cli.import_retry,
     })
 }

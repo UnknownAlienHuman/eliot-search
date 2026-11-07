@@ -18,6 +18,14 @@ fn number(value: &Value, key: &str) -> Option<u64> {
     value.get(key)?.as_u64()
 }
 pub fn validate(bytes: &[u8]) -> Option<&str> {
+    validate_operation(bytes, "publish-prepared", "published")
+}
+
+pub fn validate_import(bytes: &[u8]) -> Option<&str> {
+    validate_operation(bytes, "archive-import", "complete")
+}
+
+fn validate_operation<'a>(bytes: &'a [u8], operation: &str, state: &str) -> Option<&'a str> {
     if bytes.len() > MAX_PUBLICATION_RESPONSE_BYTES {
         return None;
     }
@@ -38,8 +46,8 @@ pub fn validate(bytes: &[u8]) -> Option<&str> {
             "point_count",
             "page_count",
         ],
-    ) || value.get("operation")?.as_str()? != "publish-prepared"
-        || value.get("state")?.as_str()? != "published"
+    ) || value.get("operation")?.as_str()? != operation
+        || value.get("state")?.as_str()? != state
     {
         return None;
     }

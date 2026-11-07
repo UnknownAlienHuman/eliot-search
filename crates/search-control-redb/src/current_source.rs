@@ -155,7 +155,9 @@ fn decode_totals(bytes: &[u8]) -> Result<SourceInventoryTotals, SourceControlErr
     Ok(totals)
 }
 
-fn read_totals(tx: &ReadTransaction) -> Result<Option<SourceInventoryTotals>, SourceControlError> {
+pub(super) fn read_totals(
+    tx: &ReadTransaction,
+) -> Result<Option<SourceInventoryTotals>, SourceControlError> {
     let state = tx
         .open_table(SOURCE_STATE)
         .map_err(|_| SourceControlError::Corrupt)?;
@@ -227,6 +229,55 @@ fn store_totals(
         .insert(TOTALS_KEY, totals.encode().as_slice())
         .map_err(|_| SourceControlError::Database)?;
     Ok(())
+}
+
+pub(super) fn install_import_sources(
+    tx: &WriteTransaction,
+    sources: &[crate::publication::CapturedSource],
+    deadline: Instant,
+    cancel: &AtomicBool,
+) -> Result<(), SourceControlError> {
+    let namespace = sources.first().map_or_else(
+        || random_id().map(SourceNamespaceId::from_bytes),
+        |captured| Ok(captured.source.source_namespace_id),
+    )?;
+    let mut totals = SourceInventoryTotals::default();
+    let mut rows = tx
+        .open_table(SOURCE_ROWS)
+        .map_err(|_| SourceControlError::Database)?;
+    let mut locators = tx
+        .open_table(SOURCE_LOCATORS)
+        .map_err(|_| SourceControlError::Database)?;
+    for captured in sources {
+        check(deadline, cancel)?;
+        let source = &captured.source;
+        let bytes = encode_record(source)?;
+        totals.add(bytes.len(), source.locator.len())?;
+        totals.check_limit()?;
+        rows.insert(source.source_id.as_bytes().as_slice(), bytes.as_slice())
+            .map_err(|_| SourceControlError::Database)?;
+        locators
+            .insert(
+                source.locator.as_slice(),
+                source.source_id.as_bytes().as_slice(),
+            )
+            .map_err(|_| SourceControlError::Database)?;
+    }
+    drop(rows);
+    drop(locators);
+    {
+        let mut state = tx
+            .open_table(SOURCE_STATE)
+            .map_err(|_| SourceControlError::Database)?;
+        state
+            .insert(SCHEMA_VERSION_KEY, SOURCE_SCHEMA_VERSION)
+            .map_err(|_| SourceControlError::Database)?;
+        state
+            .insert(NAMESPACE_KEY, namespace.as_bytes().as_slice())
+            .map_err(|_| SourceControlError::Database)?;
+    }
+    store_totals(tx, totals)?;
+    advance_wanted_revision(tx)
 }
 
 fn scan_totals(

@@ -34,6 +34,7 @@ enum RootCommand {
     Search,
     CollectObjects,
     ArchiveExport,
+    ArchiveImport,
 }
 
 impl RootCommand {
@@ -50,6 +51,7 @@ impl RootCommand {
             Self::Search => "search",
             Self::CollectObjects => "collect-objects",
             Self::ArchiveExport => "archive-export",
+            Self::ArchiveImport => "archive-import",
         }
     }
 
@@ -66,6 +68,7 @@ impl RootCommand {
             Self::Search => "--search-stdio",
             Self::CollectObjects => "--collect-objects",
             Self::ArchiveExport => "--archive-export",
+            Self::ArchiveImport => "--archive-import",
         }
     }
 }
@@ -138,7 +141,10 @@ impl RootPaths {
             }
             Some("--config-file") => &mut self.config,
             Some("--archive-path") => {
-                if !matches!(command, RootCommand::ArchiveExport) {
+                if !matches!(
+                    command,
+                    RootCommand::ArchiveExport | RootCommand::ArchiveImport
+                ) {
                     return Err("USAGE_ERROR");
                 }
                 &mut self.archive
@@ -225,6 +231,7 @@ enum DaemonResponse<'a> {
     Indexed(&'a str),
     Collected(&'a str),
     Archived(&'a str),
+    Imported(&'a str),
     Error(&'a str),
 }
 
@@ -280,6 +287,7 @@ fn command(value: &OsStr) -> Option<RootCommand> {
         "search" => Some(RootCommand::Search),
         "collect-objects" => Some(RootCommand::CollectObjects),
         "archive-export" => Some(RootCommand::ArchiveExport),
+        "archive-import" => Some(RootCommand::ArchiveImport),
         _ => None,
     }
 }
@@ -300,6 +308,7 @@ fn is_daemon_root_flag(value: &OsStr) -> bool {
                 | "--session-stdio"
                 | "--collect-objects"
                 | "--archive-export"
+                | "--archive-import"
         )
     )
 }
@@ -389,7 +398,10 @@ const fn validate_request_selection(
     }
     if matches!(
         command,
-        RootCommand::PublishPrepared | RootCommand::Index | RootCommand::Search
+        RootCommand::PublishPrepared
+            | RootCommand::Index
+            | RootCommand::Search
+            | RootCommand::ArchiveImport
     ) != publication.endpoint.is_some()
         || (index_path && !matches!(command, RootCommand::Index))
         || (publication.limit.is_some() && publication.query.is_none())
@@ -449,7 +461,10 @@ impl PublicationRequest {
         }
         if !matches!(
             command,
-            RootCommand::PublishPrepared | RootCommand::Index | RootCommand::Search
+            RootCommand::PublishPrepared
+                | RootCommand::Index
+                | RootCommand::Search
+                | RootCommand::ArchiveImport
         ) {
             return Err("USAGE_ERROR");
         }
@@ -504,6 +519,7 @@ fn parse(arguments: &[OsString]) -> Result<Parsed, &'static str> {
     let mut positional_root_seen = false;
     let mut source_file_seen = false;
     let mut index_path_seen = false;
+    let mut import_retry = false;
     let mut preparation = PreparationRequest::default();
     let mut publication = PublicationRequest::default();
     let mut index = 1;
@@ -520,6 +536,13 @@ fn parse(arguments: &[OsString]) -> Result<Parsed, &'static str> {
             &mut settings,
         )? {
             index += 2;
+        } else if argument == OsStr::new("--retry") {
+            if import_retry || !matches!(root_command, RootCommand::ArchiveImport) {
+                return Err("USAGE_ERROR");
+            }
+            import_retry = true;
+            settings.push(argument.clone());
+            index += 1;
         } else if argument == OsStr::new("--file") {
             if source_file_seen || !matches!(root_command, RootCommand::RetainFile) {
                 return Err("USAGE_ERROR");
@@ -558,7 +581,11 @@ fn parse(arguments: &[OsString]) -> Result<Parsed, &'static str> {
             index += 1;
         }
     }
-    if matches!(root_command, RootCommand::ArchiveExport) != paths.archive.is_some() {
+    if matches!(
+        root_command,
+        RootCommand::ArchiveExport | RootCommand::ArchiveImport
+    ) != paths.archive.is_some()
+    {
         return Err("USAGE_ERROR");
     }
     validate_request_selection(
@@ -976,7 +1003,8 @@ fn validated_snapshot(bytes: &[u8], command: RootCommand) -> Option<&str> {
         | RootCommand::Index
         | RootCommand::Search
         | RootCommand::CollectObjects
-        | RootCommand::ArchiveExport => {
+        | RootCommand::ArchiveExport
+        | RootCommand::ArchiveImport => {
             return None;
         }
         RootCommand::Inspect | RootCommand::DiscardIncomplete => &[
@@ -1112,7 +1140,10 @@ fn validated_response<'a>(
     preparation: &PreparationRequest,
 ) -> Option<DaemonResponse<'a>> {
     if output.stderr.bytes.is_empty() {
-        if matches!(command, RootCommand::ArchiveExport) {
+        if matches!(command, RootCommand::ArchiveImport) {
+            crate::published_response::validate_import(&output.stdout.bytes)
+                .map(DaemonResponse::Imported)
+        } else if matches!(command, RootCommand::ArchiveExport) {
             validated_archived(&output.stdout.bytes).map(DaemonResponse::Archived)
         } else if matches!(command, RootCommand::CollectObjects) {
             validated_collected(&output.stdout.bytes).map(DaemonResponse::Collected)
@@ -1157,6 +1188,7 @@ fn print_help() {
         "  eliot-search --version\n",
         "  eliot-search collect-objects [ROOT] [--data-root ROOT] [--config-file PATH] [--daemon PATH]\n",
         "  eliot-search archive-export --archive-path OUT [ROOT] [--data-root ROOT] [--config-file PATH] [--daemon PATH]\n",
+        "  eliot-search archive-import --archive-path ARCHIVE --data-root DEST --qdrant-url URL [--retry] [--daemon PATH]\n",
         "  eliot-search session --data-root ROOT [--qdrant-url URL] [--config-file PATH] [--daemon PATH]\n",
         "    stdin/stdout: SessionClientFrame/SessionReply JSON, one object per line\n",
         "  eliot-search inspect-data-root [ROOT] [--data-root ROOT] [--config-file PATH] [--daemon PATH]\n",
@@ -1311,7 +1343,8 @@ pub fn run_main() -> i32 {
             | DaemonResponse::Published(result)
             | DaemonResponse::Indexed(result)
             | DaemonResponse::Collected(result)
-            | DaemonResponse::Archived(result),
+            | DaemonResponse::Archived(result)
+            | DaemonResponse::Imported(result),
         ) => (write_line(&mut std::io::stdout().lock(), result), 0),
         (false, DaemonResponse::Error(error)) => (
             write_line(&mut std::io::stderr().lock(), error),

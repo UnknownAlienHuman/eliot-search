@@ -299,6 +299,7 @@ dependencies = [
 name = "eliot-searchd"
 version = "0.0.0"
 dependencies = [
+ "blake3",
  "ignore",
  "search-contracts",
  "search-control-redb",

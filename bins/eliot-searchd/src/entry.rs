@@ -4,6 +4,7 @@
 
 mod app;
 mod archive_export;
+mod archive_import;
 mod collect_objects;
 mod decoded_exact;
 mod exact_literal;
