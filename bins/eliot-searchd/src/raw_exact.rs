@@ -3,6 +3,7 @@
 use std::sync::atomic::AtomicBool;
 use std::time::Instant;
 
+use search_control_redb::current_preparation::PreparationOutcome;
 use search_control_redb::publication::PublishedView;
 use search_provider_protocol::{
     FailureCode, RawExactGap, RawExactItem, RawExactMatch, RawExactRequest, RawExactResult,
@@ -87,7 +88,7 @@ pub fn execute(
     request: &RawExactRequest,
     deadline: Instant,
     cancel: &AtomicBool,
-) -> Result<RawExactResult> {
+) -> Result<(RawExactResult, u64)> {
     check(deadline, cancel)?;
     request
         .validate()
@@ -116,7 +117,18 @@ pub fn execute(
         .map_err(|_| QueryFailure::Code("QUERY_ALLOCATION_FAILED"))?;
     // Existing generation/source-size ceilings bound input, including integrity
     // work; presentation limits never end scanning or change the denominator.
+    let mut preparation_gaps = 0_u64;
     for entry in inventory {
+        if matches!(
+            entry
+                .preparation
+                .outcome
+                .as_ref()
+                .map(|outcome| outcome.result),
+            Some(PreparationOutcome::Gap { .. })
+        ) {
+            preparation_gaps += 1;
+        }
         scan_source(
             root,
             &entry.source,
@@ -140,5 +152,5 @@ pub fn execute(
     result
         .validate_request(request)
         .map_err(|error| QueryFailure::Code(error.code()))?;
-    Ok(result)
+    Ok((result, preparation_gaps))
 }

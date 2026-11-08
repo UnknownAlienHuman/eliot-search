@@ -63,10 +63,10 @@ routes are removed. Check the real binary; package names and retained workspace 
                               → Search: backend nominations → retained Source/Prepared unit/citation
                               → RawExact: source_inventory → verified Source bytes/ranges/hex, no Qdrant
                               → DecodedUtf8: saved Prepared + Source → verified identity ranges/text
-                              → bounded terminal flush with root/view retained
+                              → optional QuerySummary from the same RO snapshot → bounded terminal flush with root/view retained
       session-stdio           → session I/O/control + joinable worker owning one fixed window
                               → Search/Raw/DecodedUtf8 Open → original prefix <=64 → flush-committed pages
-                              → emitted-item Expand → Close/expiry/EOF → join/release; client observes reap
+                              → emitted-item Expand with cached original summary → Close/expiry/EOF → join/release; client observes reap
 
 | CLI subcommand | Daemon flag | Root function |
 |---|---|---|
@@ -130,6 +130,7 @@ Rows marked future identify integration owners, not installed commands or comple
 | Plain archive export | [Handler](../../bins/eliot-searchd/src/archive_export.rs), [shared closure verifier](../../bins/eliot-searchd/src/retained_objects.rs), [CONTROL copy](../../crates/search-control-redb/src/plain_control.rs), [owner](../../crates/search-runtime/search-retention/FUNCTIONS.md#implemented-archive-export-consumer) |
 | Served-baseline archive import | [Handler](../../bins/eliot-searchd/src/archive_import.rs), [CONTROL install](../../crates/search-control-redb/src/publication/restore.rs), [marked root](../../crates/search-runtime/search-runtime-owner/src/plain_root.rs), [owner](../../crates/search-runtime/search-retention/FUNCTIONS.md#explicit-restoreimport-into-a-fresh-destination) |
 | Returned evidence and retained units | [Query worker](../../bins/eliot-searchd/src/verified_query.rs), [CONTROL resolver](../../crates/search-control-redb/src/publication.rs), [evidence rule](../../crates/search-query/search-candidate-validator/FUNCTIONS.md) |
+| Published/current query summary | [RO observation](../../crates/search-control-redb/src/publication.rs), [daemon producer](../../bins/eliot-searchd/src/framed_search.rs), [DTO](../../crates/search-provider-protocol/src/dto.rs), [CONTROL rule](../../crates/search-control-redb/FUNCTIONS.md#query-summary-observation) |
 | Serviced framed child and presentation | [Daemon I/O](../../bins/eliot-searchd/src/framed_search.rs), [client](../../crates/search-provider-client/FUNCTIONS.md), [protocol](../../crates/search-provider-protocol/FUNCTIONS.md), [CLI](../../bins/eliot-search/FUNCTIONS.md) |
 | Raw/DecodedUtf8 and same-session windows | [Raw](../../bins/eliot-searchd/src/raw_exact.rs), [Decoded](../../bins/eliot-searchd/src/decoded_exact.rs), [session I/O](../../bins/eliot-searchd/src/framed_search/session.rs), [window](../../bins/eliot-searchd/src/framed_search/window.rs), [owning window recipe](../../crates/search-query/search-continuation/FUNCTIONS.md) |
 
@@ -144,8 +145,11 @@ Do not restore deleted daemon implementations or unconsumed APIs because an olde
 
 That read-only query → pinned published evidence → verified retained text/citation → CLI path is connected.
 Scoped index, bare selection reload and foreground watch now use those helpers; R1's accepted scopes remain
-in the registry. X1 and M1 GC/export/import are DONE only in their selected Windows/Release scopes. V1 is READY:
-bounded known-freshness/preparation-gap summary, relevance/scale and isolated installed/final-head qualification.
+in the registry. X1 and M1 GC/export/import are DONE only in their selected Windows/Release scopes. Candidate9cfa
+connects QuerySummary; V1 is IN_PROGRESS with query-family CPU UNKNOWN, full meaningful workflow demonstrations
+pending and mandatory replacement high-water <=4 GiB NOT_MEASURED. Diagnostic ranked coverage is not a numeric
+5/5 gate. Candidate scale/installed
+observations are not a landed-main or whole-product PASS.
 Entry points and root exclusion are unchanged; no concurrent view framework is added by this documentation.
 Confirmed absence and inaccessible inventory stay distinct.
 Build the actual owners and delete displaced code with its callers. Root-only command checks, helper-native

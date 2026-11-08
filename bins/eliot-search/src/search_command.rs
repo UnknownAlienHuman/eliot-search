@@ -168,8 +168,14 @@ impl SessionCli {
         session: &mut search_provider_client::OwnedQuerySession,
     ) -> Result<(), ClientError> {
         use search_provider_protocol::SessionClientFrame;
-        let frame: SessionClientFrame = serde_json::from_slice(&self.line)
+        let mut frame: SessionClientFrame = serde_json::from_slice(&self.line)
             .map_err(|_| search_provider_protocol::ProtocolError::InvalidMessage)?;
+        if let SessionClientFrame::Open {
+            include_summary, ..
+        } = &mut frame
+        {
+            *include_summary = true;
+        }
         let started = self.line_started.take().ok_or(ClientError::Io)?;
         self.line.clear();
         if let Err(error) = frame.validate() {

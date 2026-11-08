@@ -5,8 +5,8 @@ use std::io::{self, Write};
 
 use crate::{
     ClientFrame, DecodedUtf8Result, FRAME_PREFIX_BYTES, MAX_BODY_BYTES, MAX_CLIENT_FRAME_BYTES,
-    MAX_FRAME_BYTES, MAX_ITEMS, ProtocolError, QueryOutcome, RawExactResult, SearchItem,
-    SessionClientFrame, SessionReply, StopReason, Terminal,
+    MAX_FRAME_BYTES, MAX_ITEMS, ProtocolError, QueryOutcome, QuerySummary, RawExactResult,
+    SearchItem, SessionClientFrame, SessionReply, StopReason, Terminal,
 };
 
 /// Incremental storage for exactly one length-prefixed frame.
@@ -154,10 +154,12 @@ pub fn decode_terminal_frame(frame: &[u8], requested_limit: u8) -> Result<Termin
 pub fn prepare_raw_exact(
     request_id: u64,
     result: RawExactResult,
+    summary: Option<QuerySummary>,
 ) -> Result<Vec<u8>, ProtocolError> {
     encode_terminal_frame(&Terminal {
         request_id,
         outcome: QueryOutcome::RawExact { result },
+        summary,
     })
 }
 
@@ -165,10 +167,12 @@ pub fn prepare_raw_exact(
 pub fn prepare_decoded_utf8(
     request_id: u64,
     result: DecodedUtf8Result,
+    summary: Option<QuerySummary>,
 ) -> Result<Vec<u8>, ProtocolError> {
     encode_terminal_frame(&Terminal {
         request_id,
         outcome: QueryOutcome::DecodedUtf8 { result },
+        summary,
     })
 }
 
@@ -182,6 +186,7 @@ pub fn prepare_complete(
     request_id: u64,
     generation: u64,
     items: Vec<SearchItem>,
+    summary: Option<QuerySummary>,
 ) -> Result<Vec<u8>, ProtocolError> {
     let terminal = Terminal {
         request_id,
@@ -190,6 +195,7 @@ pub fn prepare_complete(
             items,
             stop: StopReason::Complete,
         },
+        summary,
     };
     terminal.validate(u8::try_from(MAX_ITEMS).map_err(|_| ProtocolError::InvalidMessage)?)?;
     if fits(&terminal)? {
@@ -202,7 +208,12 @@ pub fn prepare_complete(
     let mut high = items.len();
     while low < high {
         let middle = low + (high - low).div_ceil(2);
-        let candidate = complete_wire(request_id, generation, &items[..middle]);
+        let candidate = complete_wire(
+            request_id,
+            generation,
+            &items[..middle],
+            terminal.summary.as_ref(),
+        );
         if fits(&candidate)? {
             low = middle;
         } else {
@@ -210,7 +221,12 @@ pub fn prepare_complete(
         }
     }
     encode(
-        &complete_wire(request_id, generation, &items[..low]),
+        &complete_wire(
+            request_id,
+            generation,
+            &items[..low],
+            terminal.summary.as_ref(),
+        ),
         MAX_FRAME_BYTES,
     )
 }
@@ -219,6 +235,8 @@ pub fn prepare_complete(
 struct CompleteWire<'a> {
     request_id: u64,
     outcome: CompleteOutcome<'a>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    summary: Option<&'a QuerySummary>,
 }
 
 #[derive(Serialize)]
@@ -229,7 +247,12 @@ struct CompleteOutcome<'a> {
     stop: StopReason,
 }
 
-const fn complete_wire(request_id: u64, generation: u64, items: &[SearchItem]) -> CompleteWire<'_> {
+const fn complete_wire<'a>(
+    request_id: u64,
+    generation: u64,
+    items: &'a [SearchItem],
+    summary: Option<&'a QuerySummary>,
+) -> CompleteWire<'a> {
     CompleteWire {
         request_id,
         outcome: CompleteOutcome {
@@ -238,6 +261,7 @@ const fn complete_wire(request_id: u64, generation: u64, items: &[SearchItem]) -
             items,
             stop: StopReason::OutputLimit,
         },
+        summary,
     }
 }
 

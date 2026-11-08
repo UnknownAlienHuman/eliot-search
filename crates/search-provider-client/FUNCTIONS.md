@@ -13,6 +13,11 @@ It validates the complete decoded terminal against literal, selection, retained 
 and item bound before returning QueryCompletion. It performs no materialization or on-the-fly source decoding.
 The CLI supplies native invocation settings, starts the original deadline before setup and owns safe rendering.
 
+The three QueryClient owned-child methods send include_summary=true and validate requested summary presence,
+selection/counts and Known revision/lag consistency along with the result. A typed Unavailable CONTROL observation
+preserves an otherwise valid query result. It does not excuse evidence/transport/cancellation failures. Legacy
+omitted/false wire requests retain their old shape; this is not a new CLI switch.
+
 The CLI explicitly calls enable_ctrl_c() before its query. Other callers leave signal handling disabled.
 The maintained Tokio listener is first polled and registered before child spawn, then the same pinned future
 remains in the existing I/O loop. A separate child process group routes terminal Ctrl-C through the parent
@@ -43,6 +48,13 @@ requests child termination then awaits reap. A kill request or kill_on_drop alon
 The two-second cleanup allowance bounds graceful servicing; the final OS wait is observed rather than detached
 or described as a hard OS timing guarantee. Independent Qdrant/server processes are never managed by this client.
 
+## Session summary binding
+
+OwnedQuerySession records Open's include_summary choice and requires WindowSummary.corpus presence to match it.
+Open/Continue pages keep the exact original summary; the client rejects changed page summaries. The CLI enables
+summary on Open before submission. Expand uses the original emitted item/representation without refreshing the
+summary or scanning current source rows. Existing finish/wait/EOF ownership remains unchanged.
+
 ## Removal and checks
 
 The former typed pairing/profile/grant/MAC/replay/TCP/native endpoint client and its exclusive example/fixtures
@@ -50,4 +62,5 @@ are physically retired, along with the Windows named-pipe adapter package. Gener
 the protocol owner with its real daemon/CLI consumers. Root/S1/P1/Q1 argv operations retain their existing route.
 
 The designated verifier owns one lock resolution and minimal locked protocol/client plus both-binary
-check/strict Clippy feedback. Native qualification uses the actual search consumer; no dummy provider is added.
+check/strict Clippy feedback. Native qualification uses the actual search consumer; no dummy provider is added. The deliberate SDK negative
+for a missing requested summary is NOT_RUN; source validation is not relabelled as that native case.

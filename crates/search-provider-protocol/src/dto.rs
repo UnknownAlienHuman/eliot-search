@@ -120,6 +120,9 @@ pub enum ClientFrame {
         remaining_ms: u64,
         /// The single shared query DTO.
         request: SearchRequest,
+        /// Include bounded published/control corpus facts in a successful terminal.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        include_summary: bool,
     },
     /// Start the sole raw literal execution on the same serviced connection.
     RawExact {
@@ -129,6 +132,9 @@ pub enum ClientFrame {
         remaining_ms: u64,
         /// Literal and pinned-source selection.
         request: RawExactRequest,
+        /// Include bounded published/control corpus facts in a successful terminal.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        include_summary: bool,
     },
     /// Search complete retained UTF-8 text on the same serviced connection.
     DecodedUtf8 {
@@ -138,6 +144,9 @@ pub enum ClientFrame {
         remaining_ms: u64,
         /// Literal and selected committed source identities.
         request: DecodedUtf8Request,
+        /// Include bounded published/control corpus facts in a successful terminal.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        include_summary: bool,
     },
     /// Cancel that same query without another work slot.
     Cancel {
@@ -147,6 +156,23 @@ pub enum ClientFrame {
 }
 
 impl ClientFrame {
+    /// Whether this data request requires a corpus summary on success.
+    #[must_use]
+    pub const fn include_summary(&self) -> bool {
+        match self {
+            Self::Query {
+                include_summary, ..
+            }
+            | Self::RawExact {
+                include_summary, ..
+            }
+            | Self::DecodedUtf8 {
+                include_summary, ..
+            } => *include_summary,
+            Self::Cancel { .. } => false,
+        }
+    }
+
     /// Validates correlation, finite duration and backend query bounds.
     pub fn validate(&self) -> Result<(), ProtocolError> {
         let request_id = match self {
@@ -154,6 +180,7 @@ impl ClientFrame {
                 request_id,
                 remaining_ms,
                 request,
+                ..
             } => {
                 if *remaining_ms == 0 || *remaining_ms > MAX_REMAINING_MS {
                     return Err(ProtocolError::InvalidMessage);
@@ -165,6 +192,7 @@ impl ClientFrame {
                 request_id,
                 remaining_ms,
                 request,
+                ..
             } => {
                 if *remaining_ms == 0 || *remaining_ms > MAX_REMAINING_MS {
                     return Err(ProtocolError::InvalidMessage);
@@ -176,6 +204,7 @@ impl ClientFrame {
                 request_id,
                 remaining_ms,
                 request,
+                ..
             } => {
                 if *remaining_ms == 0 || *remaining_ms > MAX_REMAINING_MS {
                     return Err(ProtocolError::InvalidMessage);
@@ -912,6 +941,99 @@ impl<'de> Deserialize<'de> for QueryOutcome {
     }
 }
 
+/// Why current CONTROL metadata could not be observed for a valid retained result.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub enum SummaryUnavailableReason {
+    /// Current metadata could not be read.
+    Unavailable,
+    /// Current metadata uses an unsupported source schema.
+    UnsupportedSchema,
+    /// Current metadata is malformed or contradicts the published revision.
+    Corrupt,
+}
+
+/// A bounded current-CONTROL observation, never a live-filesystem freshness claim.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "status", rename_all = "snake_case", deny_unknown_fields)]
+pub enum ControlObservation {
+    /// Current metadata was read in the pinned snapshot.
+    Known {
+        /// Corpus-wide wanted revision observed in CONTROL.
+        wanted_revision: u64,
+        /// True exactly when current CONTROL is newer than the published revision.
+        known_control_lag: bool,
+    },
+    /// Published counts remain known while current metadata is unavailable.
+    Unavailable {
+        /// Closed metadata-only cause; no numeric freshness value is invented.
+        reason: SummaryUnavailableReason,
+    },
+}
+
+/// Published and selected corpus facts independent of emitted cards and Raw completeness.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct QuerySummary {
+    /// Wanted revision captured by the pinned published generation.
+    pub published_wanted_revision: u64,
+    /// Total sources in that committed inventory, including Empty and Gap outcomes.
+    pub published_sources: u64,
+    /// Committed preparation Gap outcomes in the entire published inventory.
+    pub published_preparation_gaps: u64,
+    /// Sources in the original query's selected published scope.
+    pub selected_sources: u64,
+    /// Committed preparation Gap outcomes in that selected scope.
+    pub selected_preparation_gaps: u64,
+    /// Known current revision/lag, or a typed current-metadata observation failure.
+    pub control: ControlObservation,
+}
+
+impl QuerySummary {
+    /// Checks existing source bounds and corpus-wide CONTROL lag consistency.
+    pub const fn validate(&self) -> Result<(), ProtocolError> {
+        if self.published_sources > 4096
+            || self.published_preparation_gaps > self.published_sources
+            || self.selected_sources > self.published_sources
+            || self.selected_preparation_gaps > self.selected_sources
+            || self.selected_preparation_gaps > self.published_preparation_gaps
+        {
+            return Err(ProtocolError::InvalidMessage);
+        }
+        if self.selected_sources - self.selected_preparation_gaps
+            > self.published_sources - self.published_preparation_gaps
+        {
+            return Err(ProtocolError::InvalidMessage);
+        }
+        if let ControlObservation::Known {
+            wanted_revision,
+            known_control_lag,
+        } = &self.control
+            && (*wanted_revision < self.published_wanted_revision
+                || *known_control_lag != (*wanted_revision > self.published_wanted_revision))
+        {
+            return Err(ProtocolError::InvalidMessage);
+        }
+        Ok(())
+    }
+
+    fn validate_selection(&self, source_ids: Option<&[String]>) -> Result<(), ProtocolError> {
+        self.validate()?;
+        let selected = if let Some(ids) = source_ids {
+            u64::try_from(ids.len()).map_err(|_| ProtocolError::InvalidMessage)?
+        } else {
+            if self.selected_preparation_gaps != self.published_preparation_gaps {
+                return Err(ProtocolError::InvalidMessage);
+            }
+            self.published_sources
+        };
+        if self.selected_sources != selected {
+            return Err(ProtocolError::InvalidMessage);
+        }
+        Ok(())
+    }
+}
+
 /// The sole child-to-parent terminal for request one.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -920,6 +1042,9 @@ pub struct Terminal {
     pub request_id: u64,
     /// Complete application outcome.
     pub outcome: QueryOutcome,
+    /// Requested corpus facts; absent on old-wire or failed/cancelled terminals.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub summary: Option<QuerySummary>,
 }
 
 impl Terminal {
@@ -954,6 +1079,55 @@ impl Terminal {
         }
         if let QueryOutcome::DecodedUtf8 { result } = &self.outcome {
             result.validate(requested_limit)?;
+        }
+        if let Some(summary) = &self.summary {
+            summary.validate()?;
+            let selected = match &self.outcome {
+                QueryOutcome::Complete { .. } => {
+                    summary.validate_selection(None)?;
+                    summary.selected_sources
+                }
+                QueryOutcome::RawExact { result } => result.selected_sources,
+                QueryOutcome::DecodedUtf8 { result } => result.selected_sources,
+                QueryOutcome::Cancelled | QueryOutcome::Failed { .. } => {
+                    return Err(ProtocolError::InvalidMessage);
+                }
+            };
+            if summary.selected_sources != selected {
+                return Err(ProtocolError::InvalidMessage);
+            }
+        }
+        Ok(())
+    }
+
+    /// Binds outcome, summary presence and selected scope to the original data request.
+    pub fn validate_request(&self, request: &ClientFrame) -> Result<(), ProtocolError> {
+        request.validate()?;
+        let limit = match request {
+            ClientFrame::Query { request, .. } => request.limit,
+            ClientFrame::RawExact { request, .. } => request.limit,
+            ClientFrame::DecodedUtf8 { request, .. } => request.limit,
+            ClientFrame::Cancel { .. } => return Err(ProtocolError::InvalidMessage),
+        };
+        self.validate(limit)?;
+        let selection = match (request, &self.outcome) {
+            (ClientFrame::Query { .. }, QueryOutcome::Complete { .. }) => None,
+            (ClientFrame::RawExact { request, .. }, QueryOutcome::RawExact { result }) => {
+                result.validate_request(request)?;
+                request.source_ids.as_deref()
+            }
+            (ClientFrame::DecodedUtf8 { request, .. }, QueryOutcome::DecodedUtf8 { result }) => {
+                result.validate_request(request)?;
+                request.source_ids.as_deref()
+            }
+            (_, QueryOutcome::Cancelled | QueryOutcome::Failed { .. }) => return Ok(()),
+            _ => return Err(ProtocolError::InvalidMessage),
+        };
+        if self.summary.is_some() != request.include_summary() {
+            return Err(ProtocolError::InvalidMessage);
+        }
+        if let Some(summary) = &self.summary {
+            summary.validate_selection(selection)?;
         }
         Ok(())
     }
@@ -1016,6 +1190,9 @@ pub enum SessionClientFrame {
         /// Fixed lifetime from accepted Open before work or pinning; never renewed.
         #[serde(default = "default_window_ttl")]
         ttl_ms: u64,
+        /// Cache corpus facts from Open for the original window lifetime.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        include_summary: bool,
     },
     /// Page only the stored original result prefix, without rescanning or repinning.
     Continue {
@@ -1204,6 +1381,9 @@ pub struct WindowSummary {
     pub complete_negative: Option<bool>,
     /// Original query presentation completeness, distinct from a page's output cut.
     pub result_stop: StopReason,
+    /// Original Open corpus facts, unchanged throughout this window.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub corpus: Option<QuerySummary>,
 }
 
 /// One whole-item page prepared against the current committed cursor.
@@ -1232,6 +1412,9 @@ impl WindowPage {
     pub fn validate(&self) -> Result<(), ProtocolError> {
         validate_window_id(self.window_id)?;
         let summary = &self.summary;
+        if let Some(corpus) = &summary.corpus {
+            corpus.validate()?;
+        }
         if summary.generation == 0
             || usize::from(summary.retained_items) > MAX_ITEMS
             || self.start_index > self.next_index
@@ -1465,6 +1648,14 @@ impl WindowPage {
     ) -> Result<(), ProtocolError> {
         self.validate()?;
         query.validate()?;
+        if let Some(corpus) = &self.summary.corpus {
+            let selection = match query {
+                WindowQuery::Search(_) => None,
+                WindowQuery::Raw(request) => request.source_ids.as_deref(),
+                WindowQuery::DecodedUtf8(request) => request.source_ids.as_deref(),
+            };
+            corpus.validate_selection(selection)?;
+        }
         validate_page_size(page_size)?;
         let expected = usize::from(page_size)
             .min(usize::from(self.summary.retained_items).saturating_sub(emitted.len()));

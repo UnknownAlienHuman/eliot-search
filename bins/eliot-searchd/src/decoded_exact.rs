@@ -184,7 +184,7 @@ pub fn execute(
     request: &DecodedUtf8Request,
     deadline: Instant,
     cancel: &AtomicBool,
-) -> Result<DecodedUtf8Result> {
+) -> Result<(DecodedUtf8Result, u64)> {
     check(deadline, cancel)?;
     request
         .validate()
@@ -211,7 +211,18 @@ pub fn execute(
         .items
         .try_reserve_exact(usize::from(request.limit))
         .map_err(|_| QueryFailure::Code("QUERY_ALLOCATION_FAILED"))?;
+    let mut preparation_gaps = 0_u64;
     for entry in inventory {
+        if matches!(
+            entry
+                .preparation
+                .outcome
+                .as_ref()
+                .map(|outcome| outcome.result),
+            Some(PreparationOutcome::Gap { .. })
+        ) {
+            preparation_gaps += 1;
+        }
         scan_source(
             root,
             &entry,
@@ -235,5 +246,5 @@ pub fn execute(
     result
         .validate_request(request)
         .map_err(|error| QueryFailure::Code(error.code()))?;
-    Ok(result)
+    Ok((result, preparation_gaps))
 }

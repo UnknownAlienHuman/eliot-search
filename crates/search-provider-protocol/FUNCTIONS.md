@@ -3,12 +3,13 @@
 ## Actual API
 
 `SearchRequest { query, limit }` is shared by CLI and daemon. `ClientFrame` has JSON tag `type`:
-Query, RawExact and DecodedUtf8 carry `request_id = 1`, `remaining_ms` and `request`; Cancel carries that same ID.
+Query, RawExact and DecodedUtf8 carry `request_id = 1`, `remaining_ms`, `request` and optional include_summary;
+Cancel carries that same ID. include_summary defaults false and is omitted when false, preserving legacy shape.
 Query UTF-8 is nonempty, at most 4096 bytes, without NUL; limit is 1..=64. Remaining duration is
 1..=120000 milliseconds. The parent samples it at send and independently enforces its original deadline.
 The receiver charges observed partial-frame time to the duration; processes never exchange Instant values.
 
-`Terminal { request_id, outcome }` has one `QueryOutcome` tagged `status`: Complete contains
+`Terminal { request_id, outcome, summary? }` has one `QueryOutcome` tagged `status`: Complete contains
 generation, ordered items and stop (complete/output_limit); RawExact/DecodedUtf8 contain their separately validated results;
 Cancelled contains no result; Failed carries
 a validated 1..=64 byte uppercase/digit/underscore FailureCode. Unknown and duplicate DTO fields fail.
@@ -28,6 +29,21 @@ The daemon resolves evidence and its captured source/preparation from the same p
 verifies both retained objects and decoder/range/line bindings, and supplies the full unit. The wire's
 structural checks do not perform those storage/backend checks.
 
+## Query scope summary
+
+A successful opted-in terminal carries QuerySummary; old-wire/false requests omit summary. It contains
+published_wanted_revision, published_sources, published_preparation_gaps, selected_sources and
+selected_preparation_gaps. ControlObservation is Known { wanted_revision, known_control_lag } or Unavailable
+with the closed reason Unavailable, UnsupportedSchema or Corrupt. Known lag is exactly current wanted > published
+wanted; neither branch claims filesystem freshness. Counts describe published preparation outcomes, not emitted
+cards or Raw scan completeness. A preparation gap alone does not invalidate a complete Raw negative.
+
+Validation enforces the existing 4096-source bound, subset/gap counts and selected non-gap <= published non-gap,
+plus request selection and revision/lag consistency. Requested successful summary presence is checked; metadata-
+only Unavailable is a valid header, not an empty result or suppressed evidence failure. Cancelled/Failed omit it.
+Session Open has the same default-false include_summary; WindowSummary.corpus caches the original header for
+every page. Existing total frame limits include the encoded summary; no quota is raised.
+
 ## Raw Exact request and result
 
 RawExactRequest { literal, source_ids, limit } uses a nonempty UTF-8 String of at most 4096 bytes as a literal
@@ -44,7 +60,7 @@ verified/scanned and zero matches/missing input. OutputLimit describes an emitte
 The client validates literal bytes, selection and limit against the complete correlated result.
 
 prepare_raw_exact encodes the producer's already bounded whole-item prefix under the same 8 MiB total frame
-cap; it clips no match/range and rejects an oversized frame. Ranked prepare_complete below retains its own
+cap, including its optional summary; it clips no match/range and rejects an oversized frame. Ranked prepare_complete below retains its own
 whole-card sizing behavior. Both operation variants use the existing Cancel/terminal/EOF/reap path.
 
 ## Retained DecodedUtf8 request and result
@@ -72,7 +88,7 @@ MAX_BODY_BYTES is four fewer. MAX_CLIENT_FRAME_BYTES is 28672, including the pre
 consumes only the current frame, preserving visibility of extra/trailing bytes. Callers use cancellation-safe
 read/write operations with explicit cursors; Cancel bytes never enter a partial data frame.
 
-`prepare_complete(request_id, generation, items)` validates all supplied items, then uses capped real-Serde
+`prepare_complete(request_id, generation, items, summary)` validates all supplied items/header, then uses capped real-Serde
 counting passes to select the largest whole rank prefix. It serializes the final fitting terminal before any
 output byte. Omitted tail items produce OutputLimit. No 25 MiB body is allocated and no unit/frame is clipped.
 A terminal is exposed only after complete decode, correlation, count, rank, finite-score, citation and text-byte

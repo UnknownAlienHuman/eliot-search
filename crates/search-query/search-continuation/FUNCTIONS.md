@@ -38,6 +38,12 @@ Open/Continue page_size is 1..64, default 16. Pages expose window_id, start_inde
 whole WindowEntry values with zero-based item_index, has_more and page_stop. Frame-size cuts retain whole items
 under the existing 8 MiB total cap. has_more concerns stored entries, not unbounded matches.
 
+Open's optional include_summary defaults false for legacy SDK/wire callers; the current CLI enables it.
+When requested, WindowSummary.corpus contains the original QuerySummary from the pinned RO snapshot. It is
+cached unchanged across pages and offline Expand; Continue/Expand never refresh current CONTROL or live files
+for this header. Metadata-only Unavailable preserves valid results. Real encoded summary bytes count toward
+whole-page frame fitting under the same cap.
+
 The fixed TTL starts at accepted Open BEFORE query work/root acquisition/pinning; default and maximum are
 120000 ms. Access, Continue and Expand never renew it. Each operation's remaining_ms is also bounded by the
 original window expiry. Later source/preparation changes cannot replace the pinned inventory or representation.
@@ -81,6 +87,12 @@ cursor 63 then 64. All 64 texts/ranges were byte-exact at 65536 bytes each. Fram
 bytes, each <=8388608. Sol independently verified the v4 raw stdout/hash. Session wait, both EOFs and OS
 absence were observed; query CONTROL/objects remained unchanged.
 
+A10's separate fixed9cfa native scope verified offline Expand over exact 183-byte [0,183) original data/refs,
+then a page with the unchanged cached header: published wanted 1, current wanted 2, known lag true and published
+sources/gaps 4/1. The earlier out-of-range +8 context request correctly returned WINDOW_RANGE_INVALID; it is
+not failed valid expansion proof. TTL and 8 MiB boundary cases were not requalified for A10; prior scopes above
+remain distinct. See the [candidate checkpoint](../../../docs/audit/ANALYSIS_REGISTRY.md#a10-v1-candidate).
+
 Exact pre-exit worker/root release timing remains UNKNOWN; SDK-only unread remains NOT_PROVEN and is not
 a separate selected gate. The earlier v1 Gridstore os3 cause remains UNKNOWN; short-path PASS does not
 establish its cause. Setup init/one-shot daemon observer remains UNKNOWN wherever not actually observed.
@@ -89,5 +101,5 @@ These scopes do not qualify the whole project, other platforms or an installed f
 The current prepared-representation producer is saved UTF-8 identity. New extracted/parser/nonidentity routes
 are not selected gates before M1, and historical Markdown/JATS are not restored. Unavailable representations
 remain explicit. The [stopped-root owner](../../search-runtime/search-retention/FUNCTIONS.md#stopped-root-local-object-collection)
-now has the delivered collector slice; its checks and remaining archive/import work stay in that recipe and
-the registry. Window qualification is not a claim that archive/import or the whole product is complete.
+owns the delivered selected GC/export/import scopes; its exact evidence stays in that recipe and the registry.
+Window qualification does not establish completion of V1 or the whole product.

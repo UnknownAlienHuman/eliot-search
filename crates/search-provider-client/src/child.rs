@@ -144,6 +144,7 @@ async fn exchange(
                     request_id: QUERY_REQUEST_ID,
                     remaining_ms: 1,
                     request,
+                    include_summary: true,
                 },
                 limit,
             )
@@ -155,6 +156,7 @@ async fn exchange(
                     request_id: QUERY_REQUEST_ID,
                     remaining_ms: 1,
                     request,
+                    include_summary: true,
                 },
                 limit,
             )
@@ -166,6 +168,7 @@ async fn exchange(
                     request_id: QUERY_REQUEST_ID,
                     remaining_ms: 1,
                     request,
+                    include_summary: true,
                 },
                 limit,
             )
@@ -285,17 +288,7 @@ async fn exchange(
                     if let Some(frame) = incoming.frame() {
                         if !query_sent { return Err(ClientError::Protocol(search_provider_protocol::ProtocolError::InvalidMessage)); }
                         let decoded = decode_terminal_frame(frame, requested_limit)?;
-                        match (&query, &decoded.outcome) {
-                            (ClientFrame::Query { .. }, QueryOutcome::Complete { .. })
-                            | (_, QueryOutcome::Cancelled | QueryOutcome::Failed { .. }) => {}
-                            (ClientFrame::RawExact { request, .. }, QueryOutcome::RawExact { result }) => {
-                                result.validate_request(request)?;
-                            }
-                            (ClientFrame::DecodedUtf8 { request, .. }, QueryOutcome::DecodedUtf8 { result }) => {
-                                result.validate_request(request)?;
-                            }
-                            _ => return Err(ClientError::Protocol(search_provider_protocol::ProtocolError::InvalidMessage)),
-                        }
+                        decoded.validate_request(&query)?;
                         terminal = Some(decoded);
                         // EOF releases the daemon's one process-scoped input
                         // reader before we wait for its owned worker to join.
@@ -412,7 +405,7 @@ pub struct Session {
     closing: Option<PendingSessionRequest>,
     cancelled_request: Option<u64>,
     last_id: u64,
-    query: Option<WindowQuery>,
+    query: Option<(WindowQuery, bool)>,
     summary: Option<WindowSummary>,
     emitted: Vec<WindowEntry>,
     lifetime_end: Option<Instant>,
@@ -551,8 +544,13 @@ impl Session {
         // the daemon simply observes a gap between transmitted request identities.
         self.last_id = id;
         match &message {
-            SessionClientFrame::Open { query, ttl_ms, .. } if self.query.is_none() => {
-                self.query = Some(query.clone());
+            SessionClientFrame::Open {
+                query,
+                ttl_ms,
+                include_summary,
+                ..
+            } if self.query.is_none() => {
+                self.query = Some((query.clone(), *include_summary));
                 self.lifetime_end = Some(
                     Instant::now()
                         .checked_add(Duration::from_millis(*ttl_ms))
@@ -784,16 +782,16 @@ impl Session {
                 | SessionClientFrame::Continue { page_size, .. },
                 SessionOutcome::Page { page },
             ) => {
-                if self.summary.as_ref().is_some_and(|s| s != &page.summary) {
+                let (query, include_summary) = self
+                    .query
+                    .as_ref()
+                    .ok_or(search_provider_protocol::ProtocolError::InvalidMessage)?;
+                if page.summary.corpus.is_some() != *include_summary
+                    || self.summary.as_ref().is_some_and(|s| s != &page.summary)
+                {
                     return Err(search_provider_protocol::ProtocolError::InvalidMessage.into());
                 }
-                page.validate_request(
-                    self.query
-                        .as_ref()
-                        .ok_or(search_provider_protocol::ProtocolError::InvalidMessage)?,
-                    &self.emitted,
-                    *page_size,
-                )?;
+                page.validate_request(query, &self.emitted, *page_size)?;
                 self.summary = Some(page.summary.clone());
                 self.emitted.extend(page.items.iter().cloned());
             }

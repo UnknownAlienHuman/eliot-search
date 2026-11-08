@@ -44,6 +44,7 @@ fn terminal(items: Vec<SearchItem>) -> Terminal {
             items,
             stop: StopReason::Complete,
         },
+        summary: None,
     }
 }
 
@@ -65,6 +66,7 @@ fn fragmented_frame_keeps_prefix_body_and_trailing_bytes_visible() {
             query: "needle\r\n😀".into(),
             limit: 64,
         },
+        include_summary: false,
     };
     let frame = encode_client_frame(&message).expect("encode");
     let mut partial = FrameBuffer::new(MAX_CLIENT_FRAME_BYTES).expect("buffer");
@@ -132,6 +134,7 @@ fn closed_schema_rejects_duplicate_unknown_and_wrong_direction_fields() {
     let terminal = encode_terminal_frame(&Terminal {
         request_id: 1,
         outcome: QueryOutcome::Cancelled,
+        summary: None,
     })
     .expect("terminal");
     assert_eq!(
@@ -147,7 +150,7 @@ fn closed_schema_rejects_duplicate_unknown_and_wrong_direction_fields() {
 fn whole_worst_escaped_units_stop_at_largest_fitting_rank_prefix() {
     let text = "\u{1}".repeat(MAX_UNIT_TEXT_BYTES);
     let items = (1..=64).map(|rank| hit(rank, &text)).collect();
-    let bytes = prepare_complete(1, 1, items).expect("bounded terminal");
+    let bytes = prepare_complete(1, 1, items, None).expect("bounded terminal");
     assert!(bytes.len() <= MAX_FRAME_BYTES);
     assert_eq!(
         usize::try_from(u32::from_le_bytes(bytes[..4].try_into().expect("prefix")))
@@ -178,8 +181,8 @@ fn whole_worst_escaped_units_stop_at_largest_fitting_rank_prefix() {
 #[test]
 fn double_escaped_full_units_need_output_stop_without_shrinking_units() {
     let text = "\\".repeat(MAX_UNIT_TEXT_BYTES);
-    let bytes =
-        prepare_complete(1, 1, (1..=64).map(|rank| hit(rank, &text)).collect()).expect("frame");
+    let bytes = prepare_complete(1, 1, (1..=64).map(|rank| hit(rank, &text)).collect(), None)
+        .expect("frame");
     let decoded = decode_terminal_frame(&bytes, 64).expect("terminal");
     let QueryOutcome::Complete { items, stop, .. } = decoded.outcome else {
         panic!("complete");
@@ -258,7 +261,7 @@ fn invalid_late_item_is_rejected_before_any_output_prefix_is_prepared() {
     };
     last.evidence.prepared.digest = "invalid".into();
     assert_eq!(
-        prepare_complete(1, 1, items),
+        prepare_complete(1, 1, items, None),
         Err(ProtocolError::InvalidMessage)
     );
 }

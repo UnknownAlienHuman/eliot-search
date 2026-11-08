@@ -40,6 +40,7 @@ impl Window {
         path: &Path,
         endpoint: Option<&str>,
         query: &WindowQuery,
+        include_summary: bool,
         expires: Instant,
         deadline: Instant,
         cancel: &AtomicBool,
@@ -65,8 +66,9 @@ impl Window {
             scan_complete: None,
             complete_negative: None,
             result_stop: StopReason::Complete,
+            corpus: None,
         };
-        match query {
+        let (selected_sources, selected_preparation_gaps) = match query {
             WindowQuery::Search(request) => {
                 let endpoint = endpoint.ok_or(QueryFailure::Code("QUERY_ENDPOINT_REQUIRED"))?;
                 items.extend(
@@ -74,24 +76,36 @@ impl Window {
                         .into_iter()
                         .map(WindowItem::Search),
                 );
+                (view.generation.source_count, view.generation.gap_count)
             }
             WindowQuery::Raw(request) => {
-                let result = raw_exact::execute(&root, &view, request, deadline, cancel)?;
+                let (result, gaps) = raw_exact::execute(&root, &view, request, deadline, cancel)?;
                 summary.found_matches = Some(result.matches);
                 summary.scan_complete = Some(result.scan_complete);
                 summary.complete_negative = Some(result.complete_negative);
                 summary.result_stop = result.stop;
                 items.extend(result.items.into_iter().map(WindowItem::Raw));
+                (result.selected_sources, gaps)
             }
             WindowQuery::DecodedUtf8(request) => {
-                let result = decoded_exact::execute(&root, &view, request, deadline, cancel)?;
+                let (result, gaps) =
+                    decoded_exact::execute(&root, &view, request, deadline, cancel)?;
                 summary.found_matches = Some(result.matches);
                 summary.scan_complete = Some(result.scan_complete);
                 summary.complete_negative = Some(result.complete_negative);
                 summary.result_stop = result.stop;
                 items.extend(result.items.into_iter().map(WindowItem::DecodedUtf8));
+                (result.selected_sources, gaps)
             }
-        }
+        };
+        summary.corpus = super::query_summary(
+            &view,
+            selected_sources,
+            selected_preparation_gaps,
+            include_summary,
+            deadline,
+            cancel,
+        )?;
         summary.retained_items =
             u8::try_from(items.len()).map_err(|_| QueryFailure::Code("WINDOW_ITEM_LIMIT"))?;
         check(deadline, cancel)?;

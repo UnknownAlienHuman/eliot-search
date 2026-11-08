@@ -10,6 +10,10 @@ U1 now connects read-only search returning verified full retained units and cita
 passed at c843171; initial Unicode publications at 20c31 and earlier 2ae transport/budget cases retain their
 separate scopes. This is Windows debug qualification, not an installed baseline or the complete product.
 See the [exact source, artifacts and verification scope](docs/audit/ANALYSIS_REGISTRY.md#evidence-status).
+Candidate9cfa adds the bounded query header and scoped Windows/Release scale/isolated installed observations.
+V1 remains IN_PROGRESS: query-family CPU is UNKNOWN, full meaningful workflow demonstrations are pending,
+and mandatory replacement high-water <=4 GiB is NOT_MEASURED. The candidate is not claimed already landed
+on main or qualified as the complete product.
 
 ## Index and search
 
@@ -177,6 +181,20 @@ The CLI uses one owned framed daemon child; root/view guards remain live through
 observes child exit/reap. CONTROL and backend collections are unchanged by search. See the
 [query evidence rule](crates/search-query/search-candidate-validator/FUNCTIONS.md) and
 [wire bounds](crates/search-provider-protocol/FUNCTIONS.md#framing-and-bounded-output).
+
+## Query scope header
+
+Current Search/Raw/DecodedUtf8 CLI results include Terminal.summary; session pages use WindowSummary.corpus.
+It reports published wanted revision, published/selected source and preparation-gap counts, then either Known
+CONTROL wanted/lag or a typed Unavailable reason. Known CONTROL lag is not live-filesystem freshness; a metadata-
+only Unavailable observation does not discard a valid result. Actual evidence corruption still fails. Raw may
+prove a complete negative despite a published preparation gap because it verifies undecoded retained Source.
+Session pages/Expand retain the original cached summary. There is no new CLI flag or implicit refresh.
+
+The isolated candidate install ran initialize, index PATH, bare index, Search, Raw, Decoded and collect-objects
+with all seven commands exiting 0, outside the checkout and without --daemon. Actual default sibling path/hash
+was verified. These are candidate smokes, not full V1 acceptance; exact limits/unknowns are in the
+[checkpoint](docs/audit/ANALYSIS_REGISTRY.md#a10-v1-candidate).
 
 ## Raw literal Exact
 

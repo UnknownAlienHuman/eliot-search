@@ -1,6 +1,6 @@
 # Work register
 
-Current checkpoint, 2026-11-07: R1 is accepted at its separately recorded Windows functional and
+Current checkpoint, 2026-11-08: R1 is accepted at its separately recorded Windows functional and
 ordinary-repo-1 optimized RELEASE fixed-input scopes. Source 9e57418039d8e0effdb2edfd6b9e33d633e9e1c3
 is source-reviewed with changed-owner check/strict Clippy/build gates passed. The fixed-input run is
 FULL_RELEASE_PASS on its stated sampling/evidence basis; this is not DEBUG query, universal peak,
@@ -14,27 +14,39 @@ changed-owner gates and scoped Windows/Release A/B/C plus Busy/import-marker ref
 Core corrections/archive export have final Sol SOURCE PASS at 597, whole-tree-equivalent to rebased source
 6137dcc27e2957010474a4ead0dec4c4e49ca33b. Import source 708621c19e85d946c7db82ba64aedd00a306f952 has Sol SOURCE PASS,
 changed-owner gates and completed selected native handbacks below. M1 GC/export/import is DONE only in its
-recorded Windows/Release scopes. V1 is READY; whole-project/installed final-head qualification remains NOT_RUN.
+recorded Windows/Release scopes. Candidate9cfa34674b7657bb75b68cf449ab0def4196506e has A10 SOURCE PASS, combined
+locked check/strict Clippy/RELEASE success and scoped native outcomes below. V1 is IN_PROGRESS: query-family
+CPU is UNKNOWN, full required workflow demonstrations remain pending and mandatory replacement high-water
+<=4 GiB is NOT_MEASURED. Candidate evidence is not a
+landed-main claim or whole-product/final accepted installed-baseline qualification.
 
 <a id="resume"></a>
 <a id="resume-after-interruption"></a>
 ## Next task
 
-**V1 next: bounded known-freshness/preparation-gap summary, then relevance/scale and isolated installed qualification.**
-Use existing CONTROL/publication state in the same pinned snapshot, thread the bounded summary through the
-actual query/window DTO and CLI consumer, and preserve read-only/no-corpus-scan semantics. Product
-[scope summary](../product/AGENT_ANALYSIS_FRAMEWORK.md#orient-an-unfamiliar-repository) is required; filename lookup,
-ranked subsets, extended diagnostics and explicit Ready repair are not automatically selected gates.
+**V1 IN_PROGRESS — next close three concrete gaps.**
+1. Independently establish complete query-family average CPU against the existing <=8-core limit. Missing daemon
+   counters leave it UNKNOWN; a conservative hardware upper bound above the limit is not observed budget failure.
+2. Demonstrate the full meaningful ordinary-source workflows in
+   [Evidence for delivery](../product/AGENT_ANALYSIS_FRAMEWORK.md#evidence-for-delivery); Raman's supplemental
+   native examples are in progress. Ranked top5 coverage of 3/5 declared definitions and 4/5 callers remains
+   diagnostic: there is no numeric 5/5 acceptance gate, and those misses do not establish a source defect.
+   Exact results and correct citations do not replace the required workflow demonstrations.
+3. Measure transient generation-replacement high-water against the existing <=4 GiB limit for ordinary-repo-1.
+   Neither the old 9e run nor final9cfa fixed-input workload measured replacement. An independent native worker
+   has a separate new root/endpoint; result is pending. This mandatory gate is NOT_MEASURED, not PASS.
 
-Then qualify real-repository usefulness, ordinary-repo-1 scale under its unchanged declared budgets and a final-head
-installed CLI/daemon sibling pair in an isolated owned directory. Keep actual source/build/binary scope, byte-exact
-citations, wait/EOF/reap and UNKNOWN observations explicit; do not relabel the earlier 9e resource run.
+A10's bounded [scope summary](../product/AGENT_ANALYSIS_FRAMEWORK.md#orient-an-unfamiliar-repository) is connected
+at candidate9cfa. Declared scale timings/citations and isolated sibling installed commands have scoped outcomes
+below. Preserve true-peak/replacement/observer UNKNOWN limits and exact source/build provenance. The candidate
+was locally committed/unpushed at this checkpoint; no main build or landed-main result is claimed. Filename
+lookup, ranked subsets, extended diagnostics and explicit Ready repair are not automatically selected gates.
 M1 GC/export/import is DONE only in its recorded Windows/Release scopes. Existing Busy/marker refusals remain
 separate evidence; normal opening still refuses incomplete imports.
 The scratch bookkeeping bound is source-reviewed, not a universal native RAM benchmark. Cooperating root
 exclusion does not make unlink atomic against external same-account renames.
 X1's selected Windows/Release scope remains DONE. Stronger UNKNOWN/NOT_PROVEN limits remain unchanged.
-V1/installed final head and the whole project are not qualified.
+V1 and the whole project are not qualified; recorded candidate installed smokes do not qualify a final accepted main baseline.
 
 R1's persisted unknown Insert/ABA, postcommit/pre-view interruption and fef held-view exclusion/cleanup are
 separately pinned native evidence. The 9e RELEASE resource run does not relabel those cases. Complete unsampled
@@ -63,7 +75,7 @@ DONE below is the named delivered scope, not completion of the product.
 | X1 / DONE, Windows/Release selected scope | R1 | CLI/OwnedQuerySession/daemon window owner | Final Sol PASS: Raw/Decoded/ranked, lifetime/held-output/selection and real 63+1 frame cut at recorded scopes. |
 | M1 / DONE, selected Windows/Release scopes | X1 | Stopped-root collector/export/import owners | Recorded GC/export scopes plus source708 served import, binding guards, exact retry, interrupted-copy and uncertain-backend recovery; stronger UNKNOWN limits remain below. |
 | O1 / DEFERRED | Connected baseline + actual need | [Selected depth](../product/AGENT_ANALYSIS_FRAMEWORK.md#optional-depth) | Add only an actual source-backed consumer; remove unused scaffolds. |
-| V1 / READY | X1/M1 selected shipped paths | [Qualification](../implementation/TEST_CUTOVER.md), #215; existing CONTROL/query/CLI owners | Bounded known-freshness/preparation-gap summary, real-repository relevance, declared-corpus scale and isolated installed/final-head evidence; not yet qualified. |
+| V1 / IN_PROGRESS | X1/M1 selected shipped paths | [Qualification](../implementation/TEST_CUTOVER.md), #215; current CONTROL/query/CLI owners | A10 connected; close CPU <=8.0 cores, full meaningful workflows and mandatory replacement high-water <=4 GiB (NOT_MEASURED). Ranked 3/5 definitions, 4/5 callers are diagnostic, not a numeric gate. |
 
 [Implementation](../implementation/README.md#delivery-sequence) owns delivery order. Stage 3B is conditional
 on measured Stage 3A budgets failing; there is no separate global rewrite programme.
@@ -107,6 +119,66 @@ hydration reuse. No application encryption, grants, OS-secret platform or second
 <a id="execution-evidence"></a>
 ## Verification and known blockers
 
+<a id="a10-v1-candidate"></a>
+### A10 and V1 candidate evidence, source 9cfa3467
+
+- Source 9cfa34674b7657bb75b68cf449ab0def4196506e has Sol SOURCE PASS after the selected-non-gap subset inequality
+  fix; combined locked check/strict Clippy and RELEASE builds passed. The actual optimized x86_64-pc-windows-msvc
+  Rust/Cargo 1.98.0 build used default features and existing incremental=true. The owner built frozen DTO-fix
+  bytes matching committed 9cfa; no fresh main build is claimed. CLI SHA256 FD27FC557FABA23F96DCFCCF670397CD914068F4C928A3278DF93644465E9C29;
+  daemon SHA256 36E605008B751F3D091FE527B5A0061860E32024B763028F66CF636F8C067961.
+- QuerySummary carries published wanted/counts, selected source/preparation-gap counts and Known CONTROL
+  wanted/lag or closed Unavailable reason. The observation is O(1), in the same pinned RO transaction, with no
+  SourceRow/FS scan or live freshness claim. Metadata-only failure preserves valid results; actual evidence
+  corruption and deadline/cancel still fail. WindowSummary.corpus is cached unchanged and encoded frame fitting
+  includes its real bytes under the unchanged cap.
+- Rawls's earlier 2d38/old708 strict-client and explicit-false cases preserved legacy Search/Raw/Decoded/Open
+  shape. Opted-in header had published wanted 1, sources/gaps 4/1 and current wanted 1/lag false; entire, Gap,
+  Empty and [] selections reported 4/1, 1/1, 1/0 and 0/0. Raw scanned 434 bytes with a verified complete negative
+  despite a preparation Gap. UUIDs/refs/ranges/bytes matched the independent oracle.
+- Metadata-only source_schema [3] or wanted below published yielded Unavailable UnsupportedSchema/Corrupt while
+  Raw/Decoded/Search outcomes stayed identical and the recorded other publication/evidence/object hashes stayed
+  unchanged. Actual corrupt evidence returned typed OBJECT_INTEGRITY_FAILURE. Fixed9cfa offline Expand verified
+  exact 183 bytes [0,183)/refs; the subsequent page retained the original published 1/current 2/lag true,
+  sources/gaps 4/1 header. The earlier out-of-range +8 request's WINDOW_RANGE_INVALID was a correct refusal.
+- Rawls's 32 direct process records retain their recorded wait/EOF/OS-absence scopes; fast descendants remain
+  UNKNOWN. Original base/prior 901 backend files were unchanged and owned roots/processes released. SDK negative for missing requested summary is NOT_RUN;
+  no proxy/mock-server API was added. TTL/8 MiB boundaries were not requalified; prior qualified logic and actual
+  source fitting remain distinct. Records are under
+  C:\Development\Rust\targets\task-v1-summary-native\run-20261107-v1, including native-result.json,
+  preservation-final.json and window-corrected-result.json.
+- Raman's final candidate handback:
+  C:\Development\Rust\targets\task-v1-native\run-20261107-v1\native-final-handback-9cfa-v1.json.
+  Canonical ordinary-repo-1 used 1000 files/128 MiB, 120 ordered queries (24 x 5, limit 5), no excluded warmups.
+  Index 27.0817921 s, noop 2.4713219 s, p95 184.179 ms, max 938.2595 ms, 7.5196423 qps; all 600/600 cards had
+  independently checked retained bytes/refs/ranges. Timings/throughput met their declared limits; this is not
+  FULL_RELEASE_PASS because query-family average CPU remains UNKNOWN.
+- Cleanup after 600.3119877 s had current generation 1, pending null, known retired backlog 0, one collection/
+  7971 points. Observed product WS 33,361,920 B, handles 230, disk 275,680,151 B; Qdrant OS-lifetime WS peak
+  713,224,192 B, sampled handles 432, all-backend final 839,792,100 B and observed fixed-input high-water
+  940,344,754 B were below their respective limits on the reported basis. Unsampled product/short-lived-child
+  WS/handles/disk peaks remain UNKNOWN; mandatory replacement high-water <=4 GiB is NOT_MEASURED
+  (replacement NOT_EXERCISED here or in the old 9e fixed-input run).
+  The whole 120-query phase's
+  CONTROL-before hash was not captured; helper/watch preservation observations keep their separate scopes.
+- Complete product query-family CPU is not independently proven: 120 daemon CPU observations were unknown
+  (119 workers externally unobserved). The recorded lower bound 0.0763714 cores and conservative hardware upper
+  31.020239 cores do not establish the <=8-core gate, and the upper bound is not an observed CPU failure.
+- Real repository: 349 sources/516 points; bounded ranked top5 covered 3/5 declared definitions and 4/5 callers.
+  These counts are diagnostic, not a numeric 5/5 gate or proof of source defect. Full meaningful workflow
+  demonstrations remain a separate required qualification; supplemental native examples are in progress.
+  Raw and Decoded each found all 5 definitions; returned quotations/refs/ranges were verified. Public Open/Expand
+  was verified; Continue/Close used one necessary new Open after a DTO-only observer assertion, without repeating
+  the Index/search/exact/Expand batch. Compiler-resolved call truth and extracted producers are not claimed.
+- Isolated installed pair, outside checkout, ran initialize/index PATH/bare index/Search/Raw/Decoded/GC:
+  all 7 commands exited 0; public Open/Expand/Continue/Close passed. No --daemon was supplied; only the child
+  override was removed, and actual default sibling path/hash matched the recorded daemon. No global PATH/auth/
+  settings changes. Fast one-shot child counters and installed Qdrant numeric exit remain UNKNOWN after the
+  finalizer observer race. Final handback has no owned survivors/held handles and disposed root-release probes.
+- V1 remains IN_PROGRESS with the CPU/workflow-demonstration/replacement-high-water gaps above. Old 9e RELEASE evidence and observer failures retain
+  their own scopes; no measured Index/noop/120-query batch was rerun or rewritten. Whole-product/final accepted
+  installed-baseline PASS, other-platform, power-loss and wire lost-ACK qualification are not claimed.
+
 <a id="m1-import-delivery"></a>
 ### Served-baseline import delivery, Windows/Release
 
@@ -148,8 +220,8 @@ hydration reuse. No application encryption, grants, OS-secret platform or second
   Raman final guards: C:\Development\Rust\targets\task-m1-import-native\run-20261107-v1\708621c1-guards-v1\native-final-handback-708-v1.json.
   Earlier primary evidence remains d5a202bf-native-v1/result.json. Helper read-only sync OS5 and receipt filename
   collision remain preserved observer failures, not product failures; no replacement product runs were made.
-- M1 DONE applies only to the selected Windows/Release GC/export/import paths. V1 READY is future work:
-  A10 bounded summary, relevance/scale and isolated installed/final-head qualification. Whole-product/installed
+- At the 708 checkpoint, M1 DONE applied only to selected Windows/Release GC/export/import paths and V1 READY
+  was future work; later A10/candidate qualification is above. Whole-product/installed
   PASS, cross-OS native proof and stronger unclaimed power-loss/wire/pre-spawn boundaries are not established.
 
 <a id="core-corrections-and-archive-export"></a>
