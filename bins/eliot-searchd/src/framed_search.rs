@@ -13,12 +13,13 @@ use std::sync::{Arc, mpsc};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
-use search_control_redb::publication::{PublishedView, pin_published};
+use search_control_redb::publication::{PublicationError, PublishedView, pin_published};
 use search_provider_protocol::{
-    ClientFrame, DecodedUtf8Request, FailureCode, FrameBuffer, MAX_CLIENT_FRAME_BYTES,
-    MAX_REMAINING_MS, ProtocolError, QUERY_REQUEST_ID, QueryOutcome, RawExactRequest,
-    SearchRequest, Terminal, decode_client_frame, encode_terminal_frame, prepare_complete,
-    prepare_decoded_utf8, prepare_raw_exact,
+    ClientFrame, ControlObservation, DecodedUtf8Request, FailureCode, FrameBuffer,
+    MAX_CLIENT_FRAME_BYTES, MAX_REMAINING_MS, ProtocolError, QUERY_REQUEST_ID, QueryOutcome,
+    QuerySummary, RawExactRequest, SearchRequest, SummaryUnavailableReason, Terminal,
+    decode_client_frame, encode_terminal_frame, prepare_complete, prepare_decoded_utf8,
+    prepare_raw_exact,
 };
 use search_runtime_owner::{PlainRootGuard, open_plain};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -33,9 +34,53 @@ const CLEANUP_ALLOWANCE: Duration = Duration::from_secs(5);
 type Encoded = Result<Vec<u8>, ProtocolError>;
 
 enum Request {
-    Search(SearchRequest),
-    RawExact(RawExactRequest),
-    DecodedUtf8(DecodedUtf8Request),
+    Search(SearchRequest, bool),
+    RawExact(RawExactRequest, bool),
+    DecodedUtf8(DecodedUtf8Request, bool),
+}
+
+fn query_summary(
+    view: &PublishedView,
+    selected_sources: u64,
+    selected_preparation_gaps: u64,
+    include_summary: bool,
+    deadline: Instant,
+    cancel: &AtomicBool,
+) -> Result<Option<QuerySummary>, QueryFailure> {
+    crate::exact_literal::check(deadline, cancel)?;
+    if !include_summary {
+        return Ok(None);
+    }
+    let observed = view.current_wanted_revision(deadline, cancel);
+    // An observation I/O error must not hide a concurrent cancellation/deadline.
+    crate::exact_literal::check(deadline, cancel)?;
+    let control = match observed {
+        Ok(wanted_revision) => ControlObservation::Known {
+            wanted_revision,
+            known_control_lag: wanted_revision > view.generation.wanted_revision,
+        },
+        Err(PublicationError::Cancelled) => return Err(QueryFailure::Cancelled),
+        Err(PublicationError::Deadline) => return Err(QueryFailure::Deadline),
+        Err(error) => ControlObservation::Unavailable {
+            reason: match error {
+                PublicationError::Database => SummaryUnavailableReason::Unavailable,
+                PublicationError::UnsupportedSchema => SummaryUnavailableReason::UnsupportedSchema,
+                _ => SummaryUnavailableReason::Corrupt,
+            },
+        },
+    };
+    let summary = QuerySummary {
+        published_wanted_revision: view.generation.wanted_revision,
+        published_sources: view.generation.source_count,
+        published_preparation_gaps: view.generation.gap_count,
+        selected_sources,
+        selected_preparation_gaps,
+        control,
+    };
+    summary
+        .validate()
+        .map_err(|error| QueryFailure::Code(error.code()))?;
+    Ok(Some(summary))
 }
 impl Request {
     fn execute(
@@ -47,26 +92,66 @@ impl Request {
         cancel: &AtomicBool,
     ) -> Encoded {
         match self {
-            Self::Search(request) => {
+            Self::Search(request, include_summary) => {
                 let Some(endpoint) = endpoint else {
                     return stopped(QueryFailure::Code("QUERY_ENDPOINT_REQUIRED"));
                 };
-                match verified_query::execute(root, view, endpoint, request, deadline, cancel) {
-                    Ok(items) => {
-                        prepare_complete(QUERY_REQUEST_ID, view.generation.sequence, items)
+                let completed =
+                    verified_query::execute(root, view, endpoint, request, deadline, cancel)
+                        .and_then(|items| {
+                            let summary = query_summary(
+                                view,
+                                view.generation.source_count,
+                                view.generation.gap_count,
+                                *include_summary,
+                                deadline,
+                                cancel,
+                            )?;
+                            Ok((items, summary))
+                        });
+                match completed {
+                    Ok((items, summary)) => {
+                        prepare_complete(QUERY_REQUEST_ID, view.generation.sequence, items, summary)
                     }
                     Err(error) => stopped(error),
                 }
             }
-            Self::RawExact(request) => {
-                match raw_exact::execute(root, view, request, deadline, cancel) {
-                    Ok(result) => prepare_raw_exact(QUERY_REQUEST_ID, result),
+            Self::RawExact(request, include_summary) => {
+                let completed = raw_exact::execute(root, view, request, deadline, cancel).and_then(
+                    |(result, gaps)| {
+                        let summary = query_summary(
+                            view,
+                            result.selected_sources,
+                            gaps,
+                            *include_summary,
+                            deadline,
+                            cancel,
+                        )?;
+                        Ok((result, summary))
+                    },
+                );
+                match completed {
+                    Ok((result, summary)) => prepare_raw_exact(QUERY_REQUEST_ID, result, summary),
                     Err(error) => stopped(error),
                 }
             }
-            Self::DecodedUtf8(request) => {
-                match decoded_exact::execute(root, view, request, deadline, cancel) {
-                    Ok(result) => prepare_decoded_utf8(QUERY_REQUEST_ID, result),
+            Self::DecodedUtf8(request, include_summary) => {
+                let completed = decoded_exact::execute(root, view, request, deadline, cancel)
+                    .and_then(|(result, gaps)| {
+                        let summary = query_summary(
+                            view,
+                            result.selected_sources,
+                            gaps,
+                            *include_summary,
+                            deadline,
+                            cancel,
+                        )?;
+                        Ok((result, summary))
+                    });
+                match completed {
+                    Ok((result, summary)) => {
+                        prepare_decoded_utf8(QUERY_REQUEST_ID, result, summary)
+                    }
                     Err(error) => stopped(error),
                 }
             }
@@ -97,6 +182,7 @@ fn stopped(failure: QueryFailure) -> Encoded {
     encode_terminal_frame(&Terminal {
         request_id: QUERY_REQUEST_ID,
         outcome,
+        summary: None,
     })
 }
 fn worker_result(
@@ -224,18 +310,21 @@ impl Exchange {
             ClientFrame::Query {
                 remaining_ms,
                 request,
+                include_summary,
                 ..
-            } => (remaining_ms, Request::Search(request)),
+            } => (remaining_ms, Request::Search(request, include_summary)),
             ClientFrame::RawExact {
                 remaining_ms,
                 request,
+                include_summary,
                 ..
-            } => (remaining_ms, Request::RawExact(request)),
+            } => (remaining_ms, Request::RawExact(request, include_summary)),
             ClientFrame::DecodedUtf8 {
                 remaining_ms,
                 request,
+                include_summary,
                 ..
-            } => (remaining_ms, Request::DecodedUtf8(request)),
+            } => (remaining_ms, Request::DecodedUtf8(request, include_summary)),
             ClientFrame::Cancel { .. } => {
                 if !self.admitted {
                     return Err("QUERY_CANCEL_WITHOUT_REQUEST");

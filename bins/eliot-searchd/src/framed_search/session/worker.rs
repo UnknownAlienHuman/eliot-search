@@ -104,13 +104,17 @@ fn execute(
     let request_id = job.message.request_id();
     match &job.message {
         SessionClientFrame::Open {
-            query, page_size, ..
+            query,
+            page_size,
+            include_summary,
+            ..
         } => {
             let expires = job.expires.ok_or(QueryFailure::Code("WINDOW_NOT_OPEN"))?;
             *window = Some(Window::open(
                 root,
                 endpoint,
                 query,
+                *include_summary,
                 expires,
                 job.deadline,
                 &job.cancel,

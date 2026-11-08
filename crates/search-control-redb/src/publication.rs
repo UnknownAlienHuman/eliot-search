@@ -1506,6 +1506,29 @@ pub struct PublishedView {
     database: ReadOnlyDatabase,
 }
 impl PublishedView {
+    /// Observes current CONTROL's wanted guard from this same pinned read snapshot.
+    /// This does not audit current rows or establish live-filesystem freshness.
+    ///
+    /// # Errors
+    /// Current-only schema/I/O failures describe unavailable summary state; callers
+    /// must preserve valid retained evidence. Cancellation/deadline remain operation failures.
+    pub fn current_wanted_revision(&self, deadline: Instant, cancel: &AtomicBool) -> Result<u64> {
+        check(deadline, cancel)?;
+        let observed =
+            crate::current_source::observed_wanted_revision(&self.transaction, deadline, cancel)
+                .map_err(source_error)?;
+        let revision = match observed {
+            Some(revision) => revision,
+            None if self.generation.source_count == 0 && self.generation.wanted_revision == 0 => 0,
+            None => return Err(PublicationError::Corrupt),
+        };
+        if revision < self.generation.wanted_revision {
+            return Err(PublicationError::Corrupt);
+        }
+        check(deadline, cancel)?;
+        Ok(revision)
+    }
+
     /// Reads one captured source from this same pinned committed generation.
     ///
     /// # Errors

@@ -13,7 +13,7 @@ use std::time::Instant;
 
 use redb_plain::{
     Database, ReadOnlyDatabase, ReadTransaction, ReadableDatabase, ReadableTable,
-    ReadableTableMetadata, TableDefinition, TableHandle, WriteTransaction,
+    ReadableTableMetadata, TableDefinition, TableError, TableHandle, WriteTransaction,
 };
 use search_contracts::{Blake3Digest32, SourceId, SourceNamespaceId};
 use search_source_registry::{
@@ -1020,6 +1020,53 @@ pub(super) fn wanted_revision(transaction: &ReadTransaction) -> Result<u64, Sour
                 .map_err(|_| SourceControlError::Corrupt)?,
         ))
     })
+}
+
+fn source_table_present(
+    transaction: &ReadTransaction,
+    definition: TableDefinition<&[u8], &[u8]>,
+) -> Result<bool, SourceControlError> {
+    match transaction.open_table(definition) {
+        Ok(_) => Ok(true),
+        Err(TableError::TableDoesNotExist(_)) => Ok(false),
+        Err(TableError::Storage(_)) => Err(SourceControlError::Database),
+        Err(_) => Err(SourceControlError::UnsupportedSchema),
+    }
+}
+
+pub(super) fn observed_wanted_revision(
+    transaction: &ReadTransaction,
+    deadline: Instant,
+    cancellation: &AtomicBool,
+) -> Result<Option<u64>, SourceControlError> {
+    check(deadline, cancellation)?;
+    // Only fixed table/header reads: no current-row, preparation or locator inventory.
+    let rows = source_table_present(transaction, SOURCE_ROWS)?;
+    let locators = source_table_present(transaction, SOURCE_LOCATORS)?;
+    let preparations =
+        source_table_present(transaction, TableDefinition::new(PREPARATION_TABLE_NAME))?;
+    let state = match transaction.open_table(SOURCE_STATE) {
+        Ok(state) => state,
+        Err(TableError::TableDoesNotExist(_)) if !rows && !locators && !preparations => {
+            return Ok(None);
+        }
+        Err(TableError::Storage(_)) => return Err(SourceControlError::Database),
+        Err(_) => return Err(SourceControlError::UnsupportedSchema),
+    };
+    if !rows || !locators {
+        return Err(SourceControlError::UnsupportedSchema);
+    }
+    let version = state
+        .get(SCHEMA_VERSION_KEY)
+        .map_err(|_| SourceControlError::Database)?
+        .ok_or(SourceControlError::Corrupt)?;
+    if !supported_source_schema(version.value()) {
+        return Err(SourceControlError::UnsupportedSchema);
+    }
+    read_namespace(transaction)?.ok_or(SourceControlError::Corrupt)?;
+    let revision = wanted_revision(transaction)?;
+    check(deadline, cancellation)?;
+    Ok(Some(revision))
 }
 
 pub(super) fn write_wanted_revision(

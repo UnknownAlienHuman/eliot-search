@@ -8,12 +8,13 @@ mod error;
 mod frame;
 
 pub use dto::{
-    ClientFrame, DecodedUtf8Gap, DecodedUtf8Item, DecodedUtf8Match, DecodedUtf8Request,
-    DecodedUtf8Result, EvidenceMetadata, ExpansionContent, FailureCode, ObjectKindDto,
-    ObjectRefDto, QueryOutcome, RawExactGap, RawExactItem, RawExactMatch, RawExactRequest,
-    RawExactResult, RawSourceRef, SearchGap, SearchHit, SearchItem, SearchRequest,
-    SessionClientFrame, SessionOutcome, SessionReply, StopReason, Terminal, WindowEntry,
-    WindowExpansion, WindowItem, WindowPage, WindowQuery, WindowSummary,
+    ClientFrame, ControlObservation, DecodedUtf8Gap, DecodedUtf8Item, DecodedUtf8Match,
+    DecodedUtf8Request, DecodedUtf8Result, EvidenceMetadata, ExpansionContent, FailureCode,
+    ObjectKindDto, ObjectRefDto, QueryOutcome, QuerySummary, RawExactGap, RawExactItem,
+    RawExactMatch, RawExactRequest, RawExactResult, RawSourceRef, SearchGap, SearchHit, SearchItem,
+    SearchRequest, SessionClientFrame, SessionOutcome, SessionReply, StopReason,
+    SummaryUnavailableReason, Terminal, WindowEntry, WindowExpansion, WindowItem, WindowPage,
+    WindowQuery, WindowSummary,
 };
 pub use error::ProtocolError;
 pub use frame::{
