@@ -44,10 +44,10 @@ pub fn validate_served_corpus(
             || !locators.insert(source.locator.as_slice())
             || source.source_id != preparation.source_id
             || source.source_namespace_id != preparation.source_namespace_id
-            || !preparation
-                .outcome
-                .as_ref()
-                .is_some_and(|o| o.matches_input(source, preparation.settings))
+            || !preparation.outcome.as_ref().is_some_and(|o| {
+                o.source_row_revision <= source.row_revision
+                    && o.matches_input(source, preparation.settings)
+            })
         {
             return Err(E::Corrupt);
         }
