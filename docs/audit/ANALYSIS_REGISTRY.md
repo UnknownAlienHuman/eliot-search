@@ -14,45 +14,51 @@ changed-owner gates and scoped Windows/Release A/B/C plus Busy/import-marker ref
 Core corrections/archive export have final Sol SOURCE PASS at 597, whole-tree-equivalent to rebased source
 6137dcc27e2957010474a4ead0dec4c4e49ca33b. Import source 708621c19e85d946c7db82ba64aedd00a306f952 has Sol SOURCE PASS,
 changed-owner gates and completed selected native handbacks below. M1 GC/export/import is DONE only in its
-recorded Windows/Release scopes. Candidate9cfa34674b7657bb75b68cf449ab0def4196506e has A10 SOURCE PASS, combined
-locked check/strict Clippy/RELEASE success and scoped native outcomes below. V1 is IN_PROGRESS: query-family
-CPU is UNKNOWN, full required workflow demonstrations remain pending and mandatory replacement high-water
-<=4 GiB is NOT_MEASURED. Candidate evidence is not a
-landed-main claim or whole-product/final accepted installed-baseline qualification.
+recorded Windows/Release scopes. A10 landed in PR643/main2a0462a6 with Rust source equal to
+9cfa34674b7657bb75b68cf449ab0def4196506e. SOURCE PASS and locked check/strict Clippy/RELEASE provenance remain
+at those frozen binary inputs; no fresh main build is claimed. Sol WORKFLOW PASS and CPU_GATE PASS close their
+recorded supplemental gates below. Ptolemy's replacement run passes the observed-disk scope. V1 is DONE for
+the concrete Windows/Release ordinary-repo-1, real-repository workflows and isolated installed scope, with
+sampled/UNKNOWN limits retained. No universal platform, cold-cache, unsampled-peak or fresh main build claim follows.
 
 <a id="resume"></a>
 <a id="resume-after-interruption"></a>
 ## Next task
 
-**V1 IN_PROGRESS — next close three concrete gaps.**
-1. Independently establish complete query-family average CPU against the existing <=8-core limit. Missing daemon
-   counters leave it UNKNOWN; a conservative hardware upper bound above the limit is not observed budget failure.
-2. Demonstrate the full meaningful ordinary-source workflows in
-   [Evidence for delivery](../product/AGENT_ANALYSIS_FRAMEWORK.md#evidence-for-delivery); Raman's supplemental
-   native examples are in progress. Ranked top5 coverage of 3/5 declared definitions and 4/5 callers remains
-   diagnostic: there is no numeric 5/5 acceptance gate, and those misses do not establish a source defect.
-   Exact results and correct citations do not replace the required workflow demonstrations.
-3. Measure transient generation-replacement high-water against the existing <=4 GiB limit for ordinary-repo-1.
-   Neither the old 9e run nor final9cfa fixed-input workload measured replacement. An independent native worker
-   has a separate new root/endpoint; result is pending. This mandatory gate is NOT_MEASURED, not PASS.
+**Selected delivery register closed: V1 DONE at the recorded Windows/Release scope.**
+CPU-family, full meaningful workflows and observed replacement disk gates have actual consumer outcomes below.
+No other READY unfinished mandatory row remains; O1 stays DEFERRED and is not automatically promoted.
+The manager owns the final coherent landing after Sol's independent bounded resource/docs review. That review
+is not claimed already passed by this update; no additional native run or source task is invented.
 
-A10's bounded [scope summary](../product/AGENT_ANALYSIS_FRAMEWORK.md#orient-an-unfamiliar-repository) is connected
-at candidate9cfa. Declared scale timings/citations and isolated sibling installed commands have scoped outcomes
-below. Preserve true-peak/replacement/observer UNKNOWN limits and exact source/build provenance. The candidate
-was locally committed/unpushed at this checkpoint; no main build or landed-main result is claimed. Filename
-lookup, ranked subsets, extended diagnostics and explicit Ready repair are not automatically selected gates.
+The first long-backend-root baseline failed Gridstore OS3 before replacement, leaving preserved unserved/unknown
+state. The fresh short direct v1r8 operator-storage run exercised replacement successfully. Exact long-path
+dependency cause remains UNKNOWN; this is not a universal MAX_PATH limit, product fix or application profile change.
+
+Sol has accepted the separate complete query-family CPU bound and full meaningful
+[workflow examples](../product/AGENT_ANALYSIS_FRAMEWORK.md#evidence-for-delivery). The older 3/5 definitions,
+4/5 callers remain diagnostic, not a numeric 5/5 gate or source defect. Descendant CPU decomposition remains
+UNKNOWN but is not a missing total-family gate after the conservative aggregate bound passed.
+
+A10's bounded [scope summary](../product/AGENT_ANALYSIS_FRAMEWORK.md#orient-an-unfamiliar-repository) is on
+main2a0462a6; measured binaries retain their source9cfa provenance. Original scale timings/citations and isolated
+sibling installed commands keep their recorded scopes below. CPU-only supplement timings do not replace the
+canonical performance baseline or establish cold-cache behavior. Preserve true-peak/observer UNKNOWN
+limits. Filename lookup, ranked subsets, extended diagnostics and explicit Ready repair are not automatically
+selected gates.
 M1 GC/export/import is DONE only in its recorded Windows/Release scopes. Existing Busy/marker refusals remain
 separate evidence; normal opening still refuses incomplete imports.
 The scratch bookkeeping bound is source-reviewed, not a universal native RAM benchmark. Cooperating root
 exclusion does not make unlink atomic against external same-account renames.
 X1's selected Windows/Release scope remains DONE. Stronger UNKNOWN/NOT_PROVEN limits remain unchanged.
-V1 and the whole project are not qualified; recorded candidate installed smokes do not qualify a final accepted main baseline.
+V1 closes the selected register with recorded source9cfa binary/installed provenance; it does not qualify arbitrary platforms or universal peaks.
 
 R1's persisted unknown Insert/ABA, postcommit/pre-view interruption and fef held-view exclusion/cleanup are
 separately pinned native evidence. The 9e RELEASE resource run does not relabel those cases. Complete unsampled
-product peaks and generation-replacement peak remain UNKNOWN/NOT_RUN; exact pre-spawn timing, wire-level
+product/replacement peaks remain UNKNOWN beyond the reported samples; the observed replacement disk gate is
+qualified separately below. Exact pre-spawn timing, wire-level
 lost-ACK/original delayed RPC and real power loss remain NOT_RUN, not newly invented prerequisites.
-After the delivered M1 slices, V1 qualification remains the next unfinished delivery; no whole-product PASS follows.
+After the recorded V1 completion there is no further READY mandatory delivery; optional depth requires an actual selected need.
 Do not restore a deleted task queue or add a concurrent view framework by default: root exclusion remains.
 
 <a id="work-register"></a>
@@ -75,7 +81,7 @@ DONE below is the named delivered scope, not completion of the product.
 | X1 / DONE, Windows/Release selected scope | R1 | CLI/OwnedQuerySession/daemon window owner | Final Sol PASS: Raw/Decoded/ranked, lifetime/held-output/selection and real 63+1 frame cut at recorded scopes. |
 | M1 / DONE, selected Windows/Release scopes | X1 | Stopped-root collector/export/import owners | Recorded GC/export scopes plus source708 served import, binding guards, exact retry, interrupted-copy and uncertain-backend recovery; stronger UNKNOWN limits remain below. |
 | O1 / DEFERRED | Connected baseline + actual need | [Selected depth](../product/AGENT_ANALYSIS_FRAMEWORK.md#optional-depth) | Add only an actual source-backed consumer; remove unused scaffolds. |
-| V1 / IN_PROGRESS | X1/M1 selected shipped paths | [Qualification](../implementation/TEST_CUTOVER.md), #215; current CONTROL/query/CLI owners | A10 connected; close CPU <=8.0 cores, full meaningful workflows and mandatory replacement high-water <=4 GiB (NOT_MEASURED). Ranked 3/5 definitions, 4/5 callers are diagnostic, not a numeric gate. |
+| V1 / DONE, selected Windows/Release scope | X1/M1 selected shipped paths | [Qualification](../implementation/TEST_CUTOVER.md), #215 | Actual ordinary-repo-1 performance/CPU/observed replacement disk, full real-repository workflows and isolated installed pair. Source9cfa/main2a Rust equivalence; scope/UNKNOWN limits below. |
 
 [Implementation](../implementation/README.md#delivery-sequence) owns delivery order. Stage 3B is conditional
 on measured Stage 3A budgets failing; there is no separate global rewrite programme.
@@ -151,22 +157,24 @@ hydration reuse. No application encryption, grants, OS-secret platform or second
   C:\Development\Rust\targets\task-v1-native\run-20261107-v1\native-final-handback-9cfa-v1.json.
   Canonical ordinary-repo-1 used 1000 files/128 MiB, 120 ordered queries (24 x 5, limit 5), no excluded warmups.
   Index 27.0817921 s, noop 2.4713219 s, p95 184.179 ms, max 938.2595 ms, 7.5196423 qps; all 600/600 cards had
-  independently checked retained bytes/refs/ranges. Timings/throughput met their declared limits; this is not
-  FULL_RELEASE_PASS because query-family average CPU remains UNKNOWN.
+  independently checked retained bytes/refs/ranges. Timings/throughput met their declared limits. That original
+  handback did not claim FULL_RELEASE_PASS because its query-family CPU was UNKNOWN; the separate CPU supplement
+  below closes the CPU gate without replacing these canonical timings.
 - Cleanup after 600.3119877 s had current generation 1, pending null, known retired backlog 0, one collection/
   7971 points. Observed product WS 33,361,920 B, handles 230, disk 275,680,151 B; Qdrant OS-lifetime WS peak
   713,224,192 B, sampled handles 432, all-backend final 839,792,100 B and observed fixed-input high-water
   940,344,754 B were below their respective limits on the reported basis. Unsampled product/short-lived-child
-  WS/handles/disk peaks remain UNKNOWN; mandatory replacement high-water <=4 GiB is NOT_MEASURED
-  (replacement NOT_EXERCISED here or in the old 9e fixed-input run).
+  WS/handles/disk peaks remain UNKNOWN. In that fixed-input run replacement high-water <=4 GiB was NOT_MEASURED
+  (replacement NOT_EXERCISED there or in old9e); the later observed replacement result is recorded below.
   The whole 120-query phase's
   CONTROL-before hash was not captured; helper/watch preservation observations keep their separate scopes.
-- Complete product query-family CPU is not independently proven: 120 daemon CPU observations were unknown
-  (119 workers externally unobserved). The recorded lower bound 0.0763714 cores and conservative hardware upper
-  31.020239 cores do not establish the <=8-core gate, and the upper bound is not an observed CPU failure.
+- Original fixed-input query-family CPU observations remain UNKNOWN: 120 daemon observations were unknown
+  (119 workers externally unobserved). That recorded lower bound 0.0763714 cores and loose hardware upper
+  31.020239 cores did not establish the <=8-core gate or an observed CPU failure. They are not rewritten by
+  the later independently accepted aggregate supplement.
 - Real repository: 349 sources/516 points; bounded ranked top5 covered 3/5 declared definitions and 4/5 callers.
-  These counts are diagnostic, not a numeric 5/5 gate or proof of source defect. Full meaningful workflow
-  demonstrations remain a separate required qualification; supplemental native examples are in progress.
+  These counts remain diagnostic, not a numeric 5/5 gate or proof of source defect. The separate meaningful
+  workflow supplement below completed the required examples without changing rank heuristics.
   Raw and Decoded each found all 5 definitions; returned quotations/refs/ranges were verified. Public Open/Expand
   was verified; Continue/Close used one necessary new Open after a DTO-only observer assertion, without repeating
   the Index/search/exact/Expand batch. Compiler-resolved call truth and extracted producers are not claimed.
@@ -175,9 +183,49 @@ hydration reuse. No application encryption, grants, OS-secret platform or second
   override was removed, and actual default sibling path/hash matched the recorded daemon. No global PATH/auth/
   settings changes. Fast one-shot child counters and installed Qdrant numeric exit remain UNKNOWN after the
   finalizer observer race. Final handback has no owned survivors/held handles and disposed root-release probes.
-- V1 remains IN_PROGRESS with the CPU/workflow-demonstration/replacement-high-water gaps above. Old 9e RELEASE evidence and observer failures retain
-  their own scopes; no measured Index/noop/120-query batch was rerun or rewritten. Whole-product/final accepted
-  installed-baseline PASS, other-platform, power-loss and wire lost-ACK qualification are not claimed.
+- Sol WORKFLOW PASS: C:\Development\Rust\targets\task-v1-native\run-20261107-v1\workflow-supplement-9cfa-v1\workflow-final-evidence-9cfa.json
+  uses retained 349 sources/516 points. It demonstrates all required ordinary-source examples: useful entry points,
+  duplicate/mention ambiguity, implementation with relevant tests/docs (no test execution), selected comparison
+  with unsupported axes, known copies not treated as independent evidence, newer-source/published lag, truthful
+  Raw/Decoded/incomplete behavior and bounded paging/expansion. Actual quotes/refs/ranges and unsupported axes
+  remain explicit. The old ranked 3/5 and 4/5 observations are unchanged diagnostic results, not failures of a
+  numerical gate. CONTROL stayed unchanged, scale root was untouched and owned survivors were absent; fast
+  external daemon numeric observations retain UNKNOWN scope.
+- Sol CPU_GATE PASS: query-family-cpu-9cfa-v2/native-cpu-handback.json and independent-aggregation-check.json
+  under the same task-v1-native/run-20261107-v1 root record a NEW ordered 24 x 5/limit-5 query supplement.
+  All 120 commands exited 0; 360 lifetime processes were accounted, families were empty after every command
+  and both EOFs/waits plus backend release were observed. Accepted conservative product upper bound
+  sum(J+P)/sum(command wall)=0.61001448 cores <=8.0; possible double counting makes it an upper bound, not exact
+  decomposition. Separate Qdrant average was 0.01054027 cores <=16.0 and was not included in product jobs.
+  Descendant CPU remains UNKNOWN without leaving the total-family gate open.
+- CPU-only p95 91.4529 ms/max 170.2282 ms/16.1898534 qps are separate supplement observations. They do not
+  replace canonical Index 27.0817921 s/noop 2.4713219 s/p95 184.179 ms/max 938.2595 ms/7.5196423 qps,
+  and no cold-cache proof is claimed. Index/noop/cleanup and the original canonical batch were not rewritten.
+- Ptolemy replacement PASS at observed-disk scope: C:\Development\Rust\targets\task-v1-replacement-native\run-20261108-v1\attempt-short-20261108
+  contains final-summary.json, measurement.result.json and observer-scope.json. Binary source9cfa and FD27/36E6
+  pins matched. Fresh baseline exited 0 in 25.450 s; a genuine one-byte edit retained 1000 files/134217728 bytes.
+  Refresh exited 0 in 14.009 s, replacing generation 1 with 2, 7971 points/1016 pages.
+- Reported cleanup interval was 601.1256634 s; timer origin was after accepted refresh and before the cleanup
+  tick. It is not 600 seconds of server-only idle. Final current was generation 2, pending null, retired 0 and
+  exactly one backend collection. Observed backend high-water 1,780,153,608 B <=4 GiB; post-cleanup backend
+  839,792,099 B <=2 GiB; product storage 279,481,938 B <=1,342,177,280 B. All 515 disk samples were complete.
+  Combined product/backend bytes were observational with NO combined cap. Actual unsampled peak remains UNKNOWN;
+  this run did not remeasure CPU/RAM/handles, noop or the 120-query baseline.
+- CLI/daemon custody used the actual matching checked-wait consumer. Qdrant 23596 was guarded-stopped (-1),
+  waited/both EOF/OS gone; operator 44680 exited 0/gone and owned survivors were 0. The failed long-root state
+  remains preserved. Exact Gridstore OS3 dependency cause is UNKNOWN. A short directly selected operator backend
+  directory is valid under [operator ownership](../runtime/QDRANT_NATIVE_WINDOWS.md#baseline-product-mode),
+  not a universal MAX_PATH claim, product workaround or source change.
+- observer-scope.json preserves the optional legacy production_capture PUBLICATION_CORRUPT diagnostic. It was
+  not the product verdict: current/pending/retired facts came from the raw read-only publication_state/table_rows
+  oracle with unchanged CONTROL SHA256, matching production CLI success/wait and actual backend REST state.
+  The optional observer error is retained, not rewritten or hidden.
+- V1 is DONE only for the concrete Windows/Release ordinary-repo-1 observed resource scope, full meaningful
+  real-repository workflows and isolated installed pair, using source9cfa binaries with main2a Rust equivalence.
+  Canonical original timings, separate CPU-only supplement and replacement timings remain distinct. CPU J+P is
+  a conservative upper bound, not descendant decomposition; unsampled peaks, cold-cache, Unix/other-platform,
+  power-loss and wire lost-ACK claims are not made. Sol's independent resource review precedes publication;
+  no other READY mandatory row remains and O1 stays DEFERRED.
 
 <a id="m1-import-delivery"></a>
 ### Served-baseline import delivery, Windows/Release

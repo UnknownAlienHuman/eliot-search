@@ -10,10 +10,11 @@ U1 now connects read-only search returning verified full retained units and cita
 passed at c843171; initial Unicode publications at 20c31 and earlier 2ae transport/budget cases retain their
 separate scopes. This is Windows debug qualification, not an installed baseline or the complete product.
 See the [exact source, artifacts and verification scope](docs/audit/ANALYSIS_REGISTRY.md#evidence-status).
-Candidate9cfa adds the bounded query header and scoped Windows/Release scale/isolated installed observations.
-V1 remains IN_PROGRESS: query-family CPU is UNKNOWN, full meaningful workflow demonstrations are pending,
-and mandatory replacement high-water <=4 GiB is NOT_MEASURED. The candidate is not claimed already landed
-on main or qualified as the complete product.
+A10's bounded query header landed on main2a0462a6 with Rust equal to source9cfa; measured binaries retain their
+9cfa build provenance, not a fresh main build. Scoped Windows/Release scale/isolated installed observations and
+separate CPU/workflow and observed replacement disk results close V1 for the selected Windows/Release
+ordinary-repo-1, real-repository workflows and isolated installed scope. Actual unsampled peaks, cold-cache
+and other-platform qualification are not claimed; this is not a fresh main build.
 
 ## Index and search
 
@@ -193,7 +194,10 @@ Session pages/Expand retain the original cached summary. There is no new CLI fla
 
 The isolated candidate install ran initialize, index PATH, bare index, Search, Raw, Decoded and collect-objects
 with all seven commands exiting 0, outside the checkout and without --daemon. Actual default sibling path/hash
-was verified. These are candidate smokes, not full V1 acceptance; exact limits/unknowns are in the
+was verified. Separate CPU/workflow and observed replacement disk results complete the selected V1 scope without
+replacing the canonical performance baseline. Replacement observed high-water was 1,780,153,608 B <=4 GiB;
+post-cleanup backend was 839,792,099 B <=2 GiB, with unsampled peak UNKNOWN. These measurements are not cold-cache
+or cross-platform proof. Exact source9cfa scopes/limits are in the
 [checkpoint](docs/audit/ANALYSIS_REGISTRY.md#a10-v1-candidate).
 
 ## Raw literal Exact
@@ -264,8 +268,8 @@ The destination publishes with fresh backend identity and becomes usable only af
 removal. If interrupted, repeat this same command with --retry and the same ARCHIVE/DEST. Wrong bindings and
 populated markerless destinations refuse; preserve the partial destination rather than resetting it.
 
-M1 GC/export/import is qualified only at the recorded Windows/Release scopes. V1/installed final-head and the
-whole product remain unqualified. See the [import owner](crates/search-runtime/search-retention/FUNCTIONS.md#explicit-restoreimport-into-a-fresh-destination)
+M1 GC/export/import retains its recorded Windows/Release scopes. V1's selected ordinary-repo-1, workflow and
+isolated installed scope is complete; universal platform/peak qualification is not implied. See the [import owner](crates/search-runtime/search-retention/FUNCTIONS.md#explicit-restoreimport-into-a-fresh-destination)
 and [exact evidence](docs/audit/ANALYSIS_REGISTRY.md#m1-import-delivery).
 
 ## File, environment and CLI settings
@@ -312,5 +316,6 @@ CurrentSourceRecord. prepare-source consumes retained bytes and stores the compl
 outcome. publish-prepared connects those stored inputs to actual Qdrant/current/evidence/PublishedView.
 Read-only search returns verified retained units and citations from that pinned generation. Index now connects
 explicit file/tree retention, preparation and publication without manual SourceId assembly. Admission is durable,
-and bare index reloads it at writable startup. Foreground periodic watch is connected; broader peak/platform and installed-baseline qualification remain unfinished. Confirmed filesystem deletion excludes membership from
+and bare index reloads it at writable startup. Foreground periodic watch is connected; V1's selected installed
+scope is complete while universal peaks and other platforms remain unclaimed. Confirmed filesystem deletion excludes membership from
 new generations while preserving retained objects and pinned views. Inaccessible or partial inventory is not removal.
