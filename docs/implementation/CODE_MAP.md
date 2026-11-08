@@ -145,11 +145,12 @@ Do not restore deleted daemon implementations or unconsumed APIs because an olde
 
 That read-only query → pinned published evidence → verified retained text/citation → CLI path is connected.
 Scoped index, bare selection reload and foreground watch now use those helpers; R1's accepted scopes remain
-in the registry. X1 and M1 GC/export/import are DONE only in their selected Windows/Release scopes. Candidate9cfa
-connects QuerySummary; V1 is IN_PROGRESS with query-family CPU UNKNOWN, full meaningful workflow demonstrations
-pending and mandatory replacement high-water <=4 GiB NOT_MEASURED. Diagnostic ranked coverage is not a numeric
-5/5 gate. Candidate scale/installed
-observations are not a landed-main or whole-product PASS.
+in the registry. X1 and M1 GC/export/import are DONE only in their selected Windows/Release scopes. A10
+QuerySummary is on main2a0462a6 with unchanged Rust source9cfa. Separate Sol CPU/workflow supplements passed;
+V1 is DONE for selected Windows/Release ordinary-repo-1 resources (including observed replacement disk),
+real-repository workflows and isolated installed pair. Observed replacement high-water was 1,780,153,608 B
+<=4 GiB; unsampled actual peak remains UNKNOWN. Ranked coverage remains diagnostic. Retained source9cfa binary
+provenance is not a fresh main build or universal platform/peak claim; no READY mandatory row remains.
 Entry points and root exclusion are unchanged; no concurrent view framework is added by this documentation.
 Confirmed absence and inaccessible inventory stay distinct.
 Build the actual owners and delete displaced code with its callers. Root-only command checks, helper-native

@@ -124,11 +124,12 @@ ordinary read-only opens/queries do not repair.
 Persisted unknown Insert/ABA, postcommit/pre-view and held-query exclusion/cleanup have their separately pinned
 native scopes; the resource run does not relabel them. Fixed-input RELEASE measurement passed the declared
 profile with sampled/OS-reported counters; complete unsampled product peaks and generation-replacement peak
-remain UNKNOWN/NOT_RUN. DEBUG query performance is not qualified. See the registry for exact boundaries.
-X1 and M1 GC/export/import are DONE only in their selected Windows/Release scopes. V1 is IN_PROGRESS: candidate
-9cfa connects the bounded query summary and has scoped scale/installed observations; query-family CPU remains
-UNKNOWN, full required workflow demonstrations remain pending and mandatory replacement high-water <=4 GiB
-is NOT_MEASURED. V1/product completion is not claimed.
+remain UNKNOWN/NOT_RUN in that fixed-input run; later observed replacement disk evidence is separate. DEBUG
+query performance is not qualified. See the registry for exact boundaries.
+X1 and M1 GC/export/import are DONE only in their selected Windows/Release scopes. A10 is on main2a0462a6
+with Rust source equal to 9cfa. Sol accepted the separate CPU/workflow supplements; replacement passed its
+observed-disk scope. V1 is DONE for the recorded Windows/Release ordinary-repo-1, real-repository workflow and
+isolated installed scopes; no universal peak/platform or fresh main build claim follows.
 Search stays read-only; query and writer share exclusive root exclusion through flush, so a concurrent view
 manager is not the next prerequisite.
 
@@ -171,7 +172,7 @@ Query CONTROL/objects were preserved and session wait/both EOF/OS absence observ
 Exact pre-exit release timing remains UNKNOWN, SDK-only unread NOT_PROVEN is not a separate selected gate,
 and old Gridstore cause/setup observers retain their recorded UNKNOWN scope. No new extracted/parser/
 nonidentity producer is a selected gate before M1; saved UTF-8 identity is the current producer.
-Whole-project V1/installed final-head qualification remains NOT_RUN.
+Those X1 runs alone did not qualify V1/installed final-head delivery; the later selected V1 evidence is below.
 See the [window owner](../../crates/search-query/search-continuation/FUNCTIONS.md).
 
 ### 5. Maintenance and selected product depth
@@ -197,20 +198,31 @@ preserves portable Source/preparation facts and publishes fresh destination iden
 uses the stable root guard/recovery; no implicit reprepare, desired-state mixing or original backend replay.
 The selected native flows and UNKNOWN observations are in the [import checkpoint](../audit/ANALYSIS_REGISTRY.md#m1-import-delivery).
 
-V1 is IN_PROGRESS. Candidate9cfa implements the bounded known-CONTROL/preparation-gap summary required by
+V1 is DONE in the selected Windows/Release scope. A10 on main2a0462a6 (Rust equal to source9cfa) implements the bounded known-CONTROL/preparation-gap summary required by
 [product behavior](../product/AGENT_ANALYSIS_FRAMEWORK.md#orient-an-unfamiliar-repository): published/selected counts
 and Known wanted/lag or typed Unavailable from the same RO snapshot, with unchanged cached window facts.
 Metadata-only observation failure preserves valid retained results; this is not filesystem freshness.
 
-The candidate's declared ordinary-repo-1 timings/citations and isolated installed sibling smokes have scoped
-results. Three mandatory items remain: establish query-family CPU <=8.0 core equivalents, demonstrate the
-full meaningful ordinary-source [workflow examples](../product/AGENT_ANALYSIS_FRAMEWORK.md#evidence-for-delivery),
-and measure transient generation-replacement high-water <=4 GiB. Replacement high-water is NOT_MEASURED by
-either the old 9e or final9cfa fixed-input workload; a separate root/endpoint native run is pending.
-Supplemental native examples are in progress. Ranked top5 coverage (3/5 declared definitions, 4/5 callers)
-remains diagnostic, not a numeric 5/5 gate or proof of source defect. Correct citations/Exact checks alone do
-not establish all required workflows. Keep unobserved peaks and provenance explicit; see the
-[candidate evidence](../audit/ANALYSIS_REGISTRY.md#a10-v1-candidate). No landed-main or whole-V1 PASS is inferred.
+Original ordinary-repo-1 timings/citations and isolated installed sibling smokes retain their source9cfa scopes.
+Sol accepted the complete meaningful ordinary-source [workflow examples](../product/AGENT_ANALYSIS_FRAMEWORK.md#evidence-for-delivery)
+and a separate conservative query-family CPU upper bound 0.61001448 cores <=8.0 (Qdrant separately 0.01054027 <=16).
+Descendant CPU decomposition remains UNKNOWN, not an open total-family gate. Original performance metrics are
+unchanged; the new CPU-only query timings are not the canonical baseline or cold-cache proof. Ranked 3/5
+definitions and 4/5 callers remain diagnostic, not a numerical 5/5 gate. No test execution is claimed.
+
+The separate v1r8 replacement run passed observed-disk limits: genuine one-byte edit at 1000 files/128 MiB,
+refresh generation 1->2, 7971 points/1016 pages; observed backend high-water 1,780,153,608 B <=4 GiB,
+post-cleanup 839,792,099 B <=2 GiB and product 279,481,938 B <=1,342,177,280 B. The reported cleanup interval
+601.1256634 s has its origin after accepted refresh/before cleanup tick, not server-only idle; final current
+was generation 2/pending null/retired 0/one collection. There were 515 complete samples, no combined cap;
+actual unsampled peak is UNKNOWN and CPU/RAM/handles were not remeasured by that run.
+
+The long-root baseline failed Gridstore OS3 before replacement and remains preserved; exact cause is UNKNOWN.
+Short direct operator storage is valid, not a universal MAX_PATH limit or source fix. Optional legacy observer
+capture error and raw CONTROL oracle scope are retained in the
+[qualification evidence](../audit/ANALYSIS_REGISTRY.md#a10-v1-candidate). No other READY mandatory row remains;
+O1 stays DEFERRED. Final Sol bounded resource/docs review precedes publication. No fresh main build, cold-cache,
+Unix or universal unsampled-peak qualification is claimed.
 Optional #219/#239/#248/#334/#336 remain selected source-backed orientation/comparison/Git/document capabilities. Optional donors join existing
 consumers. No encryption or restricted-user phase. Qdrant Edge, if studied later, is a replacement experiment.
 
