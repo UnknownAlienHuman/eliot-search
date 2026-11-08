@@ -8,7 +8,7 @@ use search_control_redb::publication::{
 };
 use search_provider_protocol::{
     EvidenceMetadata, FailureCode, ObjectKindDto, ObjectRefDto, SearchGap, SearchHit, SearchItem,
-    SearchRequest,
+    SearchRequest, SourceInfo,
 };
 use search_qdrant_bridge::{Backend, BackendError, BackendLimits, Hit};
 use search_revision_store::{ObjectStoreError, read_object};
@@ -78,6 +78,7 @@ struct RankedPoint {
     rank: u8,
     hit: Hit,
     resolved: ResolvedPoint,
+    source_info: Option<SourceInfo>,
 }
 
 fn check(deadline: Instant, cancel: &AtomicBool) -> Result<()> {
@@ -142,6 +143,7 @@ fn gap(generation: u64, point: &RankedPoint, code: &'static str) -> Result<Searc
         score: point.hit.score,
         evidence: metadata(generation, point),
         code: FailureCode::new(code).map_err(|_| QueryFailure::Code("QUERY_INTERNAL_ERROR"))?,
+        source_info: point.source_info.clone(),
     }))
 }
 fn same_group(left: &RankedPoint, right: &RankedPoint) -> bool {
@@ -255,6 +257,7 @@ fn fill_group(
             score: point.hit.score,
             evidence: metadata(generation, point),
             unit_text,
+            source_info: point.source_info.clone(),
         }));
     }
     Ok(())
@@ -265,6 +268,7 @@ pub fn execute(
     view: &PublishedView,
     endpoint: &str,
     request: &SearchRequest,
+    include_source_info: bool,
     deadline: Instant,
     cancel: &AtomicBool,
 ) -> Result<Vec<SearchItem>> {
@@ -306,10 +310,13 @@ pub fn execute(
         if hit.source_id != resolved.evidence.source_id || !hit.score.is_finite() {
             return Err(QueryFailure::Code("QUERY_POINT_ROUTE_MISMATCH"));
         }
+        let source_info =
+            crate::exact_literal::source_info(&resolved.captured.source, include_source_info);
         points.push(RankedPoint {
             rank: u8::try_from(index + 1).map_err(|_| QueryFailure::Code("QUERY_LIMIT"))?,
             hit,
             resolved,
+            source_info,
         });
     }
     let mut slots: Vec<Option<SearchItem>> = (0..points.len()).map(|_| None).collect();

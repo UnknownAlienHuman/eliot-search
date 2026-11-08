@@ -117,6 +117,47 @@ pub fn source_ref(source: &CurrentSourceRecord) -> Result<RawSourceRef> {
     })
 }
 
+pub fn source_info(
+    source: &CurrentSourceRecord,
+    include: bool,
+) -> Option<search_provider_protocol::SourceInfo> {
+    use search_control_redb::current_source::{SourceControlError, source_path_from_locator};
+    use search_provider_protocol::{
+        SourceInfo, SourceInfoUnavailableReason as Reason, SourceLiveStatus,
+    };
+    if !include {
+        return None;
+    }
+    let unavailable = |reason| {
+        Some(SourceInfo::Unavailable {
+            reason,
+            live_status: SourceLiveStatus::NotChecked,
+        })
+    };
+    let path = match source_path_from_locator(&source.locator) {
+        Ok(path) => path,
+        Err(SourceControlError::UnsupportedPlatform) => {
+            return unavailable(Reason::UnsupportedPlatform);
+        }
+        Err(_) => return unavailable(Reason::InvalidLocator),
+    };
+    let Some(text) = path.to_str() else {
+        return unavailable(Reason::NonUnicodeLocator);
+    };
+    if text.len() > search_provider_protocol::MAX_UNIT_TEXT_BYTES {
+        return unavailable(Reason::OutputLimit);
+    }
+    let mut saved_path_hint = String::new();
+    if saved_path_hint.try_reserve_exact(text.len()).is_err() {
+        return unavailable(Reason::AllocationFailed);
+    }
+    saved_path_hint.push_str(text);
+    Some(SourceInfo::Available {
+        saved_path_hint,
+        live_status: SourceLiveStatus::NotChecked,
+    })
+}
+
 pub fn select_sources(
     mut inventory: Vec<CapturedSource>,
     ids: Option<&[String]>,

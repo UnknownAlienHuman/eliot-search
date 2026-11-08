@@ -136,6 +136,7 @@ pub fn execute(
         content: ExpansionContent::Raw {
             bytes_hex: String::new(),
         },
+        source_info: item.source_info().cloned(),
     };
     expansion.source_start = expansion.representation_start;
     expansion.source_end = expansion.representation_end;

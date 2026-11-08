@@ -3,8 +3,9 @@
 ## Actual API
 
 `SearchRequest { query, limit }` is shared by CLI and daemon. `ClientFrame` has JSON tag `type`:
-Query, RawExact and DecodedUtf8 carry `request_id = 1`, `remaining_ms`, `request` and optional include_summary;
-Cancel carries that same ID. include_summary defaults false and is omitted when false, preserving legacy shape.
+Query, RawExact and DecodedUtf8 carry `request_id = 1`, `remaining_ms`, `request` and optional include_summary /
+include_source_info. Cancel carries that same ID. Both flags default false and are omitted when false;
+include_source_info=false/omitted preserves the legacy result shape without source_info fields.
 Query UTF-8 is nonempty, at most 4096 bytes, without NUL; limit is 1..=64. Remaining duration is
 1..=120000 milliseconds. The parent samples it at send and independently enforces its original deadline.
 The receiver charges observed partial-frame time to the duration; processes never exchange Instant values.
@@ -28,6 +29,25 @@ Rank and score remain outside the immutable retained citation; no live-path clai
 The daemon resolves evidence and its captured source/preparation from the same published read snapshot,
 verifies both retained objects and decoder/range/line bindings, and supplies the full unit. The wire's
 structural checks do not perform those storage/backend checks.
+
+## Saved captured-source annotations
+
+include_source_info opts into optional source_info on Search/Raw/Decoded items and session evidence. Available
+contains saved_path_hint and live_status: not_checked. The hint is decoded from that pinned CapturedSource's
+saved native locator, not latest current-source state; it makes no live stat/open, existence, content or freshness
+claim. SourceId/ObjectRefs/ranges remain the evidence identity. There is no public source_info RPC.
+
+Unavailable also has live_status: not_checked and a closed reason: invalid_locator, unsupported_platform,
+non_unicode_locator, allocation_failed or output_limit. Annotation unavailability does not turn valid evidence
+into a gap; actual retained evidence corruption still fails. Requested presence and bounded string shape are
+validated; false requests omit the field rather than serializing null. Session Open uses the same default false.
+
+Annotation bytes are charged within the unchanged 8 MiB TOTAL owned-child frame cap. Exact fitting may replace
+optional path hints with typed Unavailable/output_limit while preserving match items/ranges and scan accounting;
+ranked/window output retains whole-card/page bounds. These are private SDK frame rules, not a blanket size or
+allocation guarantee for the new [MCP transport](../../bins/eliot-search-mcp/FUNCTIONS.md). Candidate3 has MCP
+SOURCE PASS; its selected native results and pending client qualification are scoped separately in
+[AD1](../../docs/audit/ANALYSIS_REGISTRY.md#agent-delivery).
 
 ## Query scope summary
 

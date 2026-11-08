@@ -1,0 +1,25 @@
+[package]
+autobins = false
+name = "eliot-search-mcp"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[[bin]]
+name = "eliot-search-mcp"
+path = "src/entry.rs"
+
+[dependencies]
+getrandom = "=0.4.3"
+rmcp.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+search-provider-client.workspace = true
+search-provider-protocol.workspace = true
+tokio = { workspace = true, features = ["rt", "macros", "sync", "io-util", "io-std", "time", "signal"] }
+tokio-util.workspace = true
+
+[lints]
+workspace = true

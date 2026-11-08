@@ -37,6 +37,7 @@ pub async fn query(
     deadline: Instant,
     cancelled: &AtomicBool,
     cancel_on_ctrl_c: bool,
+    include_source_info: bool,
 ) -> Result<QueryCompletion, ClientError> {
     checkpoint(deadline, cancelled)?;
     let ctrl_c = tokio::signal::ctrl_c();
@@ -73,6 +74,7 @@ pub async fn query(
             cancelled,
             ctrl_c.as_mut(),
             cancel_on_ctrl_c,
+            include_source_info,
         )
         .await
     }
@@ -135,6 +137,7 @@ async fn exchange(
     cancelled: &AtomicBool,
     mut ctrl_c: Pin<&mut impl Future<Output = io::Result<()>>>,
     cancel_on_ctrl_c: bool,
+    include_source_info: bool,
 ) -> Result<QueryCompletion, ClientError> {
     let (mut query, requested_limit) = match request {
         Request::Search(request) => {
@@ -145,6 +148,7 @@ async fn exchange(
                     remaining_ms: 1,
                     request,
                     include_summary: true,
+                    include_source_info,
                 },
                 limit,
             )
@@ -157,6 +161,7 @@ async fn exchange(
                     remaining_ms: 1,
                     request,
                     include_summary: true,
+                    include_source_info,
                 },
                 limit,
             )
@@ -169,6 +174,7 @@ async fn exchange(
                     remaining_ms: 1,
                     request,
                     include_summary: true,
+                    include_source_info,
                 },
                 limit,
             )
@@ -405,7 +411,7 @@ pub struct Session {
     closing: Option<PendingSessionRequest>,
     cancelled_request: Option<u64>,
     last_id: u64,
-    query: Option<(WindowQuery, bool)>,
+    query: Option<(WindowQuery, bool, bool)>,
     summary: Option<WindowSummary>,
     emitted: Vec<WindowEntry>,
     lifetime_end: Option<Instant>,
@@ -548,9 +554,10 @@ impl Session {
                 query,
                 ttl_ms,
                 include_summary,
+                include_source_info,
                 ..
             } if self.query.is_none() => {
-                self.query = Some((query.clone(), *include_summary));
+                self.query = Some((query.clone(), *include_summary, *include_source_info));
                 self.lifetime_end = Some(
                     Instant::now()
                         .checked_add(Duration::from_millis(*ttl_ms))
@@ -782,7 +789,7 @@ impl Session {
                 | SessionClientFrame::Continue { page_size, .. },
                 SessionOutcome::Page { page },
             ) => {
-                let (query, include_summary) = self
+                let (query, include_summary, include_source_info) = self
                     .query
                     .as_ref()
                     .ok_or(search_provider_protocol::ProtocolError::InvalidMessage)?;
@@ -792,6 +799,7 @@ impl Session {
                     return Err(search_provider_protocol::ProtocolError::InvalidMessage.into());
                 }
                 page.validate_request(query, &self.emitted, *page_size)?;
+                page.validate_source_info(*include_source_info)?;
                 self.summary = Some(page.summary.clone());
                 self.emitted.extend(page.items.iter().cloned());
             }

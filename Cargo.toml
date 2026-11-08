@@ -15,6 +15,7 @@ members = [
     "crates/search-provider-client",
     "bins/eliot-searchd",
     "bins/eliot-search",
+    "bins/eliot-search-mcp",
 ]
 
 [workspace.package]
@@ -43,6 +44,8 @@ qdrant-client = { version = "=1.20.0", default-features = false }
 tonic = { version = "=0.14.6", features = ["transport", "tls-native-roots", "tls-ring"] }
 prost = "=0.14.3"
 tokio = { version = "=1.53.1", default-features = false }
+tokio-util = { version = "=0.7.19", features = ["rt"] }
+rmcp = { version = "=3.9.0", default-features = false, features = ["server", "macros", "transport-io"] }
 
 # Maintained BLAKE3 is consumed directly by retained-object and preparation owners.
 blake3 = { version = "=1.8.2", default-features = false, features = ["std", "pure", "zeroize"] }

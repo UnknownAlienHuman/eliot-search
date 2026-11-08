@@ -40,7 +40,7 @@ impl Window {
         path: &Path,
         endpoint: Option<&str>,
         query: &WindowQuery,
-        include_summary: bool,
+        (include_summary, include_source_info): (bool, bool),
         expires: Instant,
         deadline: Instant,
         cancel: &AtomicBool,
@@ -72,14 +72,29 @@ impl Window {
             WindowQuery::Search(request) => {
                 let endpoint = endpoint.ok_or(QueryFailure::Code("QUERY_ENDPOINT_REQUIRED"))?;
                 items.extend(
-                    verified_query::execute(&root, &view, endpoint, request, deadline, cancel)?
-                        .into_iter()
-                        .map(WindowItem::Search),
+                    verified_query::execute(
+                        &root,
+                        &view,
+                        endpoint,
+                        request,
+                        include_source_info,
+                        deadline,
+                        cancel,
+                    )?
+                    .into_iter()
+                    .map(WindowItem::Search),
                 );
                 (view.generation.source_count, view.generation.gap_count)
             }
             WindowQuery::Raw(request) => {
-                let (result, gaps) = raw_exact::execute(&root, &view, request, deadline, cancel)?;
+                let (result, gaps) = raw_exact::execute(
+                    &root,
+                    &view,
+                    request,
+                    include_source_info,
+                    deadline,
+                    cancel,
+                )?;
                 summary.found_matches = Some(result.matches);
                 summary.scan_complete = Some(result.scan_complete);
                 summary.complete_negative = Some(result.complete_negative);
@@ -88,8 +103,14 @@ impl Window {
                 (result.selected_sources, gaps)
             }
             WindowQuery::DecodedUtf8(request) => {
-                let (result, gaps) =
-                    decoded_exact::execute(&root, &view, request, deadline, cancel)?;
+                let (result, gaps) = decoded_exact::execute(
+                    &root,
+                    &view,
+                    request,
+                    include_source_info,
+                    deadline,
+                    cancel,
+                )?;
                 summary.found_matches = Some(result.matches);
                 summary.scan_complete = Some(result.scan_complete);
                 summary.complete_negative = Some(result.complete_negative);

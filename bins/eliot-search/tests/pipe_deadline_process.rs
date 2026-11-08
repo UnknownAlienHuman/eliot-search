@@ -126,7 +126,7 @@ while (-not [IO.File]::Exists($env:ELIOT_PIPE_TEST_READY)) {
     .expect("write wrapper process");
     fs::write(
         &holder_script,
-        r#"$ErrorActionPreference = 'Stop'
+        r"$ErrorActionPreference = 'Stop'
 $heldOut = [Console]::OpenStandardOutput()
 $heldErr = [Console]::OpenStandardError()
 $bytes = [Text.Encoding]::ASCII.GetBytes('pipe held')
@@ -136,7 +136,7 @@ $heldErr.Write($bytes, 0, $bytes.Length)
 $heldErr.Flush()
 [IO.File]::WriteAllText($env:ELIOT_PIPE_TEST_READY, 'ready')
 [Threading.Thread]::Sleep(180000)
-"#,
+",
     )
     .expect("write descendant process");
     let shell = PathBuf::from(std::env::var_os("SystemRoot").expect("Windows system root"))
@@ -168,10 +168,7 @@ $heldErr.Flush()
     let stdout = read_capture(cli.stdout.take().expect("CLI stdout"));
     let stderr = read_capture(cli.stderr.take().expect("CLI stderr"));
 
-    assert!(
-        holder_ready.is_file(),
-        "descendant never acquired its pipes"
-    );
+    assert!(holder_ready.is_file(), "descendant pipes unavailable");
     assert!(wrapper_exited.is_file(), "wrapper did not finish its work");
     let status = status.expect("CLI waited past its original deadline for descendant pipes");
     assert_eq!(
@@ -181,6 +178,11 @@ $heldErr.Flush()
     );
     assert!(stdout.is_empty(), "incomplete stdout escaped the CLI");
     assert_eq!(stderr, b"{\"error\":\"DAEMON_TIMEOUT\"}\n");
-    assert!(elapsed >= CLI_DEADLINE - Duration::from_secs(1));
+    assert!(
+        elapsed
+            >= CLI_DEADLINE
+                .checked_sub(Duration::from_secs(1))
+                .expect("deadline exceeds scheduling tolerance")
+    );
     assert!(elapsed <= CLI_DEADLINE + SCHEDULING_ALLOWANCE);
 }

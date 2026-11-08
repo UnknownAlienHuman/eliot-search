@@ -1,0 +1,10 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+  "mcpServers": {
+    "eliot-search": {
+      "type": "stdio",
+      "command": "__PACKAGED_MCP_EXE__",
+      "args": ["--data-root", "__DATA_ROOT__"]
+    }
+  }
+}

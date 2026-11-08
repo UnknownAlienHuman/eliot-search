@@ -163,6 +163,23 @@ The window caches this header unchanged; codec fitting charges actual summary by
 Source9cfa candidate qualification is recorded in the [registry](../../docs/audit/ANALYSIS_REGISTRY.md#a10-v1-candidate),
 not promoted into a main/whole-product claim.
 
+## Saved captured-source hints
+
+include_source_info is a default-false private request/Open flag. [exact_literal::source_info](src/exact_literal.rs)
+decodes the saved native locator from the published CapturedSource. Ranked queries use the source resolved with
+the returned point; Raw/Decoded use selected committed source entries. Neither path substitutes current source
+rows or performs live stat/open/canonicalization for the hint.
+
+Available saved_path_hint always carries live_status: not_checked. Invalid locator/platform, non-Unicode path,
+allocation or reply-budget failure is typed Unavailable; it does not suppress retained-object/range failures.
+False/omitted requests retain legacy output without annotations. Optional hint bytes count within existing private
+frame limits; the hint never becomes evidence identity or a separate public source_info RPC.
+
+The new [MCP binary](../eliot-search-mcp/FUNCTIONS.md) is a separate rmcp JSON-RPC consumer over QueryClient /
+OwnedQuerySession. eliot-searchd remains the private owned-child endpoint, not an MCP server by renaming its argv.
+Candidate3 has CORE/MCP SOURCE PASS with all reviewed P2 items closed. Native five-client delivery remains
+IN_PROGRESS in [AD1](../../docs/audit/ANALYSIS_REGISTRY.md#agent-delivery); no public client runtime acceptance is claimed.
+
 ## FIRST RAW execution
 
 The same serviced framed worker accepts RawExactRequest and calls [raw_exact.rs](src/raw_exact.rs) instead

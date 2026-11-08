@@ -44,6 +44,11 @@ cached unchanged across pages and offline Expand; Continue/Expand never refresh 
 for this header. Metadata-only Unavailable preserves valid results. Real encoded summary bytes count toward
 whole-page frame fitting under the same cap.
 
+Open also records default-false include_source_info. Requested per-item/expansion metadata derives from the
+original captured Source locator, with live_status: not_checked or typed Unavailable; it never refreshes the
+live filesystem or latest source head. Annotation bytes count toward existing private frame/page budgets and
+may be unavailable for output size. SourceId/ObjectRefs/ranges and scan facts remain authoritative.
+
 The fixed TTL starts at accepted Open BEFORE query work/root acquisition/pinning; default and maximum are
 120000 ms. Access, Continue and Expand never renew it. Each operation's remaining_ms is also bounded by the
 original window expiry. Later source/preparation changes cannot replace the pinned inventory or representation.
@@ -73,6 +78,18 @@ and the daemon exits 0.
 Expiry, EOF/disconnect and Close cancel/join active work, release the root/view and finish/reap the child;
 the implemented expiry/shutdown path also services output backpressure. No detached timeout worker, durable
 resume, renewal, grants or second state platform is added. Runtime qualification is limited as recorded below.
+
+## New MCP consumer status
+
+The [MCP owner](../../../bins/eliot-search-mcp/FUNCTIONS.md) maps the seven declared Search/Exact/window tools
+onto this existing SDK consumer; tool schemas, not copied private-wire JSON, define its public inputs. Its
+candidate3 transport/output/handle P2 fixes have MCP SOURCE PASS. The
+[canonical Skill and packages](../../../integrations/eliot-search/README.md) passed the real build; four coding
+Skill copies and Desktop account upload/enablement are observed, with Codex host-catalog discovery.
+Candidate3 cleanup/continuation is included in Sol-accepted SELECTED_NATIVE_PASS. Four coding-client MCP entries
+now use shared package/root paths; operational root/backend preparation and native host model/context work in
+all five clients remain pending under [AD1](../../../docs/audit/ANALYSIS_REGISTRY.md#agent-delivery).
+Existing X1/A10 evidence below keeps its exact historical source scope; it does not qualify the new consumer.
 
 ## Verification scope
 

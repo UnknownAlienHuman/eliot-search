@@ -27,6 +27,20 @@ QueryCompletion carries the complete validated Terminal, retained diagnostics an
 No child or pipe escapes. Complete success requires a successful observed child exit. Application Failed and
 Cancelled remain typed terminals. A spawn/transport/truncation/deadline/reap failure never becomes an empty result.
 
+## Saved source-info opt-in
+
+QueryClient::set_include_source_info(true) opts subsequent owned-child calls into captured saved-path annotations.
+The default is false; existing CLI/SDK calls and omitted/false wire fields keep their earlier shape. There is no
+new CLI launcher flag or source_info lookup RPC. The client validates source_info presence against the request
+and its typed/bounded shape; it does not verify the live path. NotChecked and Unavailable are annotation state,
+not permission to replace invalid evidence with live files or empty success.
+
+The new [eliot-search-mcp consumer](../../bins/eliot-search-mcp/FUNCTIONS.md) uses the existing SDK and defaults
+its tool request annotation choice on. Candidate3 has CORE/MCP SOURCE PASS with the reviewed transport/handle/
+output P2 items closed and Sol-accepted SELECTED_NATIVE_PASS, including cleanup/continuation. Native operational
+host model/context work remains pending in [AD1](../../docs/audit/ANALYSIS_REGISTRY.md#agent-delivery);
+four updated coding-client MCP entries do not prove that runtime path.
+
 ## Actual I/O and cleanup
 
 The client owns one Tokio child with piped stdin/stdout/stderr and kill_on_drop as unwind fallback. One select loop
@@ -53,7 +67,9 @@ or described as a hard OS timing guarantee. Independent Qdrant/server processes 
 OwnedQuerySession records Open's include_summary choice and requires WindowSummary.corpus presence to match it.
 Open/Continue pages keep the exact original summary; the client rejects changed page summaries. The CLI enables
 summary on Open before submission. Expand uses the original emitted item/representation without refreshing the
-summary or scanning current source rows. Existing finish/wait/EOF ownership remains unchanged.
+summary or scanning current source rows. Open also records include_source_info and validates per-item/expansion
+annotations against that choice. Hints stay bound to original captured evidence; output fitting can return typed
+Unavailable without asserting a live path change. Existing finish/wait/EOF ownership remains unchanged.
 
 ## Removal and checks
 

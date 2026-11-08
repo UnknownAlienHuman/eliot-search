@@ -34,9 +34,9 @@ const CLEANUP_ALLOWANCE: Duration = Duration::from_secs(5);
 type Encoded = Result<Vec<u8>, ProtocolError>;
 
 enum Request {
-    Search(SearchRequest, bool),
-    RawExact(RawExactRequest, bool),
-    DecodedUtf8(DecodedUtf8Request, bool),
+    Search(SearchRequest, bool, bool),
+    RawExact(RawExactRequest, bool, bool),
+    DecodedUtf8(DecodedUtf8Request, bool, bool),
 }
 
 fn query_summary(
@@ -92,23 +92,30 @@ impl Request {
         cancel: &AtomicBool,
     ) -> Encoded {
         match self {
-            Self::Search(request, include_summary) => {
+            Self::Search(request, include_summary, include_source_info) => {
                 let Some(endpoint) = endpoint else {
                     return stopped(QueryFailure::Code("QUERY_ENDPOINT_REQUIRED"));
                 };
-                let completed =
-                    verified_query::execute(root, view, endpoint, request, deadline, cancel)
-                        .and_then(|items| {
-                            let summary = query_summary(
-                                view,
-                                view.generation.source_count,
-                                view.generation.gap_count,
-                                *include_summary,
-                                deadline,
-                                cancel,
-                            )?;
-                            Ok((items, summary))
-                        });
+                let completed = verified_query::execute(
+                    root,
+                    view,
+                    endpoint,
+                    request,
+                    *include_source_info,
+                    deadline,
+                    cancel,
+                )
+                .and_then(|items| {
+                    let summary = query_summary(
+                        view,
+                        view.generation.source_count,
+                        view.generation.gap_count,
+                        *include_summary,
+                        deadline,
+                        cancel,
+                    )?;
+                    Ok((items, summary))
+                });
                 match completed {
                     Ok((items, summary)) => {
                         prepare_complete(QUERY_REQUEST_ID, view.generation.sequence, items, summary)
@@ -116,38 +123,45 @@ impl Request {
                     Err(error) => stopped(error),
                 }
             }
-            Self::RawExact(request, include_summary) => {
-                let completed = raw_exact::execute(root, view, request, deadline, cancel).and_then(
-                    |(result, gaps)| {
-                        let summary = query_summary(
-                            view,
-                            result.selected_sources,
-                            gaps,
-                            *include_summary,
-                            deadline,
-                            cancel,
-                        )?;
-                        Ok((result, summary))
-                    },
-                );
+            Self::RawExact(request, include_summary, include_source_info) => {
+                let completed =
+                    raw_exact::execute(root, view, request, *include_source_info, deadline, cancel)
+                        .and_then(|(result, gaps)| {
+                            let summary = query_summary(
+                                view,
+                                result.selected_sources,
+                                gaps,
+                                *include_summary,
+                                deadline,
+                                cancel,
+                            )?;
+                            Ok((result, summary))
+                        });
                 match completed {
                     Ok((result, summary)) => prepare_raw_exact(QUERY_REQUEST_ID, result, summary),
                     Err(error) => stopped(error),
                 }
             }
-            Self::DecodedUtf8(request, include_summary) => {
-                let completed = decoded_exact::execute(root, view, request, deadline, cancel)
-                    .and_then(|(result, gaps)| {
-                        let summary = query_summary(
-                            view,
-                            result.selected_sources,
-                            gaps,
-                            *include_summary,
-                            deadline,
-                            cancel,
-                        )?;
-                        Ok((result, summary))
-                    });
+            Self::DecodedUtf8(request, include_summary, include_source_info) => {
+                let completed = decoded_exact::execute(
+                    root,
+                    view,
+                    request,
+                    *include_source_info,
+                    deadline,
+                    cancel,
+                )
+                .and_then(|(result, gaps)| {
+                    let summary = query_summary(
+                        view,
+                        result.selected_sources,
+                        gaps,
+                        *include_summary,
+                        deadline,
+                        cancel,
+                    )?;
+                    Ok((result, summary))
+                });
                 match completed {
                     Ok((result, summary)) => {
                         prepare_decoded_utf8(QUERY_REQUEST_ID, result, summary)
@@ -311,20 +325,32 @@ impl Exchange {
                 remaining_ms,
                 request,
                 include_summary,
+                include_source_info,
                 ..
-            } => (remaining_ms, Request::Search(request, include_summary)),
+            } => (
+                remaining_ms,
+                Request::Search(request, include_summary, include_source_info),
+            ),
             ClientFrame::RawExact {
                 remaining_ms,
                 request,
                 include_summary,
+                include_source_info,
                 ..
-            } => (remaining_ms, Request::RawExact(request, include_summary)),
+            } => (
+                remaining_ms,
+                Request::RawExact(request, include_summary, include_source_info),
+            ),
             ClientFrame::DecodedUtf8 {
                 remaining_ms,
                 request,
                 include_summary,
+                include_source_info,
                 ..
-            } => (remaining_ms, Request::DecodedUtf8(request, include_summary)),
+            } => (
+                remaining_ms,
+                Request::DecodedUtf8(request, include_summary, include_source_info),
+            ),
             ClientFrame::Cancel { .. } => {
                 if !self.admitted {
                     return Err("QUERY_CANCEL_WITHOUT_REQUEST");

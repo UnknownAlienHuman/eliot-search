@@ -4,6 +4,8 @@ Current binaries expose root operations, index [PATH], retain-file, prepare-sour
 cases have distinct exact-source scopes in the [registry](../audit/ANALYSIS_REGISTRY.md#evidence-status).
 U1 targeted Windows debug acceptance is at c843171, with earlier transport/budget and initial-publication scopes kept separate.
 The [owner map](README.md#owners) defines responsibilities; a row does not require keeping a crate.
+The new MCP/Skill five-client delivery is [AD1 IN_PROGRESS](../audit/ANALYSIS_REGISTRY.md#agent-delivery),
+not qualified by the earlier core V1 or private-framing acceptance.
 
 ## Real binaries
 
@@ -11,8 +13,9 @@ The [owner map](README.md#owners) defines responsibilities; a row does not requi
 |---|---|
 | eliot-search / eliot-search | [entry.rs](../../bins/eliot-search/src/entry.rs) → [app.rs](../../bins/eliot-search/src/app.rs); [manifest](../../bins/eliot-search/Cargo.toml) |
 | eliot-searchd / eliot-searchd | [entry.rs](../../bins/eliot-searchd/src/entry.rs) → [app.rs](../../bins/eliot-searchd/src/app.rs); [manifest](../../bins/eliot-searchd/Cargo.toml) |
+| eliot-search-mcp / eliot-search-mcp (IN_PROGRESS) | [entry.rs](../../bins/eliot-search-mcp/src/entry.rs) → [server.rs](../../bins/eliot-search-mcp/src/server.rs) / [window.rs](../../bins/eliot-search-mcp/src/window.rs); [manifest](../../bins/eliot-search-mcp/Cargo.toml), [owner](../../bins/eliot-search-mcp/FUNCTIONS.md) |
 
-Both packages define only their binary target. The former library, main/sealed harness and wave/loopback feature
+Each listed package defines only its binary target. The former library, main/sealed harness and wave/loopback feature
 routes are removed. Check the real binary; package names and retained workspace crates do not imply handlers.
 
 <a id="existing-dispatch-to-replace"></a>
@@ -111,6 +114,15 @@ Framed search is connected. It performs no live-source scan, reprepare, publish 
 only returned retained bindings/objects are read. Publication/recovery keeps complete graph validation.
 Root-state output does not report Qdrant availability. Final native qualification remains distinct from this map.
 
+MCP source route (IN_PROGRESS): client JSON-RPC -> eliot-search-mcp -> QueryClient/OwnedQuerySession -> owned
+eliot-searchd private frames -> existing retained query owners. Its seven tools are eliot_search, eliot_exact
+(raw/decoded_utf8) and eliot_window_open/continue/expand/cancel/close; public schemas define WindowQuery inputs.
+Candidate3 has CORE/MCP SOURCE PASS and the real version 0.0.0
+[package build](../../integrations/eliot-search/README.md) passed. Four coding Skill copies and Desktop account
+upload/enablement are observed; the four coding MCP entries now target the shared .eliot-search package/root.
+Sol-accepted SELECTED_NATIVE_PASS includes cleanup/continuation. Operational root/backend preparation and
+native host model/context work in all five clients remain pending in AD1; old AppData deployment is historical.
+
 ## Work by path
 
 Rows marked future identify integration owners, not installed commands or completed stages.
@@ -131,6 +143,8 @@ Rows marked future identify integration owners, not installed commands or comple
 | Served-baseline archive import | [Handler](../../bins/eliot-searchd/src/archive_import.rs), [CONTROL install](../../crates/search-control-redb/src/publication/restore.rs), [marked root](../../crates/search-runtime/search-runtime-owner/src/plain_root.rs), [owner](../../crates/search-runtime/search-retention/FUNCTIONS.md#explicit-restoreimport-into-a-fresh-destination) |
 | Returned evidence and retained units | [Query worker](../../bins/eliot-searchd/src/verified_query.rs), [CONTROL resolver](../../crates/search-control-redb/src/publication.rs), [evidence rule](../../crates/search-query/search-candidate-validator/FUNCTIONS.md) |
 | Published/current query summary | [RO observation](../../crates/search-control-redb/src/publication.rs), [daemon producer](../../bins/eliot-searchd/src/framed_search.rs), [DTO](../../crates/search-provider-protocol/src/dto.rs), [CONTROL rule](../../crates/search-control-redb/FUNCTIONS.md#query-summary-observation) |
+| Saved captured-source hints | [decoder](../../bins/eliot-searchd/src/exact_literal.rs), [SDK opt-in](../../crates/search-provider-client/src/lib.rs), [DTO](../../crates/search-provider-protocol/src/dto.rs); metadata-only NotChecked/Unavailable, no source_info RPC |
+| Agent package/native Skill | [package source](../../integrations/eliot-search/README.md), [canonical Skill](../../integrations/eliot-search/skills/eliot-search/SKILL.md); AD1 IN_PROGRESS |
 | Serviced framed child and presentation | [Daemon I/O](../../bins/eliot-searchd/src/framed_search.rs), [client](../../crates/search-provider-client/FUNCTIONS.md), [protocol](../../crates/search-provider-protocol/FUNCTIONS.md), [CLI](../../bins/eliot-search/FUNCTIONS.md) |
 | Raw/DecodedUtf8 and same-session windows | [Raw](../../bins/eliot-searchd/src/raw_exact.rs), [Decoded](../../bins/eliot-searchd/src/decoded_exact.rs), [session I/O](../../bins/eliot-searchd/src/framed_search/session.rs), [window](../../bins/eliot-searchd/src/framed_search/window.rs), [owning window recipe](../../crates/search-query/search-continuation/FUNCTIONS.md) |
 
@@ -150,7 +164,8 @@ QuerySummary is on main2a0462a6 with unchanged Rust source9cfa. Separate Sol CPU
 V1 is DONE for selected Windows/Release ordinary-repo-1 resources (including observed replacement disk),
 real-repository workflows and isolated installed pair. Observed replacement high-water was 1,780,153,608 B
 <=4 GiB; unsampled actual peak remains UNKNOWN. Ranked coverage remains diagnostic. Retained source9cfa binary
-provenance is not a fresh main build or universal platform/peak claim; no READY mandatory row remains.
+provenance is not a fresh main build or universal platform/peak claim. AD1 is the new first unfinished
+user-required delivery; no public MCP/client runtime proof is inferred from prior V1.
 Entry points and root exclusion are unchanged; no concurrent view framework is added by this documentation.
 Confirmed absence and inaccessible inventory stay distinct.
 Build the actual owners and delete displaced code with its callers. Root-only command checks, helper-native

@@ -107,6 +107,7 @@ fn execute(
             query,
             page_size,
             include_summary,
+            include_source_info,
             ..
         } => {
             let expires = job.expires.ok_or(QueryFailure::Code("WINDOW_NOT_OPEN"))?;
@@ -114,7 +115,7 @@ fn execute(
                 root,
                 endpoint,
                 query,
-                *include_summary,
+                (*include_summary, *include_source_info),
                 expires,
                 job.deadline,
                 &job.cancel,

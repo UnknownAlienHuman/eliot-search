@@ -20,16 +20,29 @@ at those frozen binary inputs; no fresh main build is claimed. Sol WORKFLOW PASS
 recorded supplemental gates below. Ptolemy's replacement run passes the observed-disk scope. V1 is DONE for
 the concrete Windows/Release ordinary-repo-1, real-repository workflows and isolated installed scope, with
 sampled/UNKNOWN limits retained. No universal platform, cold-cache, unsampled-peak or fresh main build claim follows.
+New user-required agent delivery AD1 is IN_PROGRESS below; that historical V1 scope is not a claim that MCP,
+packages, native Skills and all five client workflows are now delivered.
 
 <a id="resume"></a>
 <a id="resume-after-interruption"></a>
 ## Next task
 
-**Selected delivery register closed: V1 DONE at the recorded Windows/Release scope.**
-CPU-family, full meaningful workflows and observed replacement disk gates have actual consumer outcomes below.
-No other READY unfinished mandatory row remains; O1 stays DEFERRED and is not automatically promoted.
-The manager owns the final coherent landing after Sol's independent bounded resource/docs review. That review
-is not claimed already passed by this update; no additional native run or source task is invented.
+**AD1 IN_PROGRESS — first active unfinished user-required delivery.**
+Candidate3 has CORE/MCP SOURCE PASS with all reviewed P2 items closed, locked check/strict Clippy/Release PASS
+and a verified shared version 0.0.0 package build. Sol accepted SELECTED_NATIVE_PASS including cleanup/
+continuation; all four owned coding MCP entries now use shared package/root paths. Finish operational
+root/backend preparation, then after ROOT_READY prove activation, native host model/context and actual tool
+work in all five clients. Selected SDK native PASS does not establish installed-client operation.
+
+Preserve existing client/profile entries while delivering native MCP plus the canonical Skill in Codex, Claude
+Code, Claude Desktop/Cowork, OpenCode and Antigravity. Observe artifact creation, configuration, enablement,
+Skill discovery/use and real native read-only tool work separately. Four coding-client Skill copies are installed,
+and the current Codex host catalog discovers eliot-search. Desktop account Skill upload/enablement was observed
+as by you, v1; its MCPB software install awaits action-time approval and is NOT_RUN. Four coding-client
+configuration updates are complete; native operational host runtime remains unproved.
+
+The earlier V1 register closed only its selected Windows/Release core/workflow/resource/isolated-install scope.
+AD1 is the new explicitly selected requirement; O1 remains DEFERRED.
 
 The first long-backend-root baseline failed Gridstore OS3 before replacement, leaving preserved unserved/unknown
 state. The fresh short direct v1r8 operator-storage run exercised replacement successfully. Exact long-path
@@ -51,14 +64,15 @@ separate evidence; normal opening still refuses incomplete imports.
 The scratch bookkeeping bound is source-reviewed, not a universal native RAM benchmark. Cooperating root
 exclusion does not make unlink atomic against external same-account renames.
 X1's selected Windows/Release scope remains DONE. Stronger UNKNOWN/NOT_PROVEN limits remain unchanged.
-V1 closes the selected register with recorded source9cfa binary/installed provenance; it does not qualify arbitrary platforms or universal peaks.
+V1 closed its prior selected register with source9cfa binary/installed provenance; AD1 now owns new agent delivery.
+Neither milestone implies arbitrary platform, universal peak or unobserved client acceptance.
 
 R1's persisted unknown Insert/ABA, postcommit/pre-view interruption and fef held-view exclusion/cleanup are
 separately pinned native evidence. The 9e RELEASE resource run does not relabel those cases. Complete unsampled
 product/replacement peaks remain UNKNOWN beyond the reported samples; the observed replacement disk gate is
 qualified separately below. Exact pre-spawn timing, wire-level
 lost-ACK/original delayed RPC and real power loss remain NOT_RUN, not newly invented prerequisites.
-After the recorded V1 completion there is no further READY mandatory delivery; optional depth requires an actual selected need.
+After the recorded V1 completion the user selected AD1 as new mandatory delivery; unrelated optional depth still requires an actual need.
 Do not restore a deleted task queue or add a concurrent view framework by default: root exclusion remains.
 
 <a id="work-register"></a>
@@ -82,6 +96,7 @@ DONE below is the named delivered scope, not completion of the product.
 | M1 / DONE, selected Windows/Release scopes | X1 | Stopped-root collector/export/import owners | Recorded GC/export scopes plus source708 served import, binding guards, exact retry, interrupted-copy and uncertain-backend recovery; stronger UNKNOWN limits remain below. |
 | O1 / DEFERRED | Connected baseline + actual need | [Selected depth](../product/AGENT_ANALYSIS_FRAMEWORK.md#optional-depth) | Add only an actual source-backed consumer; remove unused scaffolds. |
 | V1 / DONE, selected Windows/Release scope | X1/M1 selected shipped paths | [Qualification](../implementation/TEST_CUTOVER.md), #215 | Actual ordinary-repo-1 performance/CPU/observed replacement disk, full real-repository workflows and isolated installed pair. Source9cfa/main2a Rust equivalence; scope/UNKNOWN limits below. |
+| AD1 / IN_PROGRESS, first active unfinished user requirement | V1/core SDK | [MCP owner](../../bins/eliot-search-mcp/FUNCTIONS.md), [package/Skill](../../integrations/eliot-search/README.md), native-client delivery owners | Candidate3 source/Release/shared package and selected native PASS; four coding Skill/MCP entries, Codex catalog discovery and Desktop account Skill upload/enablement observed. Finish operational root/backend, then native host model/context and actual tool work in all five clients after ROOT_READY; Desktop MCPB install awaits approval, NOT_RUN. |
 
 [Implementation](../implementation/README.md#delivery-sequence) owns delivery order. Stage 3B is conditional
 on measured Stage 3A budgets failing; there is no separate global rewrite programme.
@@ -124,6 +139,70 @@ hydration reuse. No application encryption, grants, OS-secret platform or second
 <a id="evidence-status"></a>
 <a id="execution-evidence"></a>
 ## Verification and known blockers
+
+<a id="agent-delivery"></a>
+### AD1 agent delivery — source/package accepted, client qualification pending
+
+- Core include_source_info is default-false SDK/wire opt-in. Saved path annotations use the same captured
+  published source, NotChecked and typed Unavailable; no live filesystem verification or public source_info RPC.
+  False/omitted legacy output and existing private frame budgets stay intact. Old V1 evidence is not new-feature
+  native qualification.
+- Current eliot-search-mcp source declares seven tools over the existing QueryClient/OwnedQuerySession:
+  eliot_search, eliot_exact (raw/decoded_utf8), eliot_window_open/continue/expand/cancel/close. Its actual inputs
+  come from tool schemas; absolute data-root and sibling daemon are launcher inputs, qdrant-url is needed for ranked
+  work. MCP tool requests default source-info on. Candidate3 has Sol CORE/MCP SOURCE PASS with all reviewed P2
+  items closed and locked check/strict Clippy/Release PASS. Build/source/binary pins are retained in
+  C:\Development\Rust\targets\task-agent-mcp-build\run-20261108-v3-cancel-delivery\checks-pass.json;
+  its build-time pending-review fields predate the later Sol acceptance. All three immutable input/copy pins
+  and all eight recorded source-freeze hashes were reverified during packaging.
+- Real shared builder run exited 0 with version 0.0.0. The current machine-bound output is
+  C:\Users\kleym\.eliot-search\agent-tools-20261108\package:
+  plugin/mcp.json targets its actual plugin/bin/eliot-search-mcp.exe with sibling daemon and operator CLI,
+  data-root C:\Users\kleym\.eliot-search\agent-tools-20261108\corpus-search and http://127.0.0.1:7637.
+  Generated plugin/MCP/MCPB 0.3 schemas, nine-file
+  inventory and every archive member/hash passed. eliot-search.mcpb contains manifest plus two query siblings;
+  eliot-search-skill.zip contains only eliot-search/SKILL.md. These actual files and the retained builder output
+  are package proof. Shared MCPB SHA256 is D40187B0078F7C0F6B1F507205919B4DFDD3C0608159E1E8436C59EF1CACA648.
+  Independent pins/path verification:
+  C:\Development\Rust\targets\task-agent-mcp-host-registration\run-20261108-v2-shared-path\shared-package-verification.json.
+  Its pre-chooser pending field is superseded by the actual Claude chooser/review observation.
+  Packaging never opened/initialized the dataset. The first AppData package is retained historical evidence:
+  its logical C:\Users\kleym\AppData\Local\EliotSearch path was invisible to Claude, while its explicit Codex
+  MSIX LocalCache path was accepted. All nine old package files remain byte-identical; operational binary,
+  dataset and backend paths must use the shared locations, not AppData/Codex-cache aliases.
+- Four canonical-by-value Skill copies are installed in native Codex .agents/skills, Claude Code .claude/skills,
+  OpenCode .config/opencode/skills and AGY .gemini/config/skills. Exact paths/hashes/preservation proof:
+  C:\Development\Rust\targets\task-agent-search-skill-install-20261108\run-001\installation-result.json.
+  Its discovery fields preserve their installation-time NOT_RUN; the current Codex host catalog now discovers
+  eliot-search. Discovery/use in the other coding clients remains unproved. Corrected MCP inventory used AGY
+  .gemini/config/mcp_config.json and OpenCode V2 nested mcp.servers. All four owned coding-client MCP entries
+  now target the shared packaged binary/data-root with unrelated entries/profiles preserved. Exact proof:
+  C:\Development\Rust\targets\task-agent-mcp-host-registration\run-20261108-v2-shared-path\path-update-result.json.
+  These configuration updates do not establish activation or native host model/context/tool work.
+- After the user reported the Claude window available, fresh Computer Use observed account upload/enablement:
+  eliot-search, by you, v1, one SKILL.md and enabled switch. Existing custom Skills were preserved.
+  Upload artifact: C:\Development\Rust\targets\task-agent-desktop-skill-20261108-16883738a7c0432d97f4eb40838e490a\eliot-search-skill.zip;
+  its sole member matches the canonical Skill. UI proof is the retained Computer Use observation; no standalone
+  screenshot/receipt file was generated. Extensions was accessible without an ELIOT Search entry. Earlier DWM
+  recovery failure remains historical evidence, not a current UI blocker. The new shared MCPB path was accepted
+  by the actual chooser and its review dialog is open, Install unpressed, awaiting action-time approval.
+  Desktop MCPB install is NOT_RUN;
+  account Skill enablement does not prove MCP discovery, runtime or other account/org behavior.
+- Selected official-SDK native positive/budget cases passed, including seven-tool discovery, Search/Raw/Decoded,
+  saved hints/legacy false, retained expansion, TTL/Close and bounded full-text output. Exact scopes:
+  C:\Development\Rust\targets\task-search-mcp-native-20261108\run-001\native-candidate3-assessment.json
+  and native-candidate3-result.json preserve their earlier partial scope and original unread observer failure.
+  Sol accepted the completed SELECTED_NATIVE_PASS handback:
+  C:\Development\Rust\targets\task-search-mcp-native-20261108\run-001\continuation-001\final-native-proof.json.
+  Corrected unread stdout remained open/unread at stdin EOF; MCP exited 2/MCP_OUTPUT_FAILED after 2027 ms,
+  the SDK child was actually waited/gone and a post-exit retained query confirmed root availability. Window pages 1+63
+  delivered all 64 unique entries; maximum encoded RPC was 16573116 bytes <=16777216. All three stale opaque
+  handles were refused after restart; the new window remained usable. Prior failure artifacts stay unchanged.
+  Exact inside-ToSink notification timing is NOT_OBSERVED; the oversized-response error branch was NOT_EXERCISED.
+  External SDK-child OS waits do not independently observe daemon pipe EOF. No five-client host runtime PASS
+  follows. Operational shared root/backend preparation is IN_PROGRESS; host model/context work waits for ROOT_READY.
+- Artifact presence != configured != enabled != Skill discovered/used != successful native MCP work.
+  Keep actual outcomes in this register once final facts arrive; no new report/status framework is required.
 
 <a id="a10-v1-candidate"></a>
 ### A10 and V1 candidate evidence, source 9cfa3467
@@ -225,7 +304,8 @@ hydration reuse. No application encryption, grants, OS-secret platform or second
   Canonical original timings, separate CPU-only supplement and replacement timings remain distinct. CPU J+P is
   a conservative upper bound, not descendant decomposition; unsampled peaks, cold-cache, Unix/other-platform,
   power-loss and wire lost-ACK claims are not made. Sol's independent resource review precedes publication;
-  no other READY mandatory row remains and O1 stays DEFERRED.
+  at that V1 checkpoint no further READY mandatory row remained. The later user-selected AD1 is active above;
+  O1 stays DEFERRED.
 
 <a id="m1-import-delivery"></a>
 ### Served-baseline import delivery, Windows/Release

@@ -33,6 +33,7 @@ fn hit(rank: u8, text: &str) -> SearchItem {
             ends_at_line_boundary: false,
         },
         unit_text: text.into(),
+        source_info: None,
     })
 }
 
@@ -67,6 +68,7 @@ fn fragmented_frame_keeps_prefix_body_and_trailing_bytes_visible() {
             limit: 64,
         },
         include_summary: false,
+        include_source_info: false,
     };
     let frame = encode_client_frame(&message).expect("encode");
     let mut partial = FrameBuffer::new(MAX_CLIENT_FRAME_BYTES).expect("buffer");
@@ -204,6 +206,7 @@ fn missing_object_is_a_ranked_gap_and_integrity_codes_cannot_masquerade_as_gaps(
         score: card.score,
         evidence: card.evidence,
         code: FailureCode::new("SOURCE_OBJECT_MISSING").expect("code"),
+        source_info: None,
     };
     let mut value = terminal(vec![hit(1, "first"), SearchItem::Gap(gap)]);
     let encoded = encode_terminal_frame(&value).expect("encode");

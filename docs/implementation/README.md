@@ -12,7 +12,8 @@ Qdrant generation/current evidence/view and verified retained units/citations. P
 state/counts; Search and Raw/DecodedUtf8 Exact are read-only query operations. Their exact native scopes belong in the registry;
 Same-session Continue/Expand/expiry, stopped-root collect-objects and plain archive-export/import are connected too. The
 [registry](../audit/ANALYSIS_REGISTRY.md#work-register) owns their exact qualification scopes and remaining work;
-connected commands do not imply an installed baseline or completion of the product.
+connected commands do not imply an installed baseline or completion of the product. A new user-required
+MCP/native-Skill delivery is IN_PROGRESS in Stage 6; prior V1 completion retains its earlier selected scope.
 
 ```text
 selected source → stable acquired bytes → immutable ObjectRef/current SourceRecord
@@ -61,6 +62,7 @@ the window's original view/results, not the latest index. Stage 2/3A has no intr
 | Framing/client/presentation | [Protocol](../../crates/search-provider-protocol/FUNCTIONS.md), [client](../../crates/search-provider-client/FUNCTIONS.md), [CLI](../../bins/eliot-search/FUNCTIONS.md) |
 | Composition | [Daemon](../../bins/eliot-searchd/FUNCTIONS.md) |
 | Offline maintenance/import | [Maintenance](../../crates/search-runtime/search-retention/FUNCTIONS.md) |
+| MCP/native-Skill delivery | [MCP owner](../../bins/eliot-search-mcp/FUNCTIONS.md), [package/skill source](../../integrations/eliot-search/README.md) |
 
 <a id="delivery-sequence"></a>
 ## Delivery sequence
@@ -220,11 +222,34 @@ actual unsampled peak is UNKNOWN and CPU/RAM/handles were not remeasured by that
 The long-root baseline failed Gridstore OS3 before replacement and remains preserved; exact cause is UNKNOWN.
 Short direct operator storage is valid, not a universal MAX_PATH limit or source fix. Optional legacy observer
 capture error and raw CONTROL oracle scope are retained in the
-[qualification evidence](../audit/ANALYSIS_REGISTRY.md#a10-v1-candidate). No other READY mandatory row remains;
-O1 stays DEFERRED. Final Sol bounded resource/docs review precedes publication. No fresh main build, cold-cache,
+[qualification evidence](../audit/ANALYSIS_REGISTRY.md#a10-v1-candidate). This closed the prior selected core
+register; the later user-required AD1 delivery below is now active. O1 stays DEFERRED. Final Sol bounded resource/docs review precedes publication. No fresh main build, cold-cache,
 Unix or universal unsampled-peak qualification is claimed.
 Optional #219/#239/#248/#334/#336 remain selected source-backed orientation/comparison/Git/document capabilities. Optional donors join existing
 consumers. No encryption or restricted-user phase. Qdrant Edge, if studied later, is a replacement experiment.
+
+### 6. User-required agent delivery — IN_PROGRESS
+
+[AD1](../audit/ANALYSIS_REGISTRY.md#agent-delivery) connects one real MCP JSON-RPC SDK consumer, the shared
+canonical Skill/package source and native delivery in Codex, Claude Code, Claude Desktop/Cowork, OpenCode and
+Antigravity. MCP was optional to the earlier baseline; it is now explicitly selected user work, not deferred O1.
+
+The core SDK/wire includes default-false captured-source annotations with NotChecked/typed Unavailable; legacy
+false output and private frame budgets remain unchanged. The MCP tool schemas default opt-in on. This metadata
+does not establish live freshness, add a source_info RPC, or qualify MCP transport from private-frame checks.
+
+Candidate3 has CORE/MCP SOURCE PASS, all reviewed P2 items closed and locked check/strict Clippy/Release PASS.
+The matching version 0.0.0 operator CLI/MCP/daemon trio passed the real package build, pin/member-hash and
+published-schema checks. Sol accepted SELECTED_NATIVE_PASS including unread-output cleanup, full window
+continuation and stale-handle refusal; this is the selected official-SDK scope, not five-host qualification.
+
+Four coding-client Skill copies are installed and the current Codex host catalog discovers the Skill.
+Claude Desktop account Skill upload/enablement was observed as by you, v1 after the user-reported UI state change.
+The four owned coding-client MCP entries were updated to the shared .eliot-search package/data-root with other
+entries preserved; old AppData deployment is historical. Finish operational root/backend preparation, then
+after ROOT_READY prove native host model/context and actual read-only tool work in all five clients.
+Desktop MCPB install is NOT_RUN, with the shared-bundle review dialog waiting for action-time approval.
+Keep artifact/config/enablement/discovery/native-work outcomes distinct in the existing register.
 
 <a id="lifetime-and-lock-order"></a>
 <a id="publication-and-retrieval"></a>

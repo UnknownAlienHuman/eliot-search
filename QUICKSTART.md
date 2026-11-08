@@ -16,6 +16,26 @@ separate CPU/workflow and observed replacement disk results close V1 for the sel
 ordinary-repo-1, real-repository workflows and isolated installed scope. Actual unsampled peaks, cold-cache
 and other-platform qualification are not claimed; this is not a fresh main build.
 
+## Agent/MCP delivery — IN_PROGRESS
+
+The earlier V1 scope above is core CLI/resource/workflow evidence, not completion of the new user request to
+deliver MCP plus native Skills in five clients. [AD1](docs/audit/ANALYSIS_REGISTRY.md#agent-delivery) is now the
+active first unfinished delivery. The new [MCP binary owner](bins/eliot-search-mcp/FUNCTIONS.md) and
+[package/skill source](integrations/eliot-search/README.md) exist; do not register eliot-searchd's private framed
+stdio directly as MCP JSON-RPC.
+
+MCP argv requires an absolute data-root, uses a sibling daemon by default and needs qdrant-url for ranked
+operations. Its tool schemas default source-info on; no source-info launcher flag or lookup RPC is added.
+Candidate3 has CORE/MCP SOURCE PASS and locked check/strict Clippy/Release PASS; all reviewed P2 items are closed.
+Its matching version 0.0.0 trio passed the real package build with verified pins, archive contents and schemas.
+
+Four coding-client Skill copies are installed; the current Codex host catalog discovers eliot-search.
+Claude Desktop account Skill upload/enablement was observed as by you, v1. Four coding MCP entries now use the
+verified shared package/data-root under .eliot-search; old AppData bindings are historical. Candidate3 has
+Sol-accepted SELECTED_NATIVE_PASS, including cleanup/continuation. Operational root/backend preparation remains
+IN_PROGRESS; after ROOT_READY, prove native host model/context and actual tool work in all five clients.
+Desktop MCPB installation awaits action-time approval and is NOT_RUN; package/config presence is not runtime proof.
+
 ## Index and search
 
 The qualified ordinary-repo-1 measurements use optimized RELEASE, not target/debug or default cargo run.
@@ -191,6 +211,12 @@ CONTROL wanted/lag or a typed Unavailable reason. Known CONTROL lag is not live-
 only Unavailable observation does not discard a valid result. Actual evidence corruption still fails. Raw may
 prove a complete negative despite a published preparation gap because it verifies undecoded retained Source.
 Session pages/Expand retain the original cached summary. There is no new CLI flag or implicit refresh.
+
+Separate default-false SDK/wire include_source_info can add per-item/citation source_info decoded from the saved
+published Source locator. Available saved_path_hint has live_status: not_checked; typed Unavailable supplies no
+live path fact. These hints neither replace ObjectRef/range citations nor prove current filesystem freshness.
+Legacy omitted/false results stay unchanged. Optional metadata uses existing child-frame budgets and adds no
+public source_info RPC. The new MCP consumer defaults its tool request opt-in on, but its delivery is pending.
 
 The isolated candidate install ran initialize, index PATH, bare index, Search, Raw, Decoded and collect-objects
 with all seven commands exiting 0, outside the checkout and without --daemon. Actual default sibling path/hash

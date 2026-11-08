@@ -44,6 +44,7 @@ fn scan_source(
                     source: binding,
                     code: FailureCode::new("SOURCE_OBJECT_MISSING")
                         .map_err(|error| QueryFailure::Code(error.code()))?,
+                    source_info: None,
                 }));
             }
             return Ok(());
@@ -70,6 +71,7 @@ fn scan_source(
                 end: u64::try_from(end)
                     .map_err(|_| QueryFailure::Code("EVIDENCE_RANGE_INVALID"))?,
                 bytes_hex: hex(matched)?,
+                source_info: None,
             }));
         }
         Ok(())
@@ -86,6 +88,7 @@ pub fn execute(
     root: &PlainRootGuard,
     view: &PublishedView,
     request: &RawExactRequest,
+    include_source_info: bool,
     deadline: Instant,
     cancel: &AtomicBool,
 ) -> Result<(RawExactResult, u64)> {
@@ -129,6 +132,7 @@ pub fn execute(
         ) {
             preparation_gaps += 1;
         }
+        let first = result.items.len();
         scan_source(
             root,
             &entry.source,
@@ -138,6 +142,15 @@ pub fn execute(
             deadline,
             cancel,
         )?;
+        if first != result.items.len() {
+            let info = crate::exact_literal::source_info(&entry.source, include_source_info);
+            for item in &mut result.items[first..] {
+                match item {
+                    RawExactItem::Match(hit) => hit.source_info.clone_from(&info),
+                    RawExactItem::Gap(gap) => gap.source_info.clone_from(&info),
+                }
+            }
+        }
     }
     check(deadline, cancel)?;
     result.scan_complete = result.missing_sources == 0;

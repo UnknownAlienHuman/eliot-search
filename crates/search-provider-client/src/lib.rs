@@ -18,6 +18,7 @@ use tokio::runtime::{Builder, Handle, Runtime};
 pub struct QueryClient {
     runtime: Runtime,
     cancel_on_ctrl_c: bool,
+    include_source_info: bool,
 }
 
 /// Validated application terminal after the owned child has exited and been reaped.
@@ -122,6 +123,7 @@ impl QueryClient {
         Ok(Self {
             runtime,
             cancel_on_ctrl_c: false,
+            include_source_info: false,
         })
     }
 
@@ -131,6 +133,12 @@ impl QueryClient {
     /// I/O loop through correlated cancellation and observed child cleanup.
     pub const fn enable_ctrl_c(&mut self) {
         self.cancel_on_ctrl_c = true;
+    }
+
+    /// Opts subsequent one-shot calls into saved locator annotations; default is false.
+    /// A hint never asserts that the live source exists or matches the retained revision.
+    pub const fn set_include_source_info(&mut self, include: bool) {
+        self.include_source_info = include;
     }
 
     /// Owns one native child, serviced framed stdio, cancellation and observed reap.
@@ -155,6 +163,7 @@ impl QueryClient {
             deadline,
             cancelled,
             self.cancel_on_ctrl_c,
+            self.include_source_info,
         ))
     }
 
@@ -179,6 +188,7 @@ impl QueryClient {
             deadline,
             cancelled,
             self.cancel_on_ctrl_c,
+            self.include_source_info,
         ))
     }
 
@@ -203,6 +213,7 @@ impl QueryClient {
             deadline,
             cancelled,
             self.cancel_on_ctrl_c,
+            self.include_source_info,
         ))
     }
 }

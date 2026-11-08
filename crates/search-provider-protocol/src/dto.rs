@@ -123,6 +123,9 @@ pub enum ClientFrame {
         /// Include bounded published/control corpus facts in a successful terminal.
         #[serde(default, skip_serializing_if = "std::ops::Not::not")]
         include_summary: bool,
+        /// Project saved published locators onto emitted items; no live-path check.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        include_source_info: bool,
     },
     /// Start the sole raw literal execution on the same serviced connection.
     RawExact {
@@ -135,6 +138,9 @@ pub enum ClientFrame {
         /// Include bounded published/control corpus facts in a successful terminal.
         #[serde(default, skip_serializing_if = "std::ops::Not::not")]
         include_summary: bool,
+        /// Include saved locator annotations, independent of retained-byte completeness.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        include_source_info: bool,
     },
     /// Search complete retained UTF-8 text on the same serviced connection.
     DecodedUtf8 {
@@ -147,6 +153,9 @@ pub enum ClientFrame {
         /// Include bounded published/control corpus facts in a successful terminal.
         #[serde(default, skip_serializing_if = "std::ops::Not::not")]
         include_summary: bool,
+        /// Include saved locator annotations without reading live source paths.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        include_source_info: bool,
     },
     /// Cancel that same query without another work slot.
     Cancel {
@@ -156,6 +165,25 @@ pub enum ClientFrame {
 }
 
 impl ClientFrame {
+    /// Whether each emitted item must contain a saved-source annotation.
+    #[must_use]
+    pub const fn include_source_info(&self) -> bool {
+        match self {
+            Self::Query {
+                include_source_info,
+                ..
+            }
+            | Self::RawExact {
+                include_source_info,
+                ..
+            }
+            | Self::DecodedUtf8 {
+                include_source_info,
+                ..
+            } => *include_source_info,
+            Self::Cancel { .. } => false,
+        }
+    }
     /// Whether this data request requires a corpus summary on success.
     #[must_use]
     pub const fn include_summary(&self) -> bool {
@@ -320,6 +348,82 @@ impl EvidenceMetadata {
     }
 }
 
+/// Source-path freshness is deliberately not observed by a retained query.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub enum SourceLiveStatus {
+    /// Saved metadata only; no source stat/open or current-file verification.
+    NotChecked,
+}
+
+/// Closed reasons a valid retained item has no displayable saved locator.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub enum SourceInfoUnavailableReason {
+    /// The saved locator cannot be decoded as a supported absolute native path.
+    InvalidLocator,
+    /// The current platform has no supported native locator decoder.
+    UnsupportedPlatform,
+    /// The saved native path has no lossless UTF-8 string representation.
+    NonUnicodeLocator,
+    /// The bounded annotation allocation was unavailable.
+    AllocationFailed,
+    /// The optional annotation did not fit the existing reply budget.
+    OutputLimit,
+}
+
+/// An annotation bound by its enclosing immutable citation, never a live-file claim.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "status", rename_all = "snake_case", deny_unknown_fields)]
+pub enum SourceInfo {
+    /// Exact saved locator decoded without filesystem observation or normalization.
+    Available {
+        /// A navigation hint; the named file may be absent, changed or relocated.
+        saved_path_hint: String,
+        /// Always explicitly not checked.
+        live_status: SourceLiveStatus,
+    },
+    /// Retained evidence remains usable independently of this metadata annotation.
+    Unavailable {
+        /// Closed annotation-only failure.
+        reason: SourceInfoUnavailableReason,
+        /// No live-file verification was attempted.
+        live_status: SourceLiveStatus,
+    },
+}
+
+impl SourceInfo {
+    const fn validate(&self) -> Result<(), ProtocolError> {
+        if let Self::Available {
+            saved_path_hint, ..
+        } = self
+            && (saved_path_hint.is_empty() || saved_path_hint.len() > MAX_UNIT_TEXT_BYTES)
+        {
+            return Err(ProtocolError::InvalidMessage);
+        }
+        Ok(())
+    }
+
+    pub(crate) fn omit_for_output(&mut self) {
+        if matches!(self, Self::Available { .. }) {
+            *self = Self::Unavailable {
+                reason: SourceInfoUnavailableReason::OutputLimit,
+                live_status: SourceLiveStatus::NotChecked,
+            };
+        }
+    }
+}
+
+fn source_info_requested(info: Option<&SourceInfo>, requested: bool) -> Result<(), ProtocolError> {
+    if info.is_some() != requested {
+        return Err(ProtocolError::InvalidMessage);
+    }
+    if let Some(info) = info {
+        info.validate()?;
+    }
+    Ok(())
+}
+
 /// One complete verified prepared unit in backend rank order.
 #[derive(Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -332,6 +436,9 @@ pub struct SearchHit {
     pub evidence: EvidenceMetadata,
     /// Exact full UTF-8 unit; never clipped for transport.
     pub unit_text: String,
+    /// Optional saved locator, tied to this item's published source binding.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_info: Option<SourceInfo>,
 }
 
 impl fmt::Debug for SearchHit {
@@ -341,6 +448,7 @@ impl fmt::Debug for SearchHit {
             .field("score", &self.score)
             .field("evidence", &self.evidence)
             .field("unit_text_bytes", &self.unit_text.len())
+            .field("source_info_present", &self.source_info.is_some())
             .finish()
     }
 }
@@ -390,6 +498,9 @@ pub struct SearchGap {
     pub evidence: EvidenceMetadata,
     /// `SOURCE_OBJECT_MISSING` or `PREPARED_OBJECT_MISSING`.
     pub code: FailureCode,
+    /// Saved metadata may remain available even when a retained object is missing.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_info: Option<SourceInfo>,
 }
 
 /// One whole hit or missing-object gap, preserving backend order.
@@ -403,6 +514,14 @@ pub enum SearchItem {
 }
 
 impl SearchItem {
+    /// Saved-source annotation on this emitted hit or gap.
+    #[must_use]
+    pub const fn source_info(&self) -> Option<&SourceInfo> {
+        match self {
+            Self::Hit(hit) => hit.source_info.as_ref(),
+            Self::Gap(gap) => gap.source_info.as_ref(),
+        }
+    }
     /// Original one-based backend rank.
     #[must_use]
     pub const fn rank(&self) -> u8 {
@@ -422,6 +541,9 @@ impl SearchItem {
     }
 
     fn validate(&self, generation: u64) -> Result<(), ProtocolError> {
+        if let Some(info) = self.source_info() {
+            info.validate()?;
+        }
         let score = match self {
             Self::Hit(hit) => {
                 if hit.unit_text.len() > MAX_UNIT_TEXT_BYTES
@@ -500,6 +622,9 @@ pub struct RawExactMatch {
     pub end: u64,
     /// Exact matched bytes in lowercase hex, also valid for non-UTF-8 input.
     pub bytes_hex: String,
+    /// Optional saved locator for the enclosing pinned source reference.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_info: Option<SourceInfo>,
 }
 
 /// An explicitly missing selected raw object; preparation Gaps do not cause this gap.
@@ -510,6 +635,9 @@ pub struct RawExactGap {
     pub source: RawSourceRef,
     /// Only `SOURCE_OBJECT_MISSING`; corrupt bytes are a failed terminal.
     pub code: FailureCode,
+    /// Optional saved locator; missing retained bytes do not erase saved metadata.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_info: Option<SourceInfo>,
 }
 
 /// One whole raw match or missing-source gap in source/byte order.
@@ -523,6 +651,24 @@ pub enum RawExactItem {
 }
 
 impl RawExactItem {
+    /// Saved-source annotation on this emitted item.
+    #[must_use]
+    pub const fn source_info(&self) -> Option<&SourceInfo> {
+        match self {
+            Self::Match(hit) => hit.source_info.as_ref(),
+            Self::Gap(gap) => gap.source_info.as_ref(),
+        }
+    }
+
+    pub(crate) fn omit_source_info_for_output(&mut self) {
+        let info = match self {
+            Self::Match(hit) => &mut hit.source_info,
+            Self::Gap(gap) => &mut gap.source_info,
+        };
+        if let Some(info) = info {
+            info.omit_for_output();
+        }
+    }
     /// Exact committed source binding for this item.
     #[must_use]
     pub const fn source(&self) -> &RawSourceRef {
@@ -533,6 +679,9 @@ impl RawExactItem {
     }
 
     fn validate(&self) -> Result<(), ProtocolError> {
+        if let Some(info) = self.source_info() {
+            info.validate()?;
+        }
         self.source().validate()?;
         match self {
             Self::Match(hit) => {
@@ -700,6 +849,9 @@ pub struct DecodedUtf8Match {
     pub source_end: u64,
     /// Exact matching UTF-8 text, including original BOM or line endings.
     pub text: String,
+    /// Optional saved locator, independent of representation verification.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_info: Option<SourceInfo>,
 }
 
 /// A selected source without an available valid retained UTF-8 representation.
@@ -712,6 +864,9 @@ pub struct DecodedUtf8Gap {
     pub prepared: Option<ObjectRefDto>,
     /// `PREPARATION_GAP`, `SOURCE_OBJECT_MISSING` or `PREPARED_OBJECT_MISSING`.
     pub code: FailureCode,
+    /// Optional saved source metadata even when the representation is unavailable.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_info: Option<SourceInfo>,
 }
 
 /// One whole UTF-8 occurrence or unavailable-representation gap.
@@ -725,6 +880,24 @@ pub enum DecodedUtf8Item {
 }
 
 impl DecodedUtf8Item {
+    /// Saved-source annotation on this emitted item.
+    #[must_use]
+    pub const fn source_info(&self) -> Option<&SourceInfo> {
+        match self {
+            Self::Match(hit) => hit.source_info.as_ref(),
+            Self::Gap(gap) => gap.source_info.as_ref(),
+        }
+    }
+
+    pub(crate) fn omit_source_info_for_output(&mut self) {
+        let info = match self {
+            Self::Match(hit) => &mut hit.source_info,
+            Self::Gap(gap) => &mut gap.source_info,
+        };
+        if let Some(info) = info {
+            info.omit_for_output();
+        }
+    }
     /// Source binding in the committed inventory.
     #[must_use]
     pub const fn source(&self) -> &RawSourceRef {
@@ -735,6 +908,9 @@ impl DecodedUtf8Item {
     }
 
     fn validate(&self) -> Result<(), ProtocolError> {
+        if let Some(info) = self.source_info() {
+            info.validate()?;
+        }
         self.source().validate()?;
         match self {
             Self::Match(hit) => {
@@ -1129,6 +1305,25 @@ impl Terminal {
         if let Some(summary) = &self.summary {
             summary.validate_selection(selection)?;
         }
+        let requested = request.include_source_info();
+        match &self.outcome {
+            QueryOutcome::Complete { items, .. } => {
+                for item in items {
+                    source_info_requested(item.source_info(), requested)?;
+                }
+            }
+            QueryOutcome::RawExact { result } => {
+                for item in &result.items {
+                    source_info_requested(item.source_info(), requested)?;
+                }
+            }
+            QueryOutcome::DecodedUtf8 { result } => {
+                for item in &result.items {
+                    source_info_requested(item.source_info(), requested)?;
+                }
+            }
+            QueryOutcome::Cancelled | QueryOutcome::Failed { .. } => {}
+        }
         Ok(())
     }
 }
@@ -1193,6 +1388,9 @@ pub enum SessionClientFrame {
         /// Cache corpus facts from Open for the original window lifetime.
         #[serde(default, skip_serializing_if = "std::ops::Not::not")]
         include_summary: bool,
+        /// Include saved-source annotations throughout this original window.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        include_source_info: bool,
     },
     /// Page only the stored original result prefix, without rescanning or repinning.
     Continue {
@@ -1346,6 +1544,15 @@ pub enum WindowItem {
 }
 
 impl WindowItem {
+    /// Original saved-source annotation, bound by the enclosing citation/source.
+    #[must_use]
+    pub const fn source_info(&self) -> Option<&SourceInfo> {
+        match self {
+            Self::Search(item) => item.source_info(),
+            Self::Raw(item) => item.source_info(),
+            Self::DecodedUtf8(item) => item.source_info(),
+        }
+    }
     fn validate(&self, generation: u64) -> Result<(), ProtocolError> {
         match self {
             Self::Search(item) => item.validate(generation),
@@ -1408,6 +1615,13 @@ pub struct WindowPage {
 }
 
 impl WindowPage {
+    /// Requires annotations exactly when the original Open opted in.
+    pub fn validate_source_info(&self, requested: bool) -> Result<(), ProtocolError> {
+        for entry in &self.items {
+            source_info_requested(entry.item.source_info(), requested)?;
+        }
+        Ok(())
+    }
     /// Checks original facts, contiguous indexes and item coordinate bindings.
     pub fn validate(&self) -> Result<(), ProtocolError> {
         validate_window_id(self.window_id)?;
@@ -1493,11 +1707,17 @@ pub struct WindowExpansion {
     pub source_end: u64,
     /// Exact verified context, not a latest-source substitution.
     pub content: ExpansionContent,
+    /// The original emitted item's cached saved-source annotation.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_info: Option<SourceInfo>,
 }
 
 impl WindowExpansion {
     /// Checks total returned size, representation kind and identity mapping.
     pub fn validate(&self) -> Result<(), ProtocolError> {
+        if let Some(info) = &self.source_info {
+            info.validate()?;
+        }
         validate_window_id(self.window_id)?;
         self.source.validate()?;
         let length = self
@@ -1738,6 +1958,9 @@ impl WindowExpansion {
         original: &WindowItem,
     ) -> Result<(), ProtocolError> {
         self.validate()?;
+        if self.source_info.as_ref() != original.source_info() {
+            return Err(ProtocolError::InvalidMessage);
+        }
         let SessionClientFrame::Expand {
             window_id,
             item_index,

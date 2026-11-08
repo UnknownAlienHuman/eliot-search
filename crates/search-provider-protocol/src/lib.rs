@@ -12,9 +12,9 @@ pub use dto::{
     DecodedUtf8Request, DecodedUtf8Result, EvidenceMetadata, ExpansionContent, FailureCode,
     ObjectKindDto, ObjectRefDto, QueryOutcome, QuerySummary, RawExactGap, RawExactItem,
     RawExactMatch, RawExactRequest, RawExactResult, RawSourceRef, SearchGap, SearchHit, SearchItem,
-    SearchRequest, SessionClientFrame, SessionOutcome, SessionReply, StopReason,
-    SummaryUnavailableReason, Terminal, WindowEntry, WindowExpansion, WindowItem, WindowPage,
-    WindowQuery, WindowSummary,
+    SearchRequest, SessionClientFrame, SessionOutcome, SessionReply, SourceInfo,
+    SourceInfoUnavailableReason, SourceLiveStatus, StopReason, SummaryUnavailableReason, Terminal,
+    WindowEntry, WindowExpansion, WindowItem, WindowPage, WindowQuery, WindowSummary,
 };
 pub use error::ProtocolError;
 pub use frame::{

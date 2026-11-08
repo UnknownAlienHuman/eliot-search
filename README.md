@@ -11,7 +11,8 @@ debug native qualification passed at c843171; earlier transport/budget evidence 
 register. A10 QuerySummary landed on main2a0462a6 with Rust source equal to 9cfa; existing binaries retain their
 9cfa build provenance. V1 is DONE for the concrete Windows/Release ordinary-repo-1 resource scope,
 real-repository workflows and isolated installed pair, including observed replacement disk qualification.
-Actual unsampled peaks and cold-cache/other-platform behavior are not claimed; no READY mandatory row remains.
+Actual unsampled peaks and cold-cache/other-platform behavior are not claimed. That earlier core scope is
+complete; the new user-required [AD1 agent delivery](docs/audit/ANALYSIS_REGISTRY.md#agent-delivery) is IN_PROGRESS.
 
 | Need | Start here |
 |---|---|
@@ -21,6 +22,7 @@ Actual unsampled peaks and cold-cache/other-platform behavior are not claimed; n
 | Find code and check a change | [Code map](docs/implementation/CODE_MAP.md), [working guide](docs/implementation/WORKING_GUIDE.md) |
 | Find a specific rule | [Documentation index](docs/README.md) |
 | Run | [Quickstart](QUICKSTART.md), with exact qualification scopes in the work register |
+| Agent/MCP delivery (IN_PROGRESS) | [Package/skill source](integrations/eliot-search/README.md), [MCP owner](bins/eliot-search-mcp/FUNCTIONS.md) |
 
 Use `index PATH` on an initialized root to admit and refresh that file/tree, then `index` in a new process to
 reload all stored selections, followed by `search`. Explicit PATH refreshes only that scope; bare index uses
@@ -31,7 +33,15 @@ are not claimed. Raw/DecodedUtf8 Exact, same-session windows and selected GC/exp
 Separate replacement observed-disk high-water passed <=4 GiB; the exact scopes, original versus supplemental
 metrics and retained UNKNOWN limits live in the work register. O1 optional depth remains DEFERRED.
 Confirmed deletion excludes a source from new generations while preserving retained objects and pinned views.
-Do not build optional systems first or restore the retired source/qualification frameworks.
+New eliot-search-mcp source declares seven JSON-RPC tools over the existing SDK, with captured saved-path
+annotations available by opt-in. Candidate3 has CORE/MCP SOURCE PASS with all reviewed P2 items closed, and its
+matching version 0.0.0 Release trio passed the real package build. Four coding-client Skill copies are installed;
+the current Codex host catalog discovers the Skill. Claude Desktop account upload and enablement were observed
+(by you, v1). The four coding MCP entries now target the verified shared package/data-root under .eliot-search;
+the old AppData package is historical. Candidate3 has Sol-accepted SELECTED_NATIVE_PASS, including cleanup/
+continuation. Operational root/backend preparation and native host model/context work in all five clients remain
+pending; Desktop MCPB installation awaits action-time approval and is NOT_RUN.
+See AD1 for exact artifacts and limits. Do not restore retired source/qualification frameworks.
 
 ## License
 

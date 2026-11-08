@@ -1,0 +1,18 @@
+{
+  "manifest_version": "0.3",
+  "name": "eliot-search",
+  "version": "0.0.0",
+  "description": "Read-only local ELIOT Search tools over retained source evidence.",
+  "author": { "name": "ELIOT Search" },
+  "server": {
+    "type": "binary",
+    "entry_point": "server/eliot-search-mcp.exe",
+    "mcp_config": {
+      "command": "${__dirname}/server/eliot-search-mcp.exe",
+      "args": ["--data-root", "__DATA_ROOT__"]
+    }
+  },
+  "tools_generated": true,
+  "compatibility": { "platforms": ["win32"] },
+  "license": "MIT"
+}

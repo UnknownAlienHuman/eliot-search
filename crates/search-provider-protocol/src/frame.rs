@@ -156,11 +156,13 @@ pub fn prepare_raw_exact(
     result: RawExactResult,
     summary: Option<QuerySummary>,
 ) -> Result<Vec<u8>, ProtocolError> {
-    encode_terminal_frame(&Terminal {
+    let mut terminal = Terminal {
         request_id,
         outcome: QueryOutcome::RawExact { result },
         summary,
-    })
+    };
+    fit_exact_source_info(&mut terminal)?;
+    encode_terminal_frame(&terminal)
 }
 
 /// Encodes a whole retained UTF-8 execution without clipping text or identity ranges.
@@ -169,11 +171,46 @@ pub fn prepare_decoded_utf8(
     result: DecodedUtf8Result,
     summary: Option<QuerySummary>,
 ) -> Result<Vec<u8>, ProtocolError> {
-    encode_terminal_frame(&Terminal {
+    let mut terminal = Terminal {
         request_id,
         outcome: QueryOutcome::DecodedUtf8 { result },
         summary,
-    })
+    };
+    fit_exact_source_info(&mut terminal)?;
+    encode_terminal_frame(&terminal)
+}
+
+fn fit_exact_source_info(terminal: &mut Terminal) -> Result<(), ProtocolError> {
+    let requested = match &terminal.outcome {
+        QueryOutcome::RawExact { result } => {
+            result.items.iter().any(|item| item.source_info().is_some())
+        }
+        QueryOutcome::DecodedUtf8 { result } => {
+            result.items.iter().any(|item| item.source_info().is_some())
+        }
+        _ => false,
+    };
+    if !requested {
+        return Ok(());
+    }
+    if fits(terminal)? {
+        return Ok(());
+    }
+    // Optional locators must not erase valid Exact items or scan facts.
+    match &mut terminal.outcome {
+        QueryOutcome::RawExact { result } => {
+            for item in &mut result.items {
+                item.omit_source_info_for_output();
+            }
+        }
+        QueryOutcome::DecodedUtf8 { result } => {
+            for item in &mut result.items {
+                item.omit_source_info_for_output();
+            }
+        }
+        _ => {}
+    }
+    Ok(())
 }
 
 /// Produces a complete terminal with the largest whole rank prefix that fits.

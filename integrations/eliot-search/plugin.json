@@ -1,0 +1,7 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "eliot-search",
+  "version": "0.0.0",
+  "description": "Search retained local repository and document evidence with bounded exact checks and same-view context.",
+  "license": "MIT"
+}

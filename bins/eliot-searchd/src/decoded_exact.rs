@@ -153,6 +153,7 @@ fn scan_source(
                     source_start: start,
                     source_end: end,
                     text,
+                    source_info: None,
                 }));
             }
             Ok(())
@@ -172,6 +173,7 @@ fn scan_source(
                 prepared: gap.prepared.map(object_ref).transpose()?,
                 code: FailureCode::new(gap.code)
                     .map_err(|error| QueryFailure::Code(error.code()))?,
+                source_info: None,
             }));
         }
     }
@@ -182,6 +184,7 @@ pub fn execute(
     root: &PlainRootGuard,
     view: &PublishedView,
     request: &DecodedUtf8Request,
+    include_source_info: bool,
     deadline: Instant,
     cancel: &AtomicBool,
 ) -> Result<(DecodedUtf8Result, u64)> {
@@ -223,6 +226,7 @@ pub fn execute(
         ) {
             preparation_gaps += 1;
         }
+        let first = result.items.len();
         scan_source(
             root,
             &entry,
@@ -232,6 +236,15 @@ pub fn execute(
             deadline,
             cancel,
         )?;
+        if first != result.items.len() {
+            let info = crate::exact_literal::source_info(&entry.source, include_source_info);
+            for item in &mut result.items[first..] {
+                match item {
+                    DecodedUtf8Item::Match(hit) => hit.source_info.clone_from(&info),
+                    DecodedUtf8Item::Gap(gap) => gap.source_info.clone_from(&info),
+                }
+            }
+        }
     }
     check(deadline, cancel)?;
     result.scan_complete = result.gap_sources == 0;
