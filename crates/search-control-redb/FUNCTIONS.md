@@ -19,7 +19,7 @@ cannot establish durable acceptance. Displaced unused path-opening publication A
 
 current_source owns three ordinary current tables in the same database:
 
-- source_state stores the source-row schema version, persisted root-local SourceNamespaceId and non-reset wanted_corpus_revision, plus durable admitted-selection records.
+- source_state stores the source-row schema version, persisted SourceNamespaceId and non-reset wanted_corpus_revision, plus durable admitted-selection records. Native retention creates source identity; import preserves the served portable identity.
 - current_source_rows stores typed CurrentSourceRecord values by independently generated SourceId.
 - current_source_locators maps exact OS-native path bytes to a stored SourceId.
 
@@ -120,7 +120,22 @@ write, live-file fallback or Qdrant request is performed by this read-only Exact
 copy_plain_control copies the supported closed CONTROL state under the caller's existing exclusive guard;
 describe_plain_control independently verifies its bytes/format description. Archive export checks the copy,
 typed reference closure and saved objects before completion publication. Copied pending/cleanup records are
-evidence, not authority to mutate the original backend. This introduces no import/restore entrypoint or new table.
+evidence, not authority to mutate the original backend. The copy helpers do not install rows or introduce a new table.
+
+## Served-baseline import
+
+[publication/restore.rs](src/publication/restore.rs) exposes validate_served_corpus and
+ControlWriter::install_served_corpus to the marked destination owner. Validation checks the complete selected
+served inventory, Source/publication caps, unique identities/locators and exact input/settings/outcome bindings.
+An outcome bound to an older Source revision remains valid when its retained input/settings match; a bound
+revision newer than captured Source is corruption, even if a different current desired head exists in the archive.
+
+Installation preserves Source namespace/IDs/revisions and complete preparation records, writes source schema v2
+count/byte totals in existing source_state and advances local wanted once. It copies no admissions, old publication
+namespace/counters or archived pending authority. Exact retry compares the whole installed inventory/totals and
+preserves Source/preparation/wanted plus live destination publication obligations; it is not a counter reset or
+physical-CONTROL byte-identity promise. The daemon then publishes/accepts a fresh destination generation before
+root-marker removal. Empty served inventory installs known-empty source/preparation state, not unserved desired rows.
 
 ## Guarded engine recovery
 

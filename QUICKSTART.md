@@ -228,9 +228,27 @@ The output must be fresh, outside/non-overlapping with the source, under an exis
 Export takes exclusive root ownership; close sessions first. It verifies the required retained closure, copies
 CONTROL/objects and independently verifies the copy before publishing archive.complete last. It makes no
 Qdrant connection and copies no backend storage. The archive is deliberately non-runnable, including after
-interruption; it is not a cloned installation. Import is not implemented. M1 remains PARTIAL; see the
+interruption; it is not a cloned installation. Import uses the separate fresh-destination command below; see the
 [archive owner](crates/search-runtime/search-retention/FUNCTIONS.md#implemented-archive-export-consumer) and
 [recorded qualification scopes](docs/audit/ANALYSIS_REGISTRY.md#core-corrections-and-archive-export).
+
+## Import the served archive into a fresh destination
+
+Start the operator-owned Qdrant service and use the matching RELEASE siblings. DEST must be a fresh,
+non-overlapping path under an existing non-reparse parent; do not initialize it separately:
+
+    .\target\release\eliot-search.exe archive-import --archive-path "C:\example\archives\snapshot-1" --data-root "C:\example\imported-root" --qdrant-url http://127.0.0.1:6334 --daemon .\target\release\eliot-searchd.exe
+
+The complete archive is verified before destination effects. Only the whole SERVED inventory is installed,
+with its saved Source/preparation facts and explicit Empty/Gap outcomes. Current unserved desired rows and
+admissions are not imported. Native file keys are historical; no live-file read or hidden preparation occurs.
+The destination publishes with fresh backend identity and becomes usable only after verified current and marker
+removal. If interrupted, repeat this same command with --retry and the same ARCHIVE/DEST. Wrong bindings and
+populated markerless destinations refuse; preserve the partial destination rather than resetting it.
+
+M1 GC/export/import is qualified only at the recorded Windows/Release scopes. V1/installed final-head and the
+whole product remain unqualified. See the [import owner](crates/search-runtime/search-retention/FUNCTIONS.md#explicit-restoreimport-into-a-fresh-destination)
+and [exact evidence](docs/audit/ANALYSIS_REGISTRY.md#m1-import-delivery).
 
 ## File, environment and CLI settings
 
