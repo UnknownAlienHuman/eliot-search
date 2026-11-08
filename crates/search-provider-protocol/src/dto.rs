@@ -1000,6 +1000,11 @@ impl QuerySummary {
         {
             return Err(ProtocolError::InvalidMessage);
         }
+        if self.selected_sources - self.selected_preparation_gaps
+            > self.published_sources - self.published_preparation_gaps
+        {
+            return Err(ProtocolError::InvalidMessage);
+        }
         if let ControlObservation::Known {
             wanted_revision,
             known_control_lag,
