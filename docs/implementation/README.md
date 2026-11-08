@@ -10,7 +10,7 @@ The current binaries expose four root operations, explicit file/tree index, reta
 prepare-source, publish-prepared, foreground watch and framed read-only Search/Raw/DecodedUtf8 Exact. The connected path reaches source/current row, complete preparation/current outcome,
 Qdrant generation/current evidence/view and verified retained units/citations. Publication returns generation
 state/counts; Search and Raw/DecodedUtf8 Exact are read-only query operations. Their exact native scopes belong in the registry;
-Same-session Continue/Expand/expiry, stopped-root collect-objects and plain archive-export are connected too. The
+Same-session Continue/Expand/expiry, stopped-root collect-objects and plain archive-export/import are connected too. The
 [registry](../audit/ANALYSIS_REGISTRY.md#work-register) owns their exact qualification scopes and remaining work;
 connected commands do not imply an installed baseline or completion of the product.
 
@@ -125,9 +125,9 @@ Persisted unknown Insert/ABA, postcommit/pre-view and held-query exclusion/clean
 native scopes; the resource run does not relabel them. Fixed-input RELEASE measurement passed the declared
 profile with sampled/OS-reported counters; complete unsampled product peaks and generation-replacement peak
 remain UNKNOWN/NOT_RUN. DEBUG query performance is not qualified. See the registry for exact boundaries.
-X1 is DONE in its selected Windows/Release scope. M1 collect-objects and archive-export are delivered in their
-recorded Windows/Release scopes; M1 remains PARTIAL with import next. V1 relevance/scale/installed-release work
-remains unfinished.
+X1 and M1 GC/export/import are DONE only in their selected Windows/Release scopes. V1 is READY: bounded
+known-freshness/preparation-gap summary and real-repository relevance, scale and installed/final-head
+qualification remain unfinished.
 Search stays read-only; query and writer share exclusive root exclusion through flush, so a concurrent view
 manager is not the next prerequisite.
 
@@ -175,12 +175,14 @@ See the [window owner](../../crates/search-query/search-continuation/FUNCTIONS.m
 
 ### 5. Maintenance and selected product depth
 
-M1 is PARTIAL: collect-objects is connected at f01809bc in its recorded Windows/Release scope. The owned child
+M1 is DONE only in its selected Windows/Release GC/export/import scopes. collect-objects is connected at
+f01809bc in its recorded scope. The owned child
 takes open_plain_with_recovery/root exclusion, one consistent CONTROL snapshot and typed disk-backed marks;
 it verifies Prepared bindings/embedded Source closure and every Source before one final-object streaming sweep.
 Only proven canonical current-format unmarked leaves may be deleted; foreign/unknown entries are preserved.
 Every-32 scratch durability checkpoints bound engine bookkeeping, not object count; this is source proof,
-not universal native RAM measurement. Current root.importing is unsupported/refused, not an import flow.
+not universal native RAM measurement. Ordinary open/collection refuses incomplete imports; only the bound
+archive-import --retry consumer may resume them.
 See the [collector rule/checks](../../crates/search-runtime/search-retention/FUNCTIONS.md#implemented-checks-and-remaining-m1).
 
 Archive export now connects the owned daemon to a verified, non-runnable plain archive: copied CONTROL and
@@ -189,8 +191,15 @@ requires a served generation and fresh non-overlapping output; no Qdrant storage
 copied. Source 597/whole-tree-equivalent rebased 6137 and earlier 06f/7a7d native scopes remain distinct in the
 [registry](../audit/ANALYSIS_REGISTRY.md#core-corrections-and-archive-export).
 
-Fresh-destination import remains unimplemented and is next. Owners #302/#244/#281/#227/#335; optional #219/#239/#248/#334/#336 implement those consumers first,
-then selected source-backed orientation/comparison/Git/document capabilities. Optional donors join existing
+Fresh-destination import at source 708621c1 verifies full archive closure/caps, selects the whole served baseline,
+preserves portable Source/preparation facts and publishes fresh destination identity. Exact marker-bound retry
+uses the stable root guard/recovery; no implicit reprepare, desired-state mixing or original backend replay.
+The selected native flows and UNKNOWN observations are in the [import checkpoint](../audit/ANALYSIS_REGISTRY.md#m1-import-delivery).
+
+V1 is next: deliver the bounded known-freshness/preparation-gap summary required by
+[product behavior](../product/AGENT_ANALYSIS_FRAMEWORK.md#orient-an-unfamiliar-repository), then qualify real-repository
+relevance, ordinary-repo-1 scale and an isolated installed CLI/daemon pair at the final source/build scope.
+Optional #219/#239/#248/#334/#336 remain selected source-backed orientation/comparison/Git/document capabilities. Optional donors join existing
 consumers. No encryption or restricted-user phase. Qdrant Edge, if studied later, is a replacement experiment.
 
 <a id="lifetime-and-lock-order"></a>

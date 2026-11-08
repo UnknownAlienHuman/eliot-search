@@ -2,7 +2,10 @@
 
 mod codec;
 mod collection;
+mod restore;
 mod verify;
+
+pub use restore::validate_served_corpus;
 
 pub(super) use collection::mark_objects;
 

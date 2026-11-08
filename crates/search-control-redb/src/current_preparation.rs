@@ -23,6 +23,18 @@ use crate::plain_control::ControlWriter;
 
 const PREPARATIONS: TableDefinition<&[u8], &[u8]> = TableDefinition::new(PREPARATION_TABLE_NAME);
 
+pub(super) fn install_import_preparation(
+    tx: &WriteTransaction,
+    row: &CurrentPreparation,
+) -> Result<()> {
+    let bytes = encode(row)?;
+    tx.open_table(PREPARATIONS)
+        .map_err(|_| PreparationControlError::Database)?
+        .insert(row.source_id.as_bytes().as_slice(), bytes.as_slice())
+        .map_err(|_| PreparationControlError::Database)?;
+    Ok(())
+}
+
 pub(super) fn remove_source_preparation(
     transaction: &WriteTransaction,
     source_id: SourceId,

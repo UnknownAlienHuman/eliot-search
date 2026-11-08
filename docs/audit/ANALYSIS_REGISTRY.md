@@ -10,24 +10,27 @@ c9a5f1c101e8e0828f913edd6c5769499454716f retains its source/native scope. Final 
 source-equivalent 473447af/main 5906107080c0c567721afb66d6a2f947f488eaca closes the selected Windows/Release
 window gates below. Executed binaries retain their 473447af build provenance; no fresh 590 rebuild is claimed.
 X1 is DONE in that scope. Collector source f01809bc9826314cf1850e6e4e92b970105908ab has Sol SOURCE PASS,
-changed-owner gates and scoped Windows/Release A/B/C plus Busy/import-marker refusal proof below; M1 is PARTIAL.
+changed-owner gates and scoped Windows/Release A/B/C plus Busy/import-marker refusal proof below.
 Core corrections/archive export have final Sol SOURCE PASS at 597, whole-tree-equivalent to rebased source
-6137dcc27e2957010474a4ead0dec4c4e49ca33b. The scoped native results below deliver export, not import.
-M1 remains PARTIAL. Whole-project/installed final-head qualification remains NOT_RUN.
+6137dcc27e2957010474a4ead0dec4c4e49ca33b. Import source 708621c19e85d946c7db82ba64aedd00a306f952 has Sol SOURCE PASS,
+changed-owner gates and completed selected native handbacks below. M1 GC/export/import is DONE only in its
+recorded Windows/Release scopes. V1 is READY; whole-project/installed final-head qualification remains NOT_RUN.
 
 <a id="resume"></a>
 <a id="resume-after-interruption"></a>
 ## Next task
 
-**M1 next: implement fresh-destination import.** collect-objects and archive-export are delivered only in their
-recorded scopes. Follow the existing [import rule](../../crates/search-runtime/search-retention/FUNCTIONS.md#explicit-restoreimport-into-a-fresh-destination):
-preserve portable Source identities/Prepared bindings, use a fresh destination PublicationNamespace and new
-backend generation names, and preserve original/archive data. The existing root manifest has format/version,
-not a RootId. This is future work, not an implemented import API. Copied pending/cleanup records authorize no
-original backend effects; reserved root.importing refusal is not import support.
+**V1 next: bounded known-freshness/preparation-gap summary, then relevance/scale and isolated installed qualification.**
+Use existing CONTROL/publication state in the same pinned snapshot, thread the bounded summary through the
+actual query/window DTO and CLI consumer, and preserve read-only/no-corpus-scan semantics. Product
+[scope summary](../product/AGENT_ANALYSIS_FRAMEWORK.md#orient-an-unfamiliar-repository) is required; filename lookup,
+ranked subsets, extended diagnostics and explicit Ready repair are not automatically selected gates.
 
-M1 remains PARTIAL: collector and archive export have their recorded Windows/Release scopes; import is unfinished.
-Busy-root refusal/release and reserved import-marker refusal native checks are closed at their recorded scope.
+Then qualify real-repository usefulness, ordinary-repo-1 scale under its unchanged declared budgets and a final-head
+installed CLI/daemon sibling pair in an isolated owned directory. Keep actual source/build/binary scope, byte-exact
+citations, wait/EOF/reap and UNKNOWN observations explicit; do not relabel the earlier 9e resource run.
+M1 GC/export/import is DONE only in its recorded Windows/Release scopes. Existing Busy/marker refusals remain
+separate evidence; normal opening still refuses incomplete imports.
 The scratch bookkeeping bound is source-reviewed, not a universal native RAM benchmark. Cooperating root
 exclusion does not make unlink atomic against external same-account renames.
 X1's selected Windows/Release scope remains DONE. Stronger UNKNOWN/NOT_PROVEN limits remain unchanged.
@@ -37,7 +40,7 @@ R1's persisted unknown Insert/ABA, postcommit/pre-view interruption and fef held
 separately pinned native evidence. The 9e RELEASE resource run does not relabel those cases. Complete unsampled
 product peaks and generation-replacement peak remain UNKNOWN/NOT_RUN; exact pre-spawn timing, wire-level
 lost-ACK/original delayed RPC and real power loss remain NOT_RUN, not newly invented prerequisites.
-After the delivered collector/export slices, finish M1 import, then V1 relevance/scale/installed release qualification.
+After the delivered M1 slices, V1 qualification remains the next unfinished delivery; no whole-product PASS follows.
 Do not restore a deleted task queue or add a concurrent view framework by default: root exclusion remains.
 
 <a id="work-register"></a>
@@ -58,9 +61,9 @@ DONE below is the named delivered scope, not completion of the product.
 | U1 / DONE, Windows debug scope | Q1 | CONTROL resolver, daemon/CLI, protocol/client | Read-only verified full retained units/citations; c843 targeted final-pin scope and earlier evidence below. |
 | R1 / ACCEPTED, recorded functional + RELEASE fixed-input scopes | U1 | CLI/daemon index helpers, source CONTROL and publication | Recorded owner gates include unknown Insert/ABA, postcommit boundary, held-query exclusion/cleanup and ordinary-repo-1 RELEASE fixed-input resource PASS; stronger unclaimed boundaries remain below. |
 | X1 / DONE, Windows/Release selected scope | R1 | CLI/OwnedQuerySession/daemon window owner | Final Sol PASS: Raw/Decoded/ranked, lifetime/held-output/selection and real 63+1 frame cut at recorded scopes. |
-| M1 / PARTIAL, collector + export scopes | X1 | Stopped-root collector and archive/import owner | collect-objects and archive-export delivered at their recorded Windows/Release scopes; fresh-destination import implementation is next. |
+| M1 / DONE, selected Windows/Release scopes | X1 | Stopped-root collector/export/import owners | Recorded GC/export scopes plus source708 served import, binding guards, exact retry, interrupted-copy and uncertain-backend recovery; stronger UNKNOWN limits remain below. |
 | O1 / DEFERRED | Connected baseline + actual need | [Selected depth](../product/AGENT_ANALYSIS_FRAMEWORK.md#optional-depth) | Add only an actual source-backed consumer; remove unused scaffolds. |
-| V1 / WAIT | X1/M1 shipped paths | [Qualification](../implementation/TEST_CUTOVER.md), #215 | Measured relevance/scale/platform/release and installed-baseline evidence. |
+| V1 / READY | X1/M1 selected shipped paths | [Qualification](../implementation/TEST_CUTOVER.md), #215; existing CONTROL/query/CLI owners | Bounded known-freshness/preparation-gap summary, real-repository relevance, declared-corpus scale and isolated installed/final-head evidence; not yet qualified. |
 
 [Implementation](../implementation/README.md#delivery-sequence) owns delivery order. Stage 3B is conditional
 on measured Stage 3A budgets failing; there is no separate global rewrite programme.
@@ -104,6 +107,51 @@ hydration reuse. No application encryption, grants, OS-secret platform or second
 <a id="execution-evidence"></a>
 ## Verification and known blockers
 
+<a id="m1-import-delivery"></a>
+### Served-baseline import delivery, Windows/Release
+
+- Source 708621c19e85d946c7db82ba64aedd00a306f952 has Sol SOURCE PASS, changed-owner locked check/strict
+  Clippy and RELEASE build success. The public archive-import/--retry consumer verifies archive closure and
+  Source/publication caps before DEST effects, preserves complete served portable Source/preparation facts,
+  installs v2 totals/local wanted once and publishes fresh destination identity. No RootId, admission copying,
+  secret reprepare or original backend replay is introduced.
+- Earlier d5 primary had served 4/current desired 6, including one Gap and one Empty: exact Source/preparation
+  refs/revisions/settings, totals 4/1860, fresh generation 1/local wanted 1 versus archived 14, and Raw/Decoded/
+  Search passed. True-empty served 0/desired 1 installed source/preparation 0 and known-empty generation 1;
+  Raw complete negative passed. Empty Source namespace/totals observer remains UNKNOWN. Corrupt unserved
+  C (237 bytes) refused before DEST; old backend names/points were unchanged. Wire-level NoRPC was not measured.
+- Fixed708 older-binding positive used the real producer: native key changed with identical bytes, Source 2/
+  Bound 1, no second prepare; publish/export/import succeeded with exact rows/refs and fresh publication
+  namespace (import CLI 102936/daemon 49664 both 0). Future negative changed only bound 2→3 against captured
+  Source 2/current desired 3, with valid rewritten CONTROL digest/header/completion. Public CLI 41604 returned
+  PUBLICATION_CORRUPT (2) before DEST; Source/preparation/publication, 15 objects, originals and old backend
+  full pointsets were preserved. This is no inferred failure from an invalid archive checksum.
+- Rawls final early interruption killed daemon 76336 after marker plus partial copy. Normal open refused;
+  exact retry completed fresh generation 1, removed the marker and preserved exact Source/preparation/totals.
+  The large fixture's publication wanted was 1 versus archived 12292. The old Source wanted key was not
+  exported; no independent value for it is invented.
+- Postcurrent marker-delete denial left committed generation 1 plus marker. Wrong valid archive/copied DEST
+  bindings refused with unchanged CONTROL. Correct retry reused generation/collection and identical Source/
+  preparation/totals, then removed the marker; physical CONTROL changed. Populated markerless --retry refused
+  wrong_state with CONTROL byte-identical and no marker/stage at refusal; normal open/retained readback worked.
+  Transient marker creation was not independently observed.
+- Unknown backend: observed new generation 1/marker, then owned Qdrant 43192 stopped. BACKEND_UNKNOWN_DISPATCH
+  left durable pending Create/in_flight/current None; offline --retry BACKEND_TRANSPORT_FAILED preserved logical
+  pending/Source/preparation/totals/marker. Online retry accepted fresh generation 2 while retaining generation 1
+  collection and the full unresolved Create obligation.
+- All old original CONTROL, 4099 objects, 4097 inputs, 302 old backend files and archive bytes remained unchanged;
+  cloned old collection full pointsets/configs were preserved. The 44 direct receipts recorded wait/both EOF/
+  OS absence. Final handbacks released owned processes/handles. Fast CLI-descendant custody and unrecorded
+  numeric daemon/backend cleanup exits remain UNKNOWN; OS absence does not invent numeric exit codes.
+- Exact fault evidence: C:\Development\Rust\targets\task-m1-import-fault-native\run-20261107-v1 contains
+  fault-final-result.json, SourceMarked-current-Proof.json, fault-final-preservation.json and fault-custody-release.json.
+  Raman final guards: C:\Development\Rust\targets\task-m1-import-native\run-20261107-v1\708621c1-guards-v1\native-final-handback-708-v1.json.
+  Earlier primary evidence remains d5a202bf-native-v1/result.json. Helper read-only sync OS5 and receipt filename
+  collision remain preserved observer failures, not product failures; no replacement product runs were made.
+- M1 DONE applies only to the selected Windows/Release GC/export/import paths. V1 READY is future work:
+  A10 bounded summary, relevance/scale and isolated installed/final-head qualification. Whole-product/installed
+  PASS, cross-OS native proof and stronger unclaimed power-loss/wire/pre-spawn boundaries are not established.
+
 <a id="core-corrections-and-archive-export"></a>
 ### Core corrections and archive export, source 597 / rebased 6137
 
@@ -140,7 +188,7 @@ hydration reuse. No application encryption, grants, OS-secret platform or second
 - Final interruption artifacts: C:\Development\Rust\targets\task-m1-archive-native\rawls-59772538-v1\logs\01-interruption.exit.json,
   preservation.json and custody-release.json. A11 was not reproduced; existing output-phase fail-closed is
   permitted, exact daemon error remains UNKNOWN, and no new source bug is established.
-- M1 remains PARTIAL: GC/export are delivered only at these Windows/Release scopes; import is unimplemented.
+- At the 597/6137 checkpoint M1 was PARTIAL with GC/export delivered; later import evidence is above.
   V1/installed final-head, whole product and stronger unclaimed power-loss/platform boundaries are not qualified.
 
 ### Stopped-root collector evidence, source f01809bc
@@ -171,8 +219,8 @@ hydration reuse. No application encryption, grants, OS-secret platform or second
   Root exclusion coordinates cooperating application processes; final pathname unlink is not atomic against
   a noncooperating same-account external rename/reparse replacement.
 - At this f018 checkpoint only the collector/source+Windows Release slice was delivered; later export evidence
-  is above. M1 remains PARTIAL; import, universal native RAM bounds, V1/installed final-head and the whole product
-  are not qualified.
+  is above, followed by import. M1 was PARTIAL at this checkpoint; universal native RAM bounds, V1/installed
+  final-head and the whole product remain unqualified.
 
 ### Session-window qualification, Windows/Release
 
@@ -202,7 +250,7 @@ hydration reuse. No application encryption, grants, OS-secret platform or second
   A/B/C, held-io-deferred, held-io-expiry, public-selection) and
   C:\Development\Rust\targets\task-x1-window-decoded-native\run-20261107-v2-shortpath, with v3-ranked and
   v4-framecut results. No reports/artifacts were rewritten.
-- X1 DONE / M1 READY is only the selected Windows/Release boundary. M1 implementation is unfinished;
+- At this X1 checkpoint, X1 DONE / M1 READY was only the selected Windows/Release boundary; later M1 evidence is above;
   V1/installed final head and whole project are not qualified. Existing stronger R1 NOT_RUN limits remain;
   extracted/parser/nonidentity producers are not newly selected X1 gates.
 

@@ -80,7 +80,18 @@ Use a supported current root with a served generation and a fresh non-overlappin
 non-reparse parent. The owned child creates a plain non-runnable archive, verifies the copied closure and
 publishes archive.complete last. It returns the closed archive-export/complete summary with generation,
 objects and control_bytes. No backend connection, source re-read from live paths or import is performed.
-A partial/missing/forged marker does not make the archive an ordinary root. Import remains unimplemented.
+A partial/missing/forged marker does not make the archive an ordinary root. Import uses the separate command below.
+
+## Archive import
+
+    eliot-search archive-import --archive-path ARCHIVE --data-root DEST --qdrant-url URL [--retry] [--daemon PATH]
+
+The owned daemon verifies the complete archive and whole SERVED baseline before destination effects, initializes
+fresh DEST, copies selected retained objects and publishes under fresh backend identity. It preserves portable
+Source/preparation facts; no desired-state mixing, live fallback or implicit preparation. The closed complete
+response carries generation/collection/source_count/gap_count/point_count/page_count. Normal use refuses an
+incomplete import. --retry resumes only the same archive/canonical destination binding; it does not adopt a
+populated markerless root. See the [import owner](../../crates/search-runtime/search-retention/FUNCTIONS.md#explicit-restoreimport-into-a-fresh-destination).
 
 ## Retained result
 

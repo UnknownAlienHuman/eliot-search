@@ -27,6 +27,7 @@ pub enum RootCommand {
     Session,
     CollectObjects,
     ArchiveExport,
+    ArchiveImport,
 }
 
 impl RootCommand {
@@ -44,6 +45,7 @@ impl RootCommand {
             Self::Session => "session",
             Self::CollectObjects => "collect-objects",
             Self::ArchiveExport => "archive-export",
+            Self::ArchiveImport => "archive-import",
         }
     }
 }
@@ -59,6 +61,7 @@ pub struct RootInvocation {
     pub(crate) publication: Option<PublicationRequest>,
     pub(crate) search_endpoint: Option<String>,
     pub(crate) archive_path: Option<PathBuf>,
+    pub(crate) import_retry: bool,
 }
 
 pub struct PublicationRequest {
@@ -103,6 +106,7 @@ fn print_help() {
         "  eliot-searchd --session-stdio [--qdrant-url URL] [--data-root ROOT] [--config-file PATH]\n",
         "  eliot-searchd --collect-objects [--data-root ROOT] [--config-file PATH]\n",
         "  eliot-searchd --archive-export --archive-path OUT [--data-root ROOT] [--config-file PATH]\n",
+        "  eliot-searchd --archive-import --archive-path ARCHIVE --data-root DEST --qdrant-url URL [--retry]\n",
     ));
 }
 

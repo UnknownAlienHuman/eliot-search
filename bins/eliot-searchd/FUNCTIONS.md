@@ -52,7 +52,25 @@ archive.header (plain v1, served baseline), then verifies CONTROL/objects/bindin
 read_object_in surface. Source/OUT equality/nesting and parent reparse are refused. No runnable root.toml,
 root.lock, initialization marker, scratch or Qdrant storage is copied. Files/directories are flushed with the
 root owner's primitive, archive.complete is written last and the result is verified again. The original root
-and external backend are not reset/adopted. Import remains unfinished; interruptions do not become complete archives.
+and external backend are not reset/adopted. Interrupted exports do not become complete archives.
+
+## Archive import path
+
+    eliot-searchd --archive-import --archive-path ARCHIVE --data-root DEST --qdrant-url URL [--retry]
+
+[archive_import.rs](src/archive_import.rs) validates archive closure and the whole served inventory/caps before
+DEST effects. Fresh initialization or exactly bound open_plain_marked holds one stable guard. The current
+111-byte marker binds canonical destination, archive CONTROL digest and served generation; marker/stage bounds
+remain 256 bytes. Only selected served objects/rows are installed through ControlWriter::install_served_corpus.
+Portable source/preparation facts and valid older bindings survive; native keys are historical and admissions
+are absent. No secret reprepare or old publication authority is imported.
+
+Normal publication builds a fresh destination namespace/generation, verifies complete current/evidence against
+the selected baseline and closes its view/stores before clear_import_marker. Exact retry preserves installed
+logical state; postcurrent marker-clear failure can reuse current, while uncertain Create can require a fresh
+successor with the old unresolved target retained. Wrong archive/destination and populated markerless retry
+refuse. The [maintenance owner](../../crates/search-runtime/search-retention/FUNCTIONS.md#explicit-restoreimport-into-a-fresh-destination)
+owns the complete rules and registry owns the separate native/UNKNOWN scopes.
 
 ## retain-file path
 

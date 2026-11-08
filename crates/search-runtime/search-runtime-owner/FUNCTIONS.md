@@ -44,7 +44,7 @@ eliot-plain-root-initializing-v1\n.
 | Unknown entries, invalid marker, symlinks or unsupported/legacy/encrypted format | Unsupported |
 | Another process holds the root or control lock | Busy |
 | Reserved archive.complete entry | Archive |
-| Reserved root.importing entry | IncompleteImport |
+| root.importing or root.importing.stage entry on ordinary open | IncompleteImport |
 
 Unknown or unsupported roots are classified before initialization creates a lock or other file. Existing roots
 are never repaired by inspect_plain or ordinary open_plain. The separate writable-open capability is described
@@ -132,10 +132,21 @@ does not authorize discard. No recursive deletion, store repair or import cleanu
 
 ## Archive and import boundary
 
-Archive creation and import remain owned by stopped-root maintenance
-([recipe](../search-retention/FUNCTIONS.md#backup-is-a-completed-archive-not-a-runnable-clone)). This root
-owner only refuses the reserved archive/import marker names; it does not open, repair, resume or clear them.
-The import owner must validate destination-bound marker bytes before importing.
+[Maintenance](../search-retention/FUNCTIONS.md#explicit-restoreimport-into-a-fresh-destination) owns archive/import
+policy and validates the archive/canonical-destination binding. Ordinary open still refuses archive/import markers.
+The connected import caller uses these existing-guard APIs, not an ordinary-open bypass:
+
+- open_plain_marked opens only an exactly bound import with the stable root lock and shared guarded CONTROL
+  recovery. Markerless retry requires proven empty initialized stores; only an exact-prefix fixed stage is
+  completed. Populated unmarked roots and wrong bytes/layouts refuse.
+- PlainRootGuard::publish_import_marker checks the expected nonempty binding (at most 256 bytes), marks the
+  guard non-current before publication can leave partial state and publishes through root.importing.stage.
+- PlainRootGuard::clear_import_marker requires stores/views closed and verified destination current. Exact
+  marker/stage checks, removal, directory flush, absent readback and normal-root validation precede current state.
+
+The actual import binding is currently 111 bytes; canonical native path hashing is lossless. The root format
+still contains format/version, not a new RootId or import status database. These APIs do not authorize generic
+reset, populated-root adoption or original-backend cleanup.
 
 ## Open and shutdown
 

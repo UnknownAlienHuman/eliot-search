@@ -31,6 +31,7 @@ const MAX_MARKER_BYTES: u64 = 256;
 pub const ARCHIVE_COMPLETE_MARKER: &str = "archive.complete";
 const INIT_MARKER_STAGE: &str = "root.initializing.stage";
 const MANIFEST_STAGE: &str = "root.toml.stage";
+const IMPORT_MARKER_STAGE: &str = "root.importing.stage";
 
 /// Stable lock filename inside the selected root.
 pub const LOCK_FILE: &str = "root.lock";
@@ -108,6 +109,8 @@ pub struct PlainRootGuard {
     path: PathBuf,
     // The open handle, not file existence or file contents, owns exclusion.
     _lock: File,
+    // A marked import owns exclusion, but is unavailable to normal serving.
+    import_marked: bool,
 }
 
 impl PlainRootGuard {
@@ -157,10 +160,88 @@ impl PlainRootGuard {
         )
     }
 
-    /// A returned guard always owns a validated current root.
+    /// Publishes the caller's exact, nonempty import binding (at most 256 bytes).
+    ///
+    /// A markerless destination must have a valid initialized layout and proven
+    /// empty stores. Only the fixed import stage with an exact expected prefix
+    /// may be retried there. An existing exact marker is preserved and synced.
+    /// The guard becomes non-current before publication can leave partial state.
+    pub fn publish_import_marker(
+        &mut self,
+        expected: &[u8],
+        deadline: Instant,
+        cancellation: &AtomicBool,
+    ) -> PlainRootResult<()> {
+        let operation = OperationContext::new(deadline, cancellation);
+        operation.check()?;
+        check_import_marker_bytes(expected)?;
+        check_absolute(&self.path)?;
+        import_marker_layout(&self.path, expected, operation)?;
+        self.import_marked = true;
+        publish_noclobber(
+            &self.path.join(INCOMPLETE_IMPORT_MARKER),
+            IMPORT_MARKER_STAGE,
+            expected,
+            MAX_MARKER_BYTES,
+            operation,
+        )?;
+        if !import_marker_layout(&self.path, expected, operation)? {
+            return Err(PlainRootError::Io);
+        }
+        operation.check()
+    }
+
+    /// Clears the exact import marker after the caller verified destination current.
+    ///
+    /// All views and stores must already be closed under this same guard. Unknown
+    /// bytes or stages refuse without deletion. Removal, directory flush, absent
+    /// marker readback and normal root validation must all succeed before the
+    /// guard can advertise current state.
+    pub fn clear_import_marker(
+        &mut self,
+        expected: &[u8],
+        deadline: Instant,
+        cancellation: &AtomicBool,
+    ) -> PlainRootResult<()> {
+        let operation = OperationContext::new(deadline, cancellation);
+        operation.check()?;
+        check_import_marker_bytes(expected)?;
+        check_absolute(&self.path)?;
+        self.import_marked = true;
+        if !import_marker_layout(&self.path, expected, operation)? {
+            return Err(PlainRootError::WrongState);
+        }
+        inspect_control_format(&self.control_path(), operation)?;
+        remove_metadata_stage(
+            &self.path.join(IMPORT_MARKER_STAGE),
+            expected,
+            false,
+            operation,
+        )?;
+        let marker = self.path.join(INCOMPLETE_IMPORT_MARKER);
+        let marker_bytes = read_optional_bounded(&marker, MAX_MARKER_BYTES, operation)?;
+        if marker_bytes.as_deref() != Some(expected) {
+            return Err(PlainRootError::WrongState);
+        }
+        operation.check()?;
+        after_io(fs::remove_file(&marker), operation)?;
+        sync_parent_directory(&marker, operation)?;
+        if read_optional_bounded(&marker, MAX_MARKER_BYTES, operation)?.is_some() {
+            return Err(PlainRootError::WrongState);
+        }
+        let status = classify_root(&self.path, operation, false)?;
+        if status != PlainRootStatus::Current {
+            return Err(status_error(status));
+        }
+        operation.check()?;
+        self.import_marked = false;
+        Ok(())
+    }
+
+    /// Whether this guard represents a normally openable current root.
     #[must_use]
     pub const fn is_current(&self) -> bool {
-        true
+        !self.import_marked
     }
 }
 
@@ -529,16 +610,16 @@ fn classify_root_layout(
         return Ok(PlainRootStatus::Unsupported);
     }
 
-    if contains_name(&names, INCOMPLETE_IMPORT_MARKER) {
-        return if required_kind(
-            &root.join(INCOMPLETE_IMPORT_MARKER),
-            EntryKind::File,
-            operation,
-        )? {
-            Ok(PlainRootStatus::IncompleteImport)
-        } else {
-            Ok(PlainRootStatus::Unsupported)
-        };
+    if contains_name(&names, INCOMPLETE_IMPORT_MARKER) || contains_name(&names, IMPORT_MARKER_STAGE)
+    {
+        for name in [INCOMPLETE_IMPORT_MARKER, IMPORT_MARKER_STAGE] {
+            if contains_name(&names, name)
+                && !required_kind(&root.join(name), EntryKind::File, operation)?
+            {
+                return Ok(PlainRootStatus::Unsupported);
+            }
+        }
+        return Ok(PlainRootStatus::IncompleteImport);
     }
     if contains_name(&names, ARCHIVE_COMPLETE_MARKER) {
         return if required_kind(
@@ -662,6 +743,69 @@ fn classify_committed_root_layout(
         return Ok(PlainRootStatus::Corrupt);
     }
     Ok(PlainRootStatus::Current)
+}
+
+fn check_import_marker_bytes(expected: &[u8]) -> PlainRootResult<()> {
+    if expected.is_empty() {
+        return Err(PlainRootError::Unsupported);
+    }
+    if u64::try_from(expected.len()).map_err(|_| PlainRootError::TooLarge)? > MAX_MARKER_BYTES {
+        return Err(PlainRootError::TooLarge);
+    }
+    Ok(())
+}
+
+// The caller owns root.lock. Ignore only the two fixed import metadata names
+// when validating the underlying committed plain layout; never hide other files.
+fn import_marker_layout(
+    root: &Path,
+    expected: &[u8],
+    operation: OperationContext<'_>,
+) -> PlainRootResult<bool> {
+    operation.check()?;
+    match path_kind(root, operation)? {
+        Some(EntryKind::Directory) => {}
+        None => return Err(PlainRootError::Absent),
+        Some(EntryKind::File | EntryKind::Other) => return Err(PlainRootError::Unsupported),
+    }
+    let names = read_directory_names(root, MAX_ROOT_ENTRIES, operation)?;
+    if !root_entries_are_supported(root, &names, operation)? {
+        return Err(PlainRootError::Unsupported);
+    }
+    let marked = match read_optional_bounded(
+        &root.join(INCOMPLETE_IMPORT_MARKER),
+        MAX_MARKER_BYTES,
+        operation,
+    )? {
+        Some(bytes) if bytes == expected => true,
+        Some(_) => return Err(PlainRootError::WrongState),
+        None => false,
+    };
+    if !metadata_stage_matches(
+        &root.join(IMPORT_MARKER_STAGE),
+        expected,
+        !marked,
+        operation,
+    )? {
+        return Err(PlainRootError::Unsupported);
+    }
+    let underlying: Vec<_> = names
+        .into_iter()
+        .filter(|name| {
+            name != OsStr::new(INCOMPLETE_IMPORT_MARKER) && name != OsStr::new(IMPORT_MARKER_STAGE)
+        })
+        .collect();
+    let status = classify_committed_root_layout(root, &underlying, operation)?;
+    if status != PlainRootStatus::Current {
+        return Err(status_error(status));
+    }
+    if !marked
+        && (!directory_is_empty(&root.join(OBJECT_DIR), operation)?
+            || !control_is_empty(&root.join(CONTROL_DIR).join(CONTROL_DB_FILE), operation)?)
+    {
+        return Err(PlainRootError::WrongState);
+    }
+    Ok(marked)
 }
 
 fn classify_incomplete_root(
@@ -1210,6 +1354,7 @@ pub fn initialize_plain(
         PlainRootStatus::Current => Ok(PlainRootGuard {
             path: path.to_path_buf(),
             _lock: lock,
+            import_marked: false,
         }),
         other => Err(status_error(other)),
     }
@@ -1233,6 +1378,7 @@ pub fn open_plain(
                 PlainRootStatus::Current => Ok(PlainRootGuard {
                     path: path.to_path_buf(),
                     _lock: lock,
+                    import_marked: false,
                 }),
                 other => Err(status_error(other)),
             }
@@ -1259,22 +1405,67 @@ pub fn open_plain_with_recovery(
     deadline: Instant,
     cancellation: &Arc<AtomicBool>,
 ) -> PlainRootResult<PlainRootGuard> {
+    open_plain_recovering(path, None, deadline, cancellation)
+}
+
+/// Opens a caller-bound import under the existing stable root lock.
+///
+/// The opaque expected marker must be nonempty and at most 256 bytes. An exact
+/// marker stays present through guarded CONTROL recovery. A markerless initialized
+/// destination is accepted only with proven empty stores; its fixed stage may
+/// contain only an exact prefix of the expected binding and is completed before
+/// the guard is returned. Populated markerless roots are never adopted.
+///
+/// # Errors
+///
+/// Refuses wrong marker bytes, unknown stages/layouts, nonempty unmarked stores,
+/// lock contention and invalid CONTROL. Propagates the original cancellation,
+/// deadline and guarded recovery failures without removing the import marker.
+pub fn open_plain_marked(
+    path: &Path,
+    expected_marker: &[u8],
+    deadline: Instant,
+    cancellation: &Arc<AtomicBool>,
+) -> PlainRootResult<PlainRootGuard> {
+    open_plain_recovering(path, Some(expected_marker), deadline, cancellation)
+}
+
+fn open_plain_recovering(
+    path: &Path,
+    expected_marker: Option<&[u8]>,
+    deadline: Instant,
+    cancellation: &Arc<AtomicBool>,
+) -> PlainRootResult<PlainRootGuard> {
     let operation = OperationContext::new(deadline, cancellation);
     operation.check()?;
     check_absolute(path)?;
-    let status = classify_root_layout(path, operation, false)?;
-    if status != PlainRootStatus::Current {
-        return Err(status_error(status));
+    if let Some(expected) = expected_marker {
+        check_import_marker_bytes(expected)?;
+        match path_kind(path, operation)? {
+            Some(EntryKind::Directory) => {}
+            None => return Err(PlainRootError::Absent),
+            Some(EntryKind::File | EntryKind::Other) => return Err(PlainRootError::Unsupported),
+        }
+    } else {
+        let status = classify_root_layout(path, operation, false)?;
+        if status != PlainRootStatus::Current {
+            return Err(status_error(status));
+        }
     }
     let lock = acquire_lock(path, false, operation)?;
-    let status = classify_root_layout(path, operation, false)?;
-    if status != PlainRootStatus::Current {
-        return Err(status_error(status));
-    }
-    let guard = PlainRootGuard {
+    let mut guard = PlainRootGuard {
         path: path.to_path_buf(),
         _lock: lock,
+        import_marked: expected_marker.is_some(),
     };
+    if let Some(expected) = expected_marker {
+        guard.publish_import_marker(expected, deadline, cancellation)?;
+    } else {
+        let status = classify_root_layout(path, operation, false)?;
+        if status != PlainRootStatus::Current {
+            return Err(status_error(status));
+        }
+    }
     match inspect_control_format(&guard.control_path(), operation) {
         Ok(()) => {}
         Err(PlainRootError::NeedsRepair) => {
@@ -1289,9 +1480,17 @@ pub fn open_plain_with_recovery(
         }
         Err(error) => return Err(error),
     }
-    match classify_root(path, operation, false)? {
-        PlainRootStatus::Current => Ok(guard),
-        other => Err(status_error(other)),
+    if let Some(expected) = expected_marker {
+        if !import_marker_layout(path, expected, operation)? {
+            return Err(PlainRootError::WrongState);
+        }
+        inspect_control_format(&guard.control_path(), operation)?;
+        Ok(guard)
+    } else {
+        match classify_root(path, operation, false)? {
+            PlainRootStatus::Current => Ok(guard),
+            other => Err(status_error(other)),
+        }
     }
 }
 

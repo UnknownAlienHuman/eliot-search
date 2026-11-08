@@ -546,6 +546,7 @@ pub fn run(invocation: RootInvocation, started: Instant) -> ExitCode {
         publication,
         search_endpoint,
         archive_path,
+        import_retry,
     } = invocation;
     if index_owner_stdio && let Err(code) = install_owner_lifeline() {
         return emit_source_error(code);
@@ -603,6 +604,17 @@ pub fn run(invocation: RootInvocation, started: Instant) -> ExitCode {
             || emit_source_error("ARCHIVE_PATH_REQUIRED"),
             |out| crate::archive_export::run(&data_root, &out, deadline, &CANCELLED),
         ),
+        RootCommand::ArchiveImport => match (archive_path, publication) {
+            (Some(archive), Some(request)) => crate::archive_import::run(
+                &archive,
+                &data_root,
+                import_retry,
+                &request,
+                deadline,
+                &CANCELLED,
+            ),
+            _ => emit_source_error("IMPORT_ARGUMENT_REQUIRED"),
+        },
         RootCommand::Session => {
             crate::framed_search::run_session(&data_root, search_endpoint.as_deref())
         }

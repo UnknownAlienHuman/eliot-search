@@ -12,7 +12,7 @@ use search_control_redb::object_marks::{MarkError, ObjectMarks};
 use search_control_redb::plain_control::{
     ControlCopy, PlainControlError, copy_plain_control, describe_plain_control,
 };
-use search_control_redb::publication::Generation;
+use search_control_redb::publication::{self, CapturedSource, Generation, PublicationError};
 use search_revision_store::{ObjectStoreError, object_name, read_object};
 use search_runtime_owner::{
     ARCHIVE_COMPLETE_MARKER, PlainRootError, PlainRootGuard, open_plain_with_recovery,
@@ -29,19 +29,19 @@ const HEADER_BYTES: usize = 4096;
 
 #[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct Header {
+pub struct Header {
     format: String,
     version: u16,
     control_format: u16,
     object_format: u16,
     baseline: String,
-    served_generation: Generation,
+    pub(super) served_generation: Generation,
     control_bytes: u64,
-    control_digest: [u8; 32],
+    pub(super) control_digest: [u8; 32],
     closure_objects: u64,
 }
 
-fn plain(path: &Path, directory: bool) -> Result<(), &'static str> {
+pub fn plain(path: &Path, directory: bool) -> Result<(), &'static str> {
     let meta = fs::symlink_metadata(path).map_err(|_| "ARCHIVE_PATH_IO")?;
     if meta.file_type().is_symlink()
         || (directory && !meta.is_dir())
@@ -189,20 +189,39 @@ fn layout(
     Ok(())
 }
 
-fn verify_copy(out: &Path, deadline: Instant, cancel: &AtomicBool) -> Result<Header, &'static str> {
-    layout(
-        out,
-        &[(HEADER, false), ("control", true), ("objects", true)],
-        deadline,
-        cancel,
-    )?;
+fn verify_copy(
+    out: &Path,
+    complete: bool,
+    deadline: Instant,
+    cancel: &AtomicBool,
+) -> Result<Header, &'static str> {
+    if complete {
+        layout(
+            out,
+            &[
+                (HEADER, false),
+                ("control", true),
+                ("objects", true),
+                (ARCHIVE_COMPLETE_MARKER, false),
+            ],
+            deadline,
+            cancel,
+        )?;
+    } else {
+        layout(
+            out,
+            &[(HEADER, false), ("control", true), ("objects", true)],
+            deadline,
+            cancel,
+        )?;
+    }
     layout(
         &out.join("control"),
         &[("control.redb", false)],
         deadline,
         cancel,
     )?;
-    let header = read_header(out, false, deadline, cancel)?;
+    let header = read_header(out, complete, deadline, cancel)?;
     let control = out.join("control/control.redb");
     let described =
         describe_plain_control(&control, deadline, cancel).map_err(PlainControlError::code)?;
@@ -248,6 +267,38 @@ fn verify_copy(out: &Path, deadline: Instant, cancel: &AtomicBool) -> Result<Hea
     closed?;
     checked?;
     Ok(header)
+}
+
+pub fn read_served(
+    archive: &Path,
+    deadline: Instant,
+    cancel: &AtomicBool,
+) -> Result<(Header, Vec<CapturedSource>), &'static str> {
+    let header = verify_copy(archive, true, deadline, cancel)?;
+    let control = archive.join("control/control.redb");
+    let view =
+        publication::open_published(&control, deadline, cancel).map_err(PublicationError::code)?;
+    let inventory = (|| {
+        if view.generation != header.served_generation {
+            return Err("ARCHIVE_SNAPSHOT_MISMATCH");
+        }
+        let inventory = view
+            .source_inventory(deadline, cancel)
+            .map_err(PublicationError::code)?;
+        publication::validate_served_corpus(&inventory, deadline, cancel)
+            .map_err(PublicationError::code)?;
+        Ok(inventory)
+    })();
+    view.close().map_err(PublicationError::code)?;
+    let inventory = inventory?;
+    if describe_plain_control(&control, deadline, cancel)
+        .map_err(PlainControlError::code)?
+        .digest
+        != header.control_digest
+    {
+        return Err("ARCHIVE_CONTROL_MISMATCH");
+    }
+    Ok((header, inventory))
 }
 
 fn copy_objects(
@@ -325,7 +376,7 @@ fn export(
         }
         write_new(&out.join(HEADER), &bytes, deadline, cancel)?;
         copy_objects(root, &out, &marks, deadline, cancel)?;
-        if verify_copy(&out, deadline, cancel)? != header {
+        if verify_copy(&out, false, deadline, cancel)? != header {
             return Err("ARCHIVE_SNAPSHOT_MISMATCH");
         }
         for directory in [

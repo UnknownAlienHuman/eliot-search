@@ -3,8 +3,9 @@
 This recipe owns local-object reachability, archive and import. [Publication](../../search-index-qdrant/search-publication/FUNCTIONS.md)
 owns live Qdrant retirement. [Local scope](../../../docs/architecture/LOCAL_SCOPE.md) selects plain storage, not key migration.
 The unused coordinator Rust package, manifest and exclusive fixtures remain removed. The stopped-root
-collect-objects and archive-export slices are connected at their recorded source/native scopes. Import remains
-unimplemented; M1 is PARTIAL and V1/installed final-head qualification is unfinished.
+collect-objects, archive-export and archive-import slices are delivered only in their recorded Windows/Release
+source/native scopes. M1 is DONE in that selected scope; V1/installed final-head and whole-product qualification
+remain unfinished.
 
 ## No maintenance scan in the query path
 
@@ -32,8 +33,8 @@ pending/partial-retirement/unresolved source/page/evidence references. Inspect e
 with the real codec/binding checks and include its embedded Source ObjectRef before verifying all Source leaves.
 Do not substitute a newer current head for an older artifact's input. No process-local window remains under
 stopped-root exclusion, and marks are not reconstructed from history or supplied manifests.
-root.importing is currently reserved/unsupported: ordinary opening refuses it before collection. This is not
-an implemented import flow; future supported import marking remains subject to the complete-reference rule.
+Ordinary opening/collection refuses root.importing and its fixed stage. Only the explicit archive-import
+consumer may resume an exactly bound incomplete destination; it never collects a partial import.
 
 Validate all typed tables/references; missing/corrupt/unknown/unreadable or over-limit input stops before deletion.
 Mark exact ObjectRefs once in disposable bounded scratch data outside final objects. Raw bodies are leaves.
@@ -93,23 +94,32 @@ final object nor archive payload. This is not a resume journal or permission to 
 
 ## Explicit restore/import into a fresh destination
 
-1. Read the complete archive without writes or original backend effects. Validate format, references, exact objects,
-   representation/gaps and bounded paths. Missing/unsupported/corrupt input fails, not rereads of changed live files.
-2. Under the destination's exclusive root guard, initialize an empty plain root. Persist a destination-bound
-   incomplete-import marker before importing rows/objects or issuing RPCs. Normal open refuses it before recovery.
-3. Use the destination object owner for exact bytes, preserving portable Source identities and Prepared bindings.
-   Allocate a fresh destination PublicationNamespace and never-reused backend generation names; copy no process
-   locks, source generation counters, routes or credentials as writable authority. This is future import work.
-4. Copied pending/cleanup/cursor records are archive evidence only. They authorize no retry, compensation or delete
-   against the original installation. Track actual destination effects with its ordinary publication owner.
-5. Choose one complete baseline: archived served inventory OR archived desired source/preparation state. Do not mix
-   portions. Later desired-state catch-up is normal reconciliation.
-6. After real backend readback and verified complete destination current/evidence commit, clear the incomplete marker
-   durably. Resolve uncertainty by exact readback under the guard. Only then may normal open/serving begin.
+    eliot-search archive-import --archive-path ARCHIVE --data-root DEST --qdrant-url URL [--retry] [--daemon PATH]
 
-Explicit retry acquires the same private lock and validates incomplete-import state; it does not weaken normal
-open or discard populated data. Keep unresolved destination effects bounded under the publication recipe. Do not
-create a generic restore journal/state platform. Initialization discard never deletes an incomplete populated import.
+[archive_import.rs](../../../bins/eliot-searchd/src/archive_import.rs) is the actual owned-child consumer:
+
+1. Verify the complete archive closure, then validate its whole SERVED inventory under both Source catalogue
+   and publication metadata caps before DEST effects. Corrupt unserved references also refuse. The selected
+   baseline is served only; current desired rows are not mixed in and no secret preparation/live read occurs.
+2. Initialize a fresh non-overlapping destination under the stable root guard. Publish root.importing before
+   rows/objects/backend effects. Its current 111-byte binding covers the lossless canonical destination digest,
+   archive CONTROL digest and served generation. Marker/stage bytes are bounded at 256; this is no RootId.
+3. Copy only the selected baseline's retained closure. install_served_corpus preserves portable Source namespace/
+   IDs/revisions, settings and outcomes, including an older binding when its input/settings match and bound
+   revision is not newer than captured Source. Future bindings refuse. Native keys are historical; admissions
+   are not copied. Source schema v2 totals are installed and local wanted advances once, not to archived wanted.
+4. Publish using a fresh destination PublicationNamespace and never-reused backend names. Copied archive pending/
+   cleanup rows authorize no original backend effects. Destination uncertainty uses the normal publication owner;
+   an unknown old target can remain unresolved while a fresh successor is accepted.
+5. Verify destination current/evidence, complete served inventory and retained bindings. Close stores/views before
+   clearing the exact marker with the same guard; flush/readback and normal-root validation precede current use.
+
+--retry uses open_plain_marked and shared guarded recovery. An identical installed baseline preserves Source/
+preparation/totals/wanted and existing destination publication obligations. After current commit but failed marker
+removal, retry may reuse that generation; physical CONTROL bytes need not stay identical. Wrong archive or copied
+destination bindings refuse. A markerless destination is accepted only with proven empty initialized stores and
+an absent/exact-prefix fixed stage; populated markerless roots are never adopted. Explicit retry does not discard
+data, reset unresolved effects or create a restore journal/platform.
 
 <a id="protected-storage"></a>
 ## Old protected data
@@ -129,6 +139,11 @@ corrupt D1 Prepared (296 bytes) returned OBJECT_INTEGRITY_FAILURE before changes
 Observed waits/both EOF/OS absence belong to the recorded native scopes. Additional guard/refusal checks are
 recorded in the [registry](../../../docs/audit/ANALYSIS_REGISTRY.md#evidence-status); older dbf runs stay older evidence.
 
-Collector and archive export are delivered only in their recorded scopes. Next implement fresh-destination import
-through the rules above and actual consumers, preserving originals. M1 remains PARTIAL; V1/installed final-head
-and whole-product qualification remain NOT_RUN.
+Import source 708621c1 has Sol SOURCE PASS, changed-owner locked check/strict Clippy/RELEASE build success and
+selected native served/empty/corrupt, older/future binding, interrupted-copy, marker-clear retry and uncertain-backend
+proof. Earlier d5 cases retain their own provenance. Exact outcomes/UNKNOWN observers are in the
+[import checkpoint](../../../docs/audit/ANALYSIS_REGISTRY.md#m1-import-delivery).
+
+M1 GC/export/import is DONE only in its selected Windows/Release scopes. V1 is READY: bounded known-freshness/
+preparation-gap summary, real-repository relevance, ordinary-repo-1 scale and isolated installed/final-head
+qualification are next. Whole-product/installed PASS and cross-OS native qualification are not established.
