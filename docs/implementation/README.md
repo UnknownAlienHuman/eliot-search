@@ -125,9 +125,10 @@ Persisted unknown Insert/ABA, postcommit/pre-view and held-query exclusion/clean
 native scopes; the resource run does not relabel them. Fixed-input RELEASE measurement passed the declared
 profile with sampled/OS-reported counters; complete unsampled product peaks and generation-replacement peak
 remain UNKNOWN/NOT_RUN. DEBUG query performance is not qualified. See the registry for exact boundaries.
-X1 and M1 GC/export/import are DONE only in their selected Windows/Release scopes. V1 is READY: bounded
-known-freshness/preparation-gap summary and real-repository relevance, scale and installed/final-head
-qualification remain unfinished.
+X1 and M1 GC/export/import are DONE only in their selected Windows/Release scopes. V1 is IN_PROGRESS: candidate
+9cfa connects the bounded query summary and has scoped scale/installed observations; query-family CPU remains
+UNKNOWN, full required workflow demonstrations remain pending and mandatory replacement high-water <=4 GiB
+is NOT_MEASURED. V1/product completion is not claimed.
 Search stays read-only; query and writer share exclusive root exclusion through flush, so a concurrent view
 manager is not the next prerequisite.
 
@@ -196,9 +197,20 @@ preserves portable Source/preparation facts and publishes fresh destination iden
 uses the stable root guard/recovery; no implicit reprepare, desired-state mixing or original backend replay.
 The selected native flows and UNKNOWN observations are in the [import checkpoint](../audit/ANALYSIS_REGISTRY.md#m1-import-delivery).
 
-V1 is next: deliver the bounded known-freshness/preparation-gap summary required by
-[product behavior](../product/AGENT_ANALYSIS_FRAMEWORK.md#orient-an-unfamiliar-repository), then qualify real-repository
-relevance, ordinary-repo-1 scale and an isolated installed CLI/daemon pair at the final source/build scope.
+V1 is IN_PROGRESS. Candidate9cfa implements the bounded known-CONTROL/preparation-gap summary required by
+[product behavior](../product/AGENT_ANALYSIS_FRAMEWORK.md#orient-an-unfamiliar-repository): published/selected counts
+and Known wanted/lag or typed Unavailable from the same RO snapshot, with unchanged cached window facts.
+Metadata-only observation failure preserves valid retained results; this is not filesystem freshness.
+
+The candidate's declared ordinary-repo-1 timings/citations and isolated installed sibling smokes have scoped
+results. Three mandatory items remain: establish query-family CPU <=8.0 core equivalents, demonstrate the
+full meaningful ordinary-source [workflow examples](../product/AGENT_ANALYSIS_FRAMEWORK.md#evidence-for-delivery),
+and measure transient generation-replacement high-water <=4 GiB. Replacement high-water is NOT_MEASURED by
+either the old 9e or final9cfa fixed-input workload; a separate root/endpoint native run is pending.
+Supplemental native examples are in progress. Ranked top5 coverage (3/5 declared definitions, 4/5 callers)
+remains diagnostic, not a numeric 5/5 gate or proof of source defect. Correct citations/Exact checks alone do
+not establish all required workflows. Keep unobserved peaks and provenance explicit; see the
+[candidate evidence](../audit/ANALYSIS_REGISTRY.md#a10-v1-candidate). No landed-main or whole-V1 PASS is inferred.
 Optional #219/#239/#248/#334/#336 remain selected source-backed orientation/comparison/Git/document capabilities. Optional donors join existing
 consumers. No encryption or restricted-user phase. Qdrant Edge, if studied later, is a replacement experiment.
 

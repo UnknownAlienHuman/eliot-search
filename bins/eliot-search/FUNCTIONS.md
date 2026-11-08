@@ -131,6 +131,12 @@ an async context, enables its Ctrl-C listener before spawn and sends SearchReque
 remaining duration sampled at send. It prints only a complete validated correlated terminal after owned-child
 exit/reap; untrusted text/diagnostics pass through safe JSON presentation.
 
+Current Search/Raw/DecodedUtf8 QueryClient calls request QuerySummary by default; CLI session Open enables it
+too. No --summary flag is added. One-shot Terminal.summary and session WindowSummary.corpus expose published/
+selected counts and preparation gaps, with Known CONTROL wanted/lag or typed Unavailable. This is not live-FS
+freshness. Metadata-only observation failure preserves valid results; evidence corruption still fails. Session
+pages retain the original cached header. Legacy omitted/false wire requests keep their earlier shape.
+
 A hit contains the full stored unit (at most 64 KiB), original rank/finite score and the immutable citation:
 generation/point, source namespace/ID, input/prepared ObjectRefs, unit and byte/line ranges/boundary facts.
 Missing returned objects are explicit gaps; integrity/routing errors fail. Newer preparation cannot replace

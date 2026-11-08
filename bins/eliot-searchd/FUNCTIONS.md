@@ -150,6 +150,19 @@ Root/view stay held through complete terminal flush; the worker is joined before
 The [protocol](../../crates/search-provider-protocol/FUNCTIONS.md) admits one correlated terminal and caps total
 framing at 8 MiB with whole-card OutputLimit. Do not add detached timeout workers or a session framework.
 
+## Read-only query summary
+
+[framed_search::query_summary](src/framed_search.rs) handles include_summary for Search/Raw/DecodedUtf8 and
+session Open. Published counts/revision come from the pinned generation; selected counts/gaps use the original
+selected published inventory. PublishedView::current_wanted_revision observes current CONTROL in the same RO
+transaction with O(1) metadata work and no SourceRow/FS scan. It does not replace evidence or certify live files.
+
+Metadata-only Database/UnsupportedSchema/corruption maps to the protocol's closed Unavailable reason while
+valid retained results survive. Original cancellation/deadline and evidence/object integrity failures still fail.
+The window caches this header unchanged; codec fitting charges actual summary bytes under the existing frame cap.
+Source9cfa candidate qualification is recorded in the [registry](../../docs/audit/ANALYSIS_REGISTRY.md#a10-v1-candidate),
+not promoted into a main/whole-product claim.
+
 ## FIRST RAW execution
 
 The same serviced framed worker accepts RawExactRequest and calls [raw_exact.rs](src/raw_exact.rs) instead

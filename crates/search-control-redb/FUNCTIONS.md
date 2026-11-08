@@ -106,6 +106,18 @@ read_generation_source supplies the fixed decoder binding for publication page h
 
 These tables remain ordinary user data: the root format, persistent-savepoint protection and unfinished-root empty probe are unchanged. The [daemon publisher](../../bins/eliot-searchd/src/published_corpus.rs) owns actual backend readiness/canary, snapshot installation and output. The retained [publication recipe](../search-index-qdrant/search-publication/FUNCTIONS.md) owns later convergence/view-lifetime rules.
 
+## Query summary observation
+
+PublishedView::current_wanted_revision reads the current source schema/wanted guard in the SAME native RO
+transaction as the pinned generation. It is O(1) metadata observation, not a SourceRow, filesystem or current
+inventory audit. A value below the published wanted revision is corruption. No writes, new table or repair occur.
+The daemon combines this with existing generation counts/revision and the query's selected published counts.
+
+Current-only unsupported/corrupt/unreadable metadata becomes a typed unavailable CONTROL observation without
+discarding valid retained results. Cancellation/deadline remain operation failures; corrupt published evidence/
+objects still fail. Known CONTROL lag is not a live-filesystem freshness guarantee. The
+[protocol summary](../search-provider-protocol/FUNCTIONS.md#query-scope-summary) carries that distinction.
+
 ## Raw Exact inventory
 
 PublishedView::source_inventory reads the complete committed generation_sources inventory from the same pinned
