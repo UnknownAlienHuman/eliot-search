@@ -32,8 +32,9 @@ Its matching version 0.0.0 trio passed the real package build with verified pins
 Four coding-client Skill copies are installed; the current Codex host catalog discovers eliot-search.
 Claude Desktop account Skill upload/enablement was observed as by you, v1. Four coding MCP entries now use the
 verified shared package/data-root under .eliot-search; old AppData bindings are historical. Candidate3 has
-Sol-accepted SELECTED_NATIVE_PASS, including cleanup/continuation. Operational root/backend preparation remains
-IN_PROGRESS; after ROOT_READY, prove native host model/context and actual tool work in all five clients.
+Sol-accepted SELECTED_NATIVE_PASS, including cleanup/continuation. The actual-repository shared root is READY;
+All four coding clients passed selected native context/answer paths; OpenCode requires the recorded explicit
+free-model/session-cap invocation. Only Desktop install/enablement/discovery and actual context/answer remain in AD1.
 Desktop MCPB installation awaits action-time approval and is NOT_RUN; package/config presence is not runtime proof.
 
 ## Index and search

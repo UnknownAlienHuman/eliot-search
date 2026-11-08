@@ -39,8 +39,9 @@ matching version 0.0.0 Release trio passed the real package build. Four coding-c
 the current Codex host catalog discovers the Skill. Claude Desktop account upload and enablement were observed
 (by you, v1). The four coding MCP entries now target the verified shared package/data-root under .eliot-search;
 the old AppData package is historical. Candidate3 has Sol-accepted SELECTED_NATIVE_PASS, including cleanup/
-continuation. Operational root/backend preparation and native host model/context work in all five clients remain
-pending; Desktop MCPB installation awaits action-time approval and is NOT_RUN.
+continuation. The operational shared root is READY; all four coding clients passed their selected native
+context/answer scopes, including OpenCode's explicit free-model invocation. Only Desktop MCPB install/
+enablement/discovery and actual retained context/answer remain in AD1, awaiting action-time approval.
 See AD1 for exact artifacts and limits. Do not restore retired source/qualification frameworks.
 
 ## License

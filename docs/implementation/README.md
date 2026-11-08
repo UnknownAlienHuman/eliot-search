@@ -246,8 +246,10 @@ continuation and stale-handle refusal; this is the selected official-SDK scope, 
 Four coding-client Skill copies are installed and the current Codex host catalog discovers the Skill.
 Claude Desktop account Skill upload/enablement was observed as by you, v1 after the user-reported UI state change.
 The four owned coding-client MCP entries were updated to the shared .eliot-search package/data-root with other
-entries preserved; old AppData deployment is historical. Finish operational root/backend preparation, then
-after ROOT_READY prove native host model/context and actual read-only tool work in all five clients.
+entries preserved; old AppData deployment is historical. The actual-repository shared root is READY and all
+four coding clients passed their selected native context/answer paths, including OpenCode's explicit
+free-model/session-cap invocation. Only Desktop installation/enablement/discovery and actual retained
+context/answer remain in AD1.
 Desktop MCPB install is NOT_RUN, with the shared-bundle review dialog waiting for action-time approval.
 Keep artifact/config/enablement/discovery/native-work outcomes distinct in the existing register.
 

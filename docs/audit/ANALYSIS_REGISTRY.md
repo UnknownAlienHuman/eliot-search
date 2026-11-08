@@ -30,16 +30,17 @@ packages, native Skills and all five client workflows are now delivered.
 **AD1 IN_PROGRESS — first active unfinished user-required delivery.**
 Candidate3 has CORE/MCP SOURCE PASS with all reviewed P2 items closed, locked check/strict Clippy/Release PASS
 and a verified shared version 0.0.0 package build. Sol accepted SELECTED_NATIVE_PASS including cleanup/
-continuation; all four owned coding MCP entries now use shared package/root paths. Finish operational
-root/backend preparation, then after ROOT_READY prove activation, native host model/context and actual tool
-work in all five clients. Selected SDK native PASS does not establish installed-client operation.
+continuation; all four owned coding MCP entries now use shared package/root paths. The actual-repository
+shared root is READY. All four coding clients have accepted native Skill/tool/context/answer scopes below.
+The remaining AD1 gate is Claude Desktop MCPB installation/enablement, actual initialize/tool discovery and
+retained context/answer work after the pending action-time approval. AD1 remains IN_PROGRESS.
 
 Preserve existing client/profile entries while delivering native MCP plus the canonical Skill in Codex, Claude
 Code, Claude Desktop/Cowork, OpenCode and Antigravity. Observe artifact creation, configuration, enablement,
 Skill discovery/use and real native read-only tool work separately. Four coding-client Skill copies are installed,
 and the current Codex host catalog discovers eliot-search. Desktop account Skill upload/enablement was observed
 as by you, v1; its MCPB software install awaits action-time approval and is NOT_RUN. Four coding-client
-configuration updates are complete; native operational host runtime remains unproved.
+configuration updates are complete; host runtime outcomes are client-specific below, not inferred from configuration.
 
 The earlier V1 register closed only its selected Windows/Release core/workflow/resource/isolated-install scope.
 AD1 is the new explicitly selected requirement; O1 remains DEFERRED.
@@ -96,7 +97,7 @@ DONE below is the named delivered scope, not completion of the product.
 | M1 / DONE, selected Windows/Release scopes | X1 | Stopped-root collector/export/import owners | Recorded GC/export scopes plus source708 served import, binding guards, exact retry, interrupted-copy and uncertain-backend recovery; stronger UNKNOWN limits remain below. |
 | O1 / DEFERRED | Connected baseline + actual need | [Selected depth](../product/AGENT_ANALYSIS_FRAMEWORK.md#optional-depth) | Add only an actual source-backed consumer; remove unused scaffolds. |
 | V1 / DONE, selected Windows/Release scope | X1/M1 selected shipped paths | [Qualification](../implementation/TEST_CUTOVER.md), #215 | Actual ordinary-repo-1 performance/CPU/observed replacement disk, full real-repository workflows and isolated installed pair. Source9cfa/main2a Rust equivalence; scope/UNKNOWN limits below. |
-| AD1 / IN_PROGRESS, first active unfinished user requirement | V1/core SDK | [MCP owner](../../bins/eliot-search-mcp/FUNCTIONS.md), [package/Skill](../../integrations/eliot-search/README.md), native-client delivery owners | Candidate3 source/Release/shared package and selected native PASS; four coding Skill/MCP entries, Codex catalog discovery and Desktop account Skill upload/enablement observed. Finish operational root/backend, then native host model/context and actual tool work in all five clients after ROOT_READY; Desktop MCPB install awaits approval, NOT_RUN. |
+| AD1 / IN_PROGRESS, first active unfinished user requirement | V1/core SDK | [MCP owner](../../bins/eliot-search-mcp/FUNCTIONS.md), [package/Skill](../../integrations/eliot-search/README.md), native-client delivery owners | Shared actual-repository root READY; all four coding clients have accepted selected native Skill/tool/context/answer scopes. Only Desktop MCPB install/enablement/initialize/tool discovery and actual retained context/answer remain, pending action-time approval. Source/package/selected SDK scopes and prior failures remain distinct. |
 
 [Implementation](../implementation/README.md#delivery-sequence) owns delivery order. Stage 3B is conditional
 on measured Stage 3A budgets failing; there is no separate global rewrite programme.
@@ -174,7 +175,7 @@ hydration reuse. No application encryption, grants, OS-secret platform or second
   OpenCode .config/opencode/skills and AGY .gemini/config/skills. Exact paths/hashes/preservation proof:
   C:\Development\Rust\targets\task-agent-search-skill-install-20261108\run-001\installation-result.json.
   Its discovery fields preserve their installation-time NOT_RUN; the current Codex host catalog now discovers
-  eliot-search. Discovery/use in the other coding clients remains unproved. Corrected MCP inventory used AGY
+  eliot-search. Native per-client discovery/use results are below. Corrected MCP inventory used AGY
   .gemini/config/mcp_config.json and OpenCode V2 nested mcp.servers. All four owned coding-client MCP entries
   now target the shared packaged binary/data-root with unrelated entries/profiles preserved. Exact proof:
   C:\Development\Rust\targets\task-agent-mcp-host-registration\run-20261108-v2-shared-path\path-update-result.json.
@@ -186,7 +187,9 @@ hydration reuse. No application encryption, grants, OS-secret platform or second
   screenshot/receipt file was generated. Extensions was accessible without an ELIOT Search entry. Earlier DWM
   recovery failure remains historical evidence, not a current UI blocker. The new shared MCPB path was accepted
   by the actual chooser and its review dialog is open, Install unpressed, awaiting action-time approval.
-  Desktop MCPB install is NOT_RUN;
+  A fresh read-only observation during the client runs still showed the same version 0.0.0 review with
+  All requirements met and Install; no input/query action or independent installation was observed.
+  Desktop MCPB install remains HOLD/NOT_RUN without the actual approval response;
   account Skill enablement does not prove MCP discovery, runtime or other account/org behavior.
 - Selected official-SDK native positive/budget cases passed, including seven-tool discovery, Search/Raw/Decoded,
   saved hints/legacy false, retained expansion, TTL/Close and bounded full-text output. Exact scopes:
@@ -200,7 +203,55 @@ hydration reuse. No application encryption, grants, OS-secret platform or second
   handles were refused after restart; the new window remained usable. Prior failure artifacts stay unchanged.
   Exact inside-ToSink notification timing is NOT_OBSERVED; the oversized-response error branch was NOT_EXERCISED.
   External SDK-child OS waits do not independently observe daemon pipe EOF. No five-client host runtime PASS
-  follows. Operational shared root/backend preparation is IN_PROGRESS; host model/context work waits for ROOT_READY.
+  follows; actual operational host results are recorded separately below.
+- Operational shared root READY: generation 1, 361 published sources, zero preparation gaps and known CONTROL
+  lag false at observation. It indexed the real managed repository, not a QA copy. Exact root, pins, two retained
+  repository questions and backend ownership proof:
+  C:\Users\kleym\.eliot-search\agent-tools-20261108\logs\operational-shared-20261108\attempt-003\ROOT_READY.json.
+  The same-host Qdrant backend remains intentionally operator-owned/live for client qualification; no Windows
+  service/autostart is claimed. These snapshot facts do not assert live filesystem freshness.
+- Codex 0.161 passed seven actual MCP calls, retained context/answer and Close with client exit 0. Proof root:
+  C:\Development\Rust\targets\task-agent-mcp-client-runtime\run-20261108-v1\codex:
+  stdout.jsonl, answer.txt, tool-proof.json, command.json and exit.json. The ephemeral read-only native exec
+  used per-run MCP overrides; unrelated global configuration was preserved. The exact configured model ID
+  was not captured in these receipts; no arbitrary-model compatibility follows.
+- Claude Code 2.1.278 on captured model claude-sonnet-5 passed native Skill discovery, seven-tool discovery, six search/window calls,
+  retained context/answer and Close with exit 0. Under the same runtime root, claude/discovery.json,
+  stdout.jsonl, answer.txt, actual-search-tool-result.json, command.json and exit.json retain exact evidence.
+  Its native invocation used a temporary strict search-only MCP config and explicit Skill/MCP allowlist;
+  this does not establish Claude Desktop local-MCP runtime.
+- AGY's signed CLI auto-updated from 1.5.2 to 1.5.3. Its native Skill and six Search/Exact/Open/Expand/Continue/
+  Close calls passed with retained context/answer, same original window, no repository filesystem fallback,
+  Close and exit 0. Actual wait/both EOF/OS absence and zero remaining SDK daemons are recorded under
+  C:\Users\kleym\.eliot-search\agent-tools-20261108\logs\agy-native-20261108\run-002-session-allow:
+  tool-proof.json, stdout.jsonl, answer.txt, exit.json and ROOT_RELEASED_AFTER_AGY.json.
+  The first headless permission denial in run-001 is preserved. Session-only --settings permissions.allow
+  rules for the seven exact mcp(eliot-search/tool) names enabled the retry; permission-mechanism-proof.json
+  records the native/official format and preservation of unrelated global settings. Its exact admitted model ID
+  was not captured; the observed native session, not every selectable model, is qualified.
+- OpenCode 2.0.32 connected the MCP with seven tools and recognized the canonical Skill. The first actual
+  liquid/lfm-3-1.7b:free run failed by emitting JSON where CodeMode execute.code required JavaScript; its
+  failure/cleanup remains preserved under the runtime root's opencode/diagnosis.json and raw artifacts.
+  One purposeful per-run openrouter/openai/gpt-6.1-sol standalone retry is preserved under opencode-retry-001;
+  MCP connected with seven tools, but HTTP 402 occurred before model/tool work because the host requested a
+  128000-output-token reserve. This is provider admission failure, not MCP failure or successful model/tool
+  work. The subsequent documented native session-only output cap 1024 under opencode-bounded-001 still returned
+  HTTP 402 on input budget before admission, with no MCP Root calls. Both quota attempts remain failed and
+  preserved; no further paid/cap retries or billing/global-setting changes are selected. After these three
+  failed approaches, Sol's bounded read-only audit selected existing
+  openrouter/nvidia/nemotron-3-ultra-550b-a55b:free: current catalog metadata advertises text I/O, tools/tool_choice,
+  1M context and zero input/output price on the same provider/auth. Those catalog facts were selection evidence,
+  not runtime proof; the one resulting native run is recorded separately below.
+- OpenCode 2.0.32 selected native utility PASS: the native session export verifies actual
+  openrouter/nvidia/nemotron-3-ultra-550b-a55b:free with session-only output cap 4096. The canonical Skill loaded,
+  MCP connected with seven tools, ranked Search used generation 1 of the real managed repository, retained
+  Open/Expand context and successful Close supported a grounded answer with source paths and not_checked honesty.
+  CLI exit 0, zero new owned survivors and ROOT_RELEASED are recorded under the runtime root's opencode-free-001:
+  assessment.json, stdout.jsonl, stderr.log, answer.txt, nested-mcp-calls.json, retained-citation-ledger.json,
+  exit.json, custody.json and native-session-export.json. Two argument errors recovered through the native
+  catalog, ordinary RootBusy and redundant Close refusals remain in the raw evidence. The PASS run made no
+  repository filesystem fallback/original read/import, source/global-config/billing edit, or repeat of the other
+  three passed clients. This selected model/invocation PASS does not relabel Liquid or either paid-route 402.
 - Artifact presence != configured != enabled != Skill discovered/used != successful native MCP work.
   Keep actual outcomes in this register once final facts arrive; no new report/status framework is required.
 

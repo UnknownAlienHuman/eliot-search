@@ -119,7 +119,11 @@ discovers eliot-search. After a user-reported UI state change, Claude Desktop ac
 observed as by you, v1, with one SKILL.md and enabled switch. Existing custom Skills were preserved. The earlier
 DWM preflight failure is historical; it does not describe the current accessible UI. Desktop MCPB software
 installation awaits action-time approval and is NOT_RUN. The four owned coding-client MCP entries now use the
-shared package/data-root; activation and actual native host model/context work in all five clients remain unproved.
+shared package/data-root. Codex 0.161, Claude Code 2.1.278 and signed AGY CLI 1.5.3 passed native Skill/tool
+work, retained context/answer and Close/exit 0. AGY's actual wait/both EOF/root-release proof is retained.
+OpenCode 2.0.32 passed selected native Search/retained context/Close/answer on the audited free model below.
+Only Desktop MCP install/enablement/initialize/discovery and retained context/answer remain in AD1; no Desktop
+runtime follows from the four coding-client results.
 
 Candidate3 has CORE/MCP SOURCE PASS with all reviewed P2 items closed and locked check/strict Clippy/Release PASS.
 The real builder exited 0 using the matching version 0.0.0 trio at
@@ -130,7 +134,8 @@ All three pins/copies, nine output files, archive members and published schemas 
 remained unchanged. DataRoot is C:\Users\kleym\.eliot-search\agent-tools-20261108\corpus-search and Qdrant URL
 is http://127.0.0.1:7637. Desktop keeps only the documented extension-directory macro for its binary; root/URL
 are literals, with no user_config. The actual Claude chooser accepted this shared MCPB and opened its review
-dialog; Install remains unpressed. The UI warns of access to everything on the computer, not a dataset sandbox.
+dialog; a fresh read-only observation during the client runs still showed Install pending. No input/query
+action was taken. The UI warns of access to everything on the computer, not a dataset sandbox.
 
 The first AppData/Codex MSIX-cache package is preserved as historical evidence, not the operational install.
 Its short AppData alias was invisible to Claude; all nine old package files remain byte-identical. Operational
@@ -140,6 +145,28 @@ This is an operator-location correction, not a Rust, database or protocol change
 
 Sol accepted candidate3 SELECTED_NATIVE_PASS including unread-output cleanup, full 1+63 window continuation
 and three stale-handle refusals. Packaging itself did not open/initialize the dataset or register/install
-anything. Operational root/backend preparation remains IN_PROGRESS; native host model/context and actual tool
-work in all five clients follow ROOT_READY. See [AD1 evidence](../../docs/audit/ANALYSIS_REGISTRY.md#agent-delivery)
-for exact shared package/pins, completed configuration/native handbacks and retained historical failures.
+anything. The actual-repository shared root is READY: generation 1, 361 sources, zero preparation gaps.
+The operator-owned backend remains intentionally live for client verification; no service/autostart is added.
+See [AD1 evidence](../../docs/audit/ANALYSIS_REGISTRY.md#agent-delivery) for exact shared root/package/pins,
+client outcomes and preserved failed attempts. AD1 remains IN_PROGRESS.
+
+Reproduce native client work with a fresh session loading the installed Skill/MCP and the ready shared root.
+The recorded runs used existing authenticated native client/provider access.
+Recorded Codex exec uses --sandbox read-only --ephemeral with per-run MCP overrides. Claude Code uses
+--strict-mcp-config with a temporary search-only config, --tools Skill and explicit --allowedTools
+Skill(eliot-search) plus mcp__eliot-search__*, with --permission-mode dontAsk --permission-prompts none.
+Claude's captured model is claude-sonnet-5; exact Codex/AGY model IDs were not captured, so their observed
+admitted native sessions do not establish arbitrary-model compatibility. AGY headless needs session-only
+--settings permissions.allow entries for the seven exact mcp(eliot-search/tool) rules.
+
+Qualified OpenCode 2.0.32 uses run --standalone --model openrouter/nvidia/nemotron-3-ultra-550b-a55b:free.
+The fresh owned working directory's .opencode/opencode.jsonc sets
+providers.openrouter.models["nvidia/nemotron-3-ultra-550b-a55b:free"].limit.output to 4096 for that run.
+CodeMode execute.code must contain plain JavaScript using names from the native catalog. Actual ranked Search,
+retained Open/Expand, successful Close and grounded answer passed with exit 0 and ROOT_RELEASED. Two recovered
+argument errors, ordinary Busy/redundant Close refusals, the first Liquid CodeMode failure, and both paid Sol
+HTTP 402 pre-admission failures remain preserved. This is the selected free-model invocation scope.
+
+Use the exact command/proof artifacts linked from AD1, keep permissions/model caps session-scoped, preserve
+unrelated global settings, and close each retained window promptly. The qualified free-model run reused the
+existing provider/auth and made no billing change.

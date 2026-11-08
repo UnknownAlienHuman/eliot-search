@@ -120,8 +120,10 @@ eliot-searchd private frames -> existing retained query owners. Its seven tools 
 Candidate3 has CORE/MCP SOURCE PASS and the real version 0.0.0
 [package build](../../integrations/eliot-search/README.md) passed. Four coding Skill copies and Desktop account
 upload/enablement are observed; the four coding MCP entries now target the shared .eliot-search package/root.
-Sol-accepted SELECTED_NATIVE_PASS includes cleanup/continuation. Operational root/backend preparation and
-native host model/context work in all five clients remain pending in AD1; old AppData deployment is historical.
+Sol-accepted SELECTED_NATIVE_PASS includes cleanup/continuation. The actual-repository shared root is READY;
+All four coding clients passed selected native context/answer paths; OpenCode's explicit free-model/session-cap
+scope is recorded in AD1. Only Desktop MCP installation/enablement/discovery and retained context/answer remain.
+Old AppData deployment is historical.
 
 ## Work by path
 

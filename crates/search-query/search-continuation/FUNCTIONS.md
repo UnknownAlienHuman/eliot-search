@@ -87,8 +87,9 @@ candidate3 transport/output/handle P2 fixes have MCP SOURCE PASS. The
 [canonical Skill and packages](../../../integrations/eliot-search/README.md) passed the real build; four coding
 Skill copies and Desktop account upload/enablement are observed, with Codex host-catalog discovery.
 Candidate3 cleanup/continuation is included in Sol-accepted SELECTED_NATIVE_PASS. Four coding-client MCP entries
-now use shared package/root paths; operational root/backend preparation and native host model/context work in
-all five clients remain pending under [AD1](../../../docs/audit/ANALYSIS_REGISTRY.md#agent-delivery).
+now use shared package/root paths. The actual-repository root is READY and all four coding clients passed
+selected native context/answer scopes. Only Desktop MCP installation/discovery and actual retained context/
+answer remain in [AD1](../../../docs/audit/ANALYSIS_REGISTRY.md#agent-delivery); its Install is still HOLD.
 Existing X1/A10 evidence below keeps its exact historical source scope; it does not qualify the new consumer.
 
 ## Verification scope
