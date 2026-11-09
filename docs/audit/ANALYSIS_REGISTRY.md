@@ -29,14 +29,17 @@ Historical V1/core evidence, current package/configuration and actual client wor
 
 **No READY unfinished mandatory row remains in the selected register.**
 AD1 is DONE at the recorded native-client/version/model scopes after Sol DESKTOP_NATIVE_ACCEPTED.
-Current shared package-v4 contains the v4 MCP and unchanged CLI/daemon/Skill; all five current owned targets use it.
+Current shared package-v4 contains the v4 MCP and unchanged CLI/daemon/Skill; four coding targets use it directly,
+while Desktop now uses the matching copy installed by its v4 MCPB.
 The four coding-client native flows retain v3 execution provenance. Main ed8ce5b4 changes only Open's public
 schema/description with equivalent resolved validation; those four model workflows were not replayed.
 
 Desktop's fifth proof is actual normal Chat in 4.23118.0 / Opus 5.5 Extra, native account Skill and the official
 local mcpServers configuration route. Retained Rust/context/citations and valid-handle Close passed; native
 answer clarifications label the abridged block and restrict the observed match to the exact literal in the
-registered g1 inventory. MCPB is optional BUILT_NOT_INSTALLED; the Install approval request was withdrawn.
+registered g1 inventory. After a new explicit human approval on 2026-11-09, v4 MCPB installation/enablement and
+one native Search/Open/Expand/Close passed; only the duplicate manual Search entry was removed. The earlier
+withdrawn Install request remains historical.
 No Cowork, all-UI-variant, arbitrary-model or whole-repository/live-filesystem claim follows.
 
 The shared g1 snapshot has 361 registered sources/gap0. The app/backend were left functional, with a separate
@@ -97,7 +100,7 @@ DONE below is the named delivered scope, not completion of the product.
 | M1 / DONE, selected Windows/Release scopes | X1 | Stopped-root collector/export/import owners | Recorded GC/export scopes plus source708 served import, binding guards, exact retry, interrupted-copy and uncertain-backend recovery; stronger UNKNOWN limits remain below. |
 | O1 / DEFERRED | Connected baseline + actual need | [Selected depth](../product/AGENT_ANALYSIS_FRAMEWORK.md#optional-depth) | Add only an actual source-backed consumer; remove unused scaffolds. |
 | V1 / DONE, selected Windows/Release scope | X1/M1 selected shipped paths | [Qualification](../implementation/TEST_CUTOVER.md), #215 | Actual ordinary-repo-1 performance/CPU/observed replacement disk, full real-repository workflows and isolated installed pair. Source9cfa/main2a Rust equivalence; scope/UNKNOWN limits below. |
-| AD1 / DONE, recorded five-client native scopes | V1/core SDK | [MCP owner](../../bins/eliot-search-mcp/FUNCTIONS.md), [package/Skill](../../integrations/eliot-search/README.md), native-client delivery owners | Actual Skill/tool/context/grounded-answer/Close scopes accepted in four coding clients plus Desktop normal Chat via official local mcpServers config. Current v4 targets, original four v3 flow provenance, corrected native answers and source/package/SDK limits are recorded below; MCPB installation is optional and not performed. |
+| AD1 / DONE, recorded five-client native scopes | V1/core SDK | [MCP owner](../../bins/eliot-search-mcp/FUNCTIONS.md), [package/Skill](../../integrations/eliot-search/README.md), native-client delivery owners | Actual Skill/tool/context/grounded-answer/Close scopes accepted in four coding clients plus Desktop normal Chat, initially via local mcpServers and subsequently via the installed v4 MCPB. Current targets, original four v3 flow provenance, corrected native answers and source/package/SDK limits are recorded below. |
 
 [Implementation](../implementation/README.md#delivery-sequence) owns delivery order. Stage 3B is conditional
 on measured Stage 3A budgets failing; there is no separate global rewrite programme.
@@ -170,7 +173,8 @@ hydration reuse. No application encryption, grants, OS-secret platform or second
   All three pins, nine files, archive members and three published schemas passed. Proof:
   C:\Users\kleym\.eliot-search\agent-tools-20261108\logs\desktop-native-20261108\run-002-v4-inline:
   package-build.json and package-verification.json. V4 MCPB SHA256 is
-  11707D89CF0D9AFCD18384773F71A2794329FC5E93CC8F556A03B2BDA41175C3; it is BUILT_NOT_INSTALLED.
+  11707D89CF0D9AFCD18384773F71A2794329FC5E93CC8F556A03B2BDA41175C3; it was BUILT_NOT_INSTALLED at package
+  qualification and was subsequently installed/enabled under the new explicit approval below.
   Packaging never opened/copied/initialized the dataset.
 - Old shared-v3 package (MCPB D40187B0...) and the first AppData/Codex MSIX-cache package are preserved historical
   artifacts; all eighteen old package files remained unchanged. The short AppData alias was invisible to Claude.
@@ -188,12 +192,13 @@ hydration reuse. No application encryption, grants, OS-secret platform or second
   preserved. Exact command-only update proof:
   C:\Development\Rust\targets\task-agent-mcp-host-registration\run-20261108-v3-package-v4\registration-v4-result.json.
   Their accepted model workflows below ran on v3, not a v4 replay; equivalent v4 metadata is separate evidence.
-- Desktop uses the official local mcpServers.eliot-search entry in the physical
+- Desktop's original fifth proof used the official local mcpServers.eliot-search entry in the physical
   C:\Users\kleym\AppData\Roaming\Claude\claude_desktop_config.json. The own command points to package-v4;
   other current semantic fields and ACL were preserved through normal graceful Quit/reopen. Native Desktop
   process/command/pin binding and Running state are saved under run-002-v4-inline below.
   Earlier DWM failure and unpressed shared-v3 MCPB review remain historical. The Install approval request was
-  withdrawn; no MCPB installation, warning acknowledgement, security-policy bypass or Cowork qualification occurred.
+  withdrawn; no MCPB installation occurred at that checkpoint. The later user-approved installed route is below;
+  no security-policy bypass or Cowork qualification is claimed.
 - Selected official-SDK native positive/budget cases passed, including seven-tool discovery, Search/Raw/Decoded,
   saved hints/legacy false, retained expansion, TTL/Close and bounded full-text output. Exact scopes:
   C:\Development\Rust\targets\task-search-mcp-native-20261108\run-001\native-candidate3-assessment.json
@@ -282,6 +287,17 @@ hydration reuse. No application encryption, grants, OS-secret platform or second
   literal-scope-clarification-native-ui.txt, config-post-native.json, desktop-parent-binding.json and
   schema-and-skill-provenance.json. The host UI did not expose full consumed schema fields; the saved actual
   seven-tool SDK catalog is separate. Expand UI previews are truncated; the verified signature is present.
+- On 2026-11-09, explicit human approval authorised the current v4 MCPB installation. Native Extensions showed
+  installed/enabled and seven tools. Claude launched the installed server under Roaming\Claude\Claude Extensions\
+  local.mcpb.eliot-search.eliot-search\server with matching MCP 9ECA...4730A and daemon 9E26...1A295 pins.
+  Only the duplicate manual mcpServers.eliot-search property was removed with a protected backup/hash guard;
+  github/codebase_memory, all other semantic fields and ACL were unchanged. The account Skill stayed selected.
+  One actual extension-only Search (limit 3), Open, Expand with no extra context and valid-handle Close returned
+  generation 1 Rust unit [0,6405), both refs and historical not_checked path. Close replied closed to its actual
+  returned handle. No source/index/backend write or other-client replay was performed. Proof:
+  C:\Users\kleym\.eliot-search\agent-tools-20261108\logs\desktop-extension-20261109\run-001:
+  native-answer-ui.txt, native-close-ui.txt, installed-process-binding.json, single-route-config.json and
+  config-after-native.json. App/backend were left working.
 - Artifact/config/enablement/Skill/native work remain distinct evidence. AD1 is DONE for these five version/
   model/invocation scopes, not arbitrary clients/models, Cowork/UI variants, whole-repository semantics or live
   freshness. No READY mandatory row remains; O1 is DEFERRED. No new report/status framework is added.

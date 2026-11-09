@@ -110,8 +110,8 @@ The Skill ZIP contains exactly eliot-search/SKILL.md and no executables.
 
 See [Claude native Skill scope](https://code.claude.com/docs/en/skills#use-skills-in-cowork-and-cloud-sessions)
 and [account upload](https://support.claude.com/en/articles/12512180-use-skills-in-claude).
-Desktop supports the ordinary local mcpServers config route for an existing binary; that is the delivered
-native route below. The optional .mcpb is a separate Extensions installer artifact. Uploading a Skill neither
+Desktop supports the ordinary local mcpServers config route for an existing binary; it supplied the original
+native proof below. The current Desktop route is the subsequently installed .mcpb extension. Uploading a Skill neither
 registers the MCP server nor makes local stdio a cloud connector.
 
 Artifact creation, native configuration/enablement, Skill discovery/use and actual MCP work are separate
@@ -139,18 +139,24 @@ retain their accepted v3 native Skill/tool/context/answer/Close flows, with thei
 All four current command-only bindings target v4; those model flows were not replayed on v4.
 
 Desktop 4.23118.0 / Opus 5.5 Extra has separate actual v4 normal-Chat proof using the enabled native account
-Skill and official mcpServers.eliot-search configuration in the physical
-C:\Users\kleym\AppData\Roaming\Claude\claude_desktop_config.json. The own command uses package-v4 and the root/URL
-above; other current fields and ACL were preserved through normal graceful reload. The observed native Desktop
-process ran that pinned binary. Search/Exact, actual Rust context, Open/Expand and valid-handle Close passed.
+Skill, initially through official mcpServers.eliot-search configuration. After explicit human approval on
+2026-11-09, the current v4 MCPB was installed/enabled through native Extensions. Its actual server is
+C:\Users\kleym\AppData\Roaming\Claude\Claude Extensions\local.mcpb.eliot-search.eliot-search\server\eliot-search-mcp.exe
+with the unchanged root/URL above and matching MCP/daemon pins. Seven tools were discovered; one native
+Search (limit 3), Open, zero-extra-context Expand and actual valid-handle Close returned saved Rust text,
+both ObjectRefs, [0,6405) unit context and not_checked. Only the duplicate manual mcpServers.eliot-search
+entry was removed; github/codebase_memory, other fields, ACL and account Skill were preserved.
 The initial string-shaped Open rejection, recovered numeric-handle refusal and native answer-only corrections
 remain preserved. The larger code block is explicitly abridged; the short signature is literal. The one exact
 literal match is scoped to the registered g1 inventory, not semantic declaration uniqueness.
 
 The optional v4 MCPB SHA256 is 11707D89CF0D9AFCD18384773F71A2794329FC5E93CC8F556A03B2BDA41175C3.
-It is BUILT_NOT_INSTALLED. Its command uses the documented extension-directory macro with literal root/URL,
-but the native delivery used JSON config, not MCPB/Cowork. The unpressed v3 review is historical, and the
-Install approval request was withdrawn. The old shared-v3 and AppData/Codex-cache packages remain preserved;
+It is installed and enabled in the recorded Desktop scope. Its command uses the documented extension-directory
+macro with literal root/URL. The earlier withdrawn request and unpressed v3 review remain historical;
+installation followed the new explicit approval for v4, with no Cowork claim. Bounded proof is under
+C:\Users\kleym\.eliot-search\agent-tools-20261108\logs\desktop-extension-20261109\run-001:
+native-answer-ui.txt, native-close-ui.txt, installed-process-binding.json and config-after-native.json.
+The old shared-v3 and AppData/Codex-cache packages remain preserved;
 all eighteen old package files were unchanged. Operational paths do not depend on the invisible AppData alias.
 
 The shared g1 snapshot has 361 registered sources and zero preparation gaps, not a whole-repository/live-file

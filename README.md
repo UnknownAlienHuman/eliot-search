@@ -39,9 +39,10 @@ changes only Open's self-contained public schema/description; resolved validatio
 The canonical Skill is unchanged in all five clients. Codex 0.161, Claude Code 2.1.278, AGY CLI 1.5.3 and
 OpenCode 2.0.32 retain their accepted v3 native-flow provenance; all four current command paths target v4,
 without a claim of replaying those model workflows on v4.
-Claude Desktop 4.23118.0 / Opus 5.5 Extra passed normal Chat using the official local mcpServers config and
-native account Skill, including saved Rust context, exact citations and successful Close. This is not Cowork
-or an MCPB installation. The optional MCPB is BUILT_NOT_INSTALLED; its approval request was withdrawn.
+Claude Desktop 4.23118.0 / Opus 5.5 Extra first passed normal Chat through local mcpServers config. On
+2026-11-09 the user authorised installation of the current v4 MCPB; the enabled extension then passed native
+Search/Open/Expand/Close with the unchanged account Skill. Its installed copy has the same v4 pins; only the
+duplicate manual Search entry was removed. Cowork is not qualified by these observations.
 The shared g1 snapshot has 361 registered sources and zero preparation gaps; this does not establish whole-repository
 coverage or live filesystem freshness. [AD1](docs/audit/ANALYSIS_REGISTRY.md#agent-delivery) records exact client,
 answer-correction and preservation scopes. Old v3/AppData artifacts remain historical evidence.
