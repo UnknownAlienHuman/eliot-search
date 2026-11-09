@@ -9,7 +9,7 @@ use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 
-use search_source_registry::{NativeFileKey, MAX_SOURCE_OBJECT_BYTES};
+use search_source_registry::{MAX_SOURCE_OBJECT_BYTES, NativeFileKey};
 
 /// Maximum bytes accepted by the first whole-file source operation.
 pub const MAX_SOURCE_FILE_BYTES: u64 = MAX_SOURCE_OBJECT_BYTES;
@@ -291,3 +291,6 @@ pub fn acquire_file(
     let mut file = open_source_file(path)?;
     same_handle_read_core(&mut file, maximum_bytes, deadline, cancellation)
 }
+
+#[cfg(test)]
+mod tests;
