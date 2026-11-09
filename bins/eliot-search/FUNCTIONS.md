@@ -37,7 +37,8 @@ Qdrant remains operator-owned; watch is a foreground process, not an installed s
 - eliot-search retain-file --file PATH [ROOT] [--data-root ROOT] [--config-file PATH] [--daemon PATH]
 - eliot-search prepare-source --source-id UUID [--unit N] [ROOT] [--data-root ROOT] [--config-file PATH] [--daemon PATH]
 - eliot-search publish-prepared --qdrant-url URL [ROOT] [--data-root ROOT] [--config-file PATH] [--daemon PATH]
-- eliot-search search --query TEXT [--limit N] --qdrant-url URL [ROOT] [--data-root ROOT] [--config-file PATH] [--daemon PATH]
+- eliot-search search --query TEXT [--limit N] [--source-info] --qdrant-url URL [ROOT] [--data-root ROOT] [--config-file PATH] [--daemon PATH]
+- eliot-search exact --raw|--decoded-utf8 --literal TEXT --data-root ROOT [--source-id UUID] [--limit N] [--source-info] [--config-file PATH] [--daemon PATH]
 - Existing root operations remain available.
 
 The CLI forwards --file as the daemon's native --source-file argument. Root settings keep their existing precedence and native path handling. It does not open the root or source file itself.
@@ -49,12 +50,21 @@ The CLI forwards --file as the daemon's native --source-file argument. Root sett
 This FIRST RAW command uses the existing --search-stdio child with RawExactRequest and no Qdrant endpoint.
 The nonempty UTF-8 literal (at most 4096 bytes) is matched literally over undecoded retained Source objects.
 Omitted source ID selects all committed published sources, including Empty/PreparationGap inputs; a supplied
-UUID must belong to that pinned inventory. Current unpublished inputs and live files are not consulted.
+UUID must belong to that pinned inventory. An explicit selection must name at least one source: an empty
+selection scans nothing, so its completeness and complete-negative answers would be vacuously true over no
+bytes, and the request is refused as EXACT_EMPTY_SELECTION. Current unpublished inputs and live files are not
+consulted.
+
+Optional --source-info adds each emitted item's saved locator from the same pinned view. Without it the output
+identifies sources only by UUID, digest and byte offset, which names no file an operator can open. The locator
+is retained registration metadata with live_status not_checked; it is never a claim that the path still exists
+or still holds these bytes.
 
 Output carries generation, source/ObjectRef/revision bindings, exact raw byte ranges and bytes_hex. N bounds
 whole emitted match/gap items to 1..64; full scan counters continue beyond that prefix. OutputLimit does not
-imply incomplete scanning. Missing Source is an explicit Gap; corruption fails. Complete negative requires
-all selected objects verified/scanned with zero matches and no missing input. The total frame remains 8 MiB.
+imply incomplete scanning. Missing Source is an explicit Gap; corruption fails. Complete negative requires a non-empty
+selection with all its objects verified/scanned, zero matches and no missing input. Scanning an empty
+population is never a proven absence. The total frame remains 8 MiB.
 This is not arbitrary byte-needle syntax, a decoded/extracted mode or a reusable window/expansion locator.
 
 ## Retained DecodedUtf8 Exact
@@ -67,8 +77,9 @@ Output carries Source/Prepared refs, both byte ranges and exact matching text, i
 Matching spans the full representation across stored unit boundaries. No Qdrant endpoint is required.
 
 The literal/source selection/output bounds remain 4096 UTF-8 bytes, at most 64 items and 8 MiB total framing.
-PrepGap or missing input/artifact produces an explicit representation gap; corruption fails. Output cuts do
-not stop the scan, and gaps prevent complete negative. The connected session command uses the
+An explicit selection must name at least one source, exactly as for Raw Exact, and --source-info adds the same
+saved locators. PrepGap or missing input/artifact produces an explicit representation gap; corruption fails.
+Output cuts do not stop the scan, and gaps prevent complete negative, as does an empty scan population. The connected session command uses the
 [window owner](../../crates/search-query/search-continuation/FUNCTIONS.md); its qualification is scoped there.
 There is no extracted producer/route or arbitrary non-UTF-8 needle syntax.
 
@@ -130,6 +141,10 @@ TEXT is 1..4096 UTF-8 bytes without NUL; N defaults to 10 and is 1..64. The CLI 
 an async context, enables its Ctrl-C listener before spawn and sends SearchRequest to --search-stdio with
 remaining duration sampled at send. It prints only a complete validated correlated terminal after owned-child
 exit/reap; untrusted text/diagnostics pass through safe JSON presentation.
+
+Optional --source-info is the only output selector on this route; it adds each hit's saved locator from the
+pinned view. It is a client-side request, never forwarded as a daemon setting, and is rejected on any other
+command.
 
 Current Search/Raw/DecodedUtf8 QueryClient calls request QuerySummary by default; CLI session Open enables it
 too. No --summary flag is added. One-shot Terminal.summary and session WindowSummary.corpus expose published/
