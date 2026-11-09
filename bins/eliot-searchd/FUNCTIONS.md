@@ -15,8 +15,11 @@ short transactions for source/preparation work, then transfers it into publicati
 may remain open across object/RPC work; transactions may not. Failed borrowed commit stops the operation;
 explicit close precedes native read-only acceptance, final CAS and PublishedView.
 
-The pinned ignore 0.4.34 walk uses captured CWD, strict ignore-file I/O, standard filters, no link following,
-and explicit .git/data-root exclusion. Reparse/link and incomplete/malformed-ignore observations refuse the
+The pinned ignore 0.4.34 walk uses captured CWD, strict ignore-file I/O, standard filters, require_git(false),
+no link following, and explicit .git/data-root exclusion. Ignore rules are an admission filter here, not git
+emulation, so .gitignore, .ignore and git exclude files apply whether or not the admitted tree is a checkout.
+The crate default would apply git ignore rules only inside a repository, which silently retained every ignored
+file of a plain folder as plaintext objects and indexed retrieval text. Reparse/link and incomplete/malformed-ignore observations refuse the
 refresh; a second matching scan precedes removals. Only confirmed in-scope filesystem absence removes current
 membership; an ignored but present file is not removed. Outside source rows and retained/published evidence remain.
 An unchanged NativeFileKey/ObjectRef preserves the logical source head; a key change is a real update even

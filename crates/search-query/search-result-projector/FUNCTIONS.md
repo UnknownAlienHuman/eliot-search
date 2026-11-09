@@ -1,5 +1,9 @@
 # search-result-projector — source map and deletion boundary
 
+> **Retained policy: this package was removed. Result formatting is inlined in
+> [verified_query::metadata](../../../bins/eliot-searchd/src/verified_query.rs) and the protocol encoder. The
+> rules below are canonical; the API is not.**
+
 ## Current consumer
 
 The former crate/manifest/source and exclusive fixtures are removed. Current ranked evidence metadata is

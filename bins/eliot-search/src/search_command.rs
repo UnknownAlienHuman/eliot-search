@@ -17,9 +17,17 @@ fn failure(error: ClientError) -> i32 {
         _ => 2,
     }
 }
-fn configured_client() -> Result<QueryClient, ClientError> {
+/// Builds the one owned-child client for this command.
+///
+/// `source_info` requests the pinned view's saved locator for each emitted
+/// item. Without it a terminal carries only source UUIDs, digests and byte
+/// offsets, which identifies nothing an operator can open. It stays opt-in
+/// because the locator is retained historical metadata, never a live-path
+/// claim, and the daemon omits it from output when the flag is absent.
+fn configured_client(source_info: bool) -> Result<QueryClient, ClientError> {
     let mut client = QueryClient::new()?;
     client.enable_ctrl_c();
+    client.set_include_source_info(source_info);
     Ok(client)
 }
 
@@ -27,9 +35,10 @@ pub fn run(
     daemon: &Path,
     arguments: &[OsString],
     request: SearchRequest,
+    source_info: bool,
     deadline: Instant,
 ) -> i32 {
-    let mut client = match configured_client() {
+    let mut client = match configured_client(source_info) {
         Ok(client) => client,
         Err(error) => return failure(error),
     };
@@ -45,9 +54,10 @@ pub fn run_raw_exact(
     daemon: &Path,
     arguments: &[OsString],
     request: RawExactRequest,
+    source_info: bool,
     deadline: Instant,
 ) -> i32 {
-    let mut client = match configured_client() {
+    let mut client = match configured_client(source_info) {
         Ok(client) => client,
         Err(error) => return failure(error),
     };
@@ -64,9 +74,10 @@ pub fn run_decoded_utf8(
     daemon: &Path,
     arguments: &[OsString],
     request: DecodedUtf8Request,
+    source_info: bool,
     deadline: Instant,
 ) -> i32 {
-    let mut client = match configured_client() {
+    let mut client = match configured_client(source_info) {
         Ok(client) => client,
         Err(error) => return failure(error),
     };

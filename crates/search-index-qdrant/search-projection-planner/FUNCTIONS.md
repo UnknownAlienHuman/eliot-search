@@ -1,5 +1,9 @@
 # Projection — complete generations before measured source-local deltas
 
+> **Retained policy: this package was removed. Page construction and point identity now live in the daemon
+> publisher [published_corpus.rs](../../../bins/eliot-searchd/src/published_corpus.rs) and
+> [CONTROL](../../search-control-redb/src/publication.rs). The rules below are canonical; the API is not.**
+
 Projection turns prepared units into bounded uploadable pages and matching evidence bindings. It owns no
 redb/Qdrant effect, publication state or recovery ledger. Keep it inside preparation/publication unless a
 substantial independent algorithm justifies the package.

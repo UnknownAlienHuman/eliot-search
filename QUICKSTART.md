@@ -1,4 +1,22 @@
-# Quickstart status
+# Quickstart
+
+## Start here
+
+Run these in order. Each section below holds the exact commands.
+
+1. Start the operator-owned Qdrant 1.20.0 service on a loopback endpoint.
+2. Build the sibling pair and initialize a data root: [Index and search](#index-and-search).
+3. Admit a tree and publish it: `index PATH`, then `search`.
+4. For agent clients, install the MCP package: [Agent/MCP delivery](#agentmcp-delivery--qualified-native-scopes)
+   and the [package guide](integrations/eliot-search/README.md).
+
+Every path in this file is a placeholder. Substitute your own data root, corpus and endpoint.
+
+The remainder of this page is the **qualification status record**: which exact source revisions, platforms
+and scopes were measured. It is provenance, not instructions, and the
+[work register](docs/audit/ANALYSIS_REGISTRY.md#evidence-status) owns it.
+
+## Qualification status
 
 The four root operator commands are qualified for Windows debug artifacts with Rust 1.98.0 at source
 ad8cc9e8fa498d43b644246af3b7f4900890317a. S1 final Windows debug checks, strict Clippy, builds and basic retained-file
@@ -23,10 +41,15 @@ The earlier V1 CLI/resource/workflow evidence retains its own scope. The
 [MCP binary](bins/eliot-search-mcp/FUNCTIONS.md) consumes the existing SDK; do not register the daemon's
 private framed stdio directly as MCP JSON-RPC. Public tool schemas define inputs.
 
-Use the current version 0.0.0 packaged command
-C:\Users\kleym\.eliot-search\agent-tools-20261108\package-v4\plugin\bin\eliot-search-mcp.exe
-with --data-root C:\Users\kleym\.eliot-search\agent-tools-20261108\corpus-search and
---qdrant-url http://127.0.0.1:7637. The daemon is its sibling; ranked work needs the operator-owned Qdrant.
+Register the version 0.0.0 packaged command, using your own install and data-root locations:
+
+    <INSTALL_DIR>\plugin\bin\eliot-search-mcp.exe --data-root <DATA_ROOT> --qdrant-url <QDRANT_URL>
+
+`<INSTALL_DIR>` is wherever the package was unpacked, `<DATA_ROOT>` is an initialized data root and
+`<QDRANT_URL>` is the loopback endpoint of your own Qdrant service. The daemon is the MCP binary's sibling;
+ranked work needs the operator-owned Qdrant. The exact locations used for the recorded qualification runs are
+in the [work register](docs/audit/ANALYSIS_REGISTRY.md#agent-delivery); they are one machine's evidence paths,
+not values to copy.
 The builder does not initialize/copy a dataset. The [package guide](integrations/eliot-search/README.md)
 gives native installation mappings and invocation prerequisites; no checkout or global PATH is required.
 

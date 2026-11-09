@@ -1,5 +1,10 @@
 # Evidence resolution — pinned truth, real bytes, explicit domains
 
+> **Retained policy: this package was removed. Evidence resolution is implemented by
+> [verified_query.rs](../../../bins/eliot-searchd/src/verified_query.rs) with
+> [PublishedView::resolve_point](../../search-control-redb/src/publication.rs). The rules below are canonical;
+> the API is not.**
+
 This file owns excerpt truth and evidence failure scope. [Windowing](../search-continuation/FUNCTIONS.md) owns
 future page progress and item lifetime. The current implementation is
 [verified_query.rs](../../../bins/eliot-searchd/src/verified_query.rs) with
