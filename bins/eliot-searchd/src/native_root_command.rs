@@ -262,6 +262,14 @@ fn scan_index_path(
         builder
             .current_dir(cwd)
             .standard_filters(true)
+            // The crate's default only applies .gitignore, .git/info/exclude and
+            // global git excludes inside a repository. An admitted tree that is
+            // not a checkout would otherwise retain every ignored file, so a
+            // plain folder holding secrets, caches or build output became
+            // plaintext retained objects and indexed retrieval text. Ignore
+            // rules are an admission filter here, not git emulation, so they
+            // apply wherever the operator wrote them.
+            .require_git(false)
             .follow_links(false)
             .filter_entry(move |entry| {
                 if is_git_metadata(entry.path()) {
