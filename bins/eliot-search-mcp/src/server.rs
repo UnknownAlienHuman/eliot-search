@@ -6,7 +6,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use rmcp::handler::server::{router::tool::ToolRouter, wrapper::Parameters};
-use rmcp::model::{CallToolResult, Implementation, ServerCapabilities, ServerConfig};
+use rmcp::model::{CallToolResult, Implementation, JsonObject, ServerCapabilities, ServerConfig};
 use rmcp::service::RequestContext;
 use rmcp::{RoleServer, ServerHandler, schemars, tool, tool_handler, tool_router};
 use search_provider_client::{ClientError, QueryClient};
@@ -188,6 +188,27 @@ struct OpenArgs {
     timeout_ms: u64,
     #[serde(default = "enabled")]
     include_source_info: bool,
+}
+
+fn open_args_schema() -> Arc<JsonObject> {
+    // Match rmcp's input settings and root normalization, with this finite input inlined.
+    let schema = schemars::generate::SchemaSettings::draft2020_12()
+        .with(|settings| settings.inline_subschemas = true)
+        .into_generator()
+        .into_root_schema_for::<OpenArgs>();
+    let serde_json::Value::Object(mut object) =
+        serde_json::to_value(schema).expect("failed to serialize OpenArgs schema")
+    else {
+        panic!("OpenArgs input schema must be an object");
+    };
+    assert_eq!(
+        object.get("type").and_then(serde_json::Value::as_str),
+        Some("object"),
+        "OpenArgs input schema must have root type object"
+    );
+    object.remove("title");
+    object.remove("description");
+    Arc::new(object)
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
@@ -656,7 +677,8 @@ impl McpServer {
 
     #[tool(
         name = "eliot_window_open",
-        description = "Open one retained query window, returning its first evidence page and an ephemeral handle. TTL starts before work, never renews, and is at most 120000ms.",
+        description = r#"Open one retained query window, returning its first evidence page and an ephemeral handle. query is a mode/request object, not a string. Example: {"query":{"mode":"search","request":{"query":"TEXT","limit":1}},"page_size":1}. TTL starts before work, never renews, and is at most 120000ms."#,
+        input_schema = open_args_schema(),
         annotations(read_only_hint = true, destructive_hint = false)
     )]
     async fn window_open(

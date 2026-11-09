@@ -35,6 +35,20 @@ listener, negotiation layer or host configuration writer is installed.
 - eliot_window_close: window_handle and timeout_ms. Closes all context and
   observes SDK finish/reap before a successful response.
 
+WindowOpen publishes the complete nested query object inline through Schemars
+1.2.3 with rmcp's JSON Schema 2020-12 deserialize settings. Its tool description
+includes this valid call:
+
+```json
+{"query":{"mode":"search","request":{"query":"TEXT","limit":1}},"page_size":1}
+```
+
+`query` is an object with `mode` and `request`; `limit` belongs inside `request`.
+The generated branches retain the same required fields, closed objects, bounds,
+defaults and nullable source selection. The DTO, parser and handler are unchanged;
+a string containing JSON is still invalid. This metadata clarity change does not
+establish that any host dropped schema definitions.
+
 Query/literal UTF-8 byte bounds, source selection, framing and evidence validation
 remain at the existing protocol/SDK boundary. The small UUID-count preflight is
 derived from the existing core request-frame byte ceiling, not a new corpus quota.
