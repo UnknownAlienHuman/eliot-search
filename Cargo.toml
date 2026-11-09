@@ -43,7 +43,10 @@ search-provider-client = { path = "crates/search-provider-client" }
 qdrant-client = { version = "=1.20.0", default-features = false }
 tonic = { version = "=0.14.6", features = ["transport", "tls-native-roots", "tls-ring"] }
 prost = "=0.14.3"
-tokio = { version = "=1.53.1", default-features = false }
+# 1.53.3 is the first 1.53 patch that closes RUSTSEC-2026-0386 (AsyncFd I/O
+# safety). This workspace constructs no AsyncFd, but the advisory is a hard
+# cargo-deny failure and the bump is a same-minor patch with no API change.
+tokio = { version = "=1.53.3", default-features = false }
 tokio-util = { version = "=0.7.19", features = ["rt"] }
 rmcp = { version = "=3.9.0", default-features = false, features = ["server", "macros", "transport-io"] }
 

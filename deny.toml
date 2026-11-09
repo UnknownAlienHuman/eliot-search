@@ -9,15 +9,23 @@ allow = [
   "MIT",
   "Apache-2.0",
   "BSD-2-Clause",
+  # matchit (MIT AND BSD-3-Clause, via axum/tonic) and subtle (BSD-3-Clause).
+  "BSD-3-Clause",
   "Unicode-3.0",
   "ISC",
   "Zlib",
+  # Vendored ignore is Unlicense OR MIT; record both of its actual terms.
+  "Unlicense",
 ]
 confidence-threshold = 0.93
 
 [bans]
 multiple-versions = "warn"
 wildcards = "deny"
+# Workspace members are path dependencies declared without a version, which is
+# the normal shape for a private unpublished workspace. The wildcard ban still
+# applies to every registry dependency.
+allow-wildcard-paths = true
 
 [sources]
 unknown-registry = "deny"
