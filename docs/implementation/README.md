@@ -245,7 +245,7 @@ DTO/parser/handlers and the other six tool schemas are unchanged. The verified v
 contains the v4 MCP, unchanged CLI/daemon and canonical Skill. All five current owned command targets use v4.
 The four coding-client model workflows keep v3 execution provenance; no v4 replay is claimed.
 
-Desktop's separate v4 native proof used normal Chat / Opus 5.5 Extra, its enabled account Skill and the
+Desktop's separate original v4 native proof used normal Chat / Opus 5.5 Extra, its enabled account Skill and the
 official local mcpServers config route. Search/Exact and retained Open/Expand/valid-handle Close returned
 actual Rust definitions/context and historical hints. Recovered argument errors and native answer-only
 clarifications remain in the evidence. OpenCode's effective answer includes the accepted 001/002/003
@@ -253,8 +253,10 @@ corrections; model/invocation limits and session-only permissions/caps stay in t
 
 The shared g1 inventory has 361 registered sources and zero preparation gaps. This is a selected saved
 snapshot, not whole-repository or live-file coverage. Skill/config presence, native work and source/package
-checks retain their separate evidence. Old v3/AppData packages are preserved; optional MCPB is
-BUILT_NOT_INSTALLED and its Install approval request was withdrawn. No Cowork/all-UI-variant claim follows.
+checks retain their separate evidence. Old v3/AppData packages are preserved. The current formal MCPB 0.0.0 v4
+is INSTALLED_ENABLED; native seven-tool discovery and Search/retained context/Close were verified on 2026-11-09.
+Only the duplicate manual Search entry was removed. JSON config remains a supported alternative, not the current
+Desktop route. No Cowork/all-UI-variant claim follows.
 Sol DESKTOP_NATIVE_ACCEPTED closes the last AD1 gate. No READY mandatory row remains in the selected register;
 O1 remains DEFERRED. Application and operator-owned backend were left functional.
 

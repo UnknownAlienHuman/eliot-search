@@ -35,11 +35,11 @@ OpenCode 2.0.32 passed their selected native context/answer paths on v3. Current
 package-v4; those four model workflows were not replayed. OpenCode's qualified scope uses the recorded explicit
 Nemotron free model/session-only cap and corrected answer chronology. Keep client allowlists session-scoped.
 
-Desktop 4.23118.0 / Opus 5.5 Extra passed normal Chat with the native account Skill and the documented
-mcpServers.eliot-search entry in its physical Roaming\Claude\claude_desktop_config.json. It used the actual
-local v4 MCP for Search/Exact, retained Open/Expand and successful Close. Existing settings/ACL were preserved.
-No Cowork or MCPB software installation is claimed. MCPB remains optional BUILT_NOT_INSTALLED; the obsolete
-Install approval request was withdrawn.
+Desktop 4.23118.0 / Opus 5.5 Extra originally passed normal Chat through local mcpServers config and the
+native account Skill. The current formal MCPB 0.0.0 v4 is INSTALLED_ENABLED: native seven-tool discovery and
+Search/retained context/Close were verified on 2026-11-09. Only the duplicate manual mcpServers.eliot-search
+entry was removed; other settings/ACL and the Skill were preserved. JSON config remains a supported alternative,
+not the current Desktop route. No Cowork qualification is claimed.
 
 Main ed8ce5b4 contains only Open schema/description clarification with equivalent validation and unchanged
 DTO/parser/handlers. Matching v4 package/schema/pin checks passed; the CLI/daemon and Skill are unchanged.
@@ -226,7 +226,8 @@ Separate default-false SDK/wire include_source_info can add per-item/citation so
 published Source locator. Available saved_path_hint has live_status: not_checked; typed Unavailable supplies no
 live path fact. These hints neither replace ObjectRef/range citations nor prove current filesystem freshness.
 Legacy omitted/false results stay unchanged. Optional metadata uses existing child-frame budgets and adds no
-public source_info RPC. The new MCP consumer defaults its tool request opt-in on, but its delivery is pending.
+public source_info RPC. The MCP consumer defaults its tool request opt-in on; its
+[recorded five-client delivery](docs/audit/ANALYSIS_REGISTRY.md#agent-delivery) is DONE.
 
 The isolated candidate install ran initialize, index PATH, bare index, Search, Raw, Decoded and collect-objects
 with all seven commands exiting 0, outside the checkout and without --daemon. Actual default sibling path/hash
