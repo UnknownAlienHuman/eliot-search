@@ -1,5 +1,8 @@
 # search-overlay — source audit and optional replacement
 
+> **Retained policy: this package was removed and no editor overlay is implemented. The rules below describe
+> optional deferred depth, not current behavior.**
+
 ## Current disposition
 
 Q1 physically retired the disconnected Rust package/manifests/exclusive fixtures. This directory retains

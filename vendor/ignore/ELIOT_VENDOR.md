@@ -11,6 +11,15 @@ files are retained. Cargo's registry cache markers and the package's separate
 Cargo.lock are omitted. `COPYING`, `LICENSE-MIT` and `UNLICENSE` preserve the
 upstream Unlicense OR MIT terms. Version and dependency declarations are unchanged.
 
+## Exact source change
+
+Only `src/dir.rs`, `src/gitignore.rs` and `src/lib.rs` differ from the retained published files.
+[ELIOT_VENDOR.patch](ELIOT_VENDOR.patch) is the complete diff against those three published files, with
+portable relative paths and zero context. From the verified upstream source directory, apply it with
+`git apply --unidiff-zero ELIOT_VENDOR.patch` to reproduce the modified files. Applying it to the
+checksum-verified upstream sources reproduces the vendored content byte for byte; every other published
+file is unchanged apart from the repository's own line-ending normalization.
+
 ELIOT's patch changes automatic ignore-loading error propagation only:
 
 - Missing optional files (`NotFound`) remain optional. Other read/stat failures
