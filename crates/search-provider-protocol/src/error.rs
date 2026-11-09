@@ -9,6 +9,8 @@ pub enum ProtocolError {
     FrameTooLarge,
     /// Closed JSON schema or a field invariant was rejected.
     InvalidMessage,
+    /// An explicit source selection named no source, so no scan population exists.
+    EmptySelection,
     /// The sole request identity does not match.
     InvalidCorrelation,
     /// A bounded allocation could not be reserved.
@@ -25,6 +27,7 @@ impl ProtocolError {
             Self::InvalidFrame => "QUERY_FRAME_INVALID",
             Self::FrameTooLarge => "QUERY_FRAME_TOO_LARGE",
             Self::InvalidMessage => "QUERY_MESSAGE_INVALID",
+            Self::EmptySelection => "EXACT_EMPTY_SELECTION",
             Self::InvalidCorrelation => "QUERY_RESPONSE_MISMATCH",
             Self::ResourceExhausted => "QUERY_ALLOCATION_FAILED",
             Self::Serialization => "QUERY_SERIALIZATION_FAILED",

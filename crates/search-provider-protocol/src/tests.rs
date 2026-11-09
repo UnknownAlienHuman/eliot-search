@@ -279,3 +279,143 @@ fn decoded_item_count_and_failure_code_are_bounded() {
     }
     assert!(FailureCode::new(&"X".repeat(65)).is_err());
 }
+
+fn raw_result(selected: u64, scanned: u64, matches: u64, negative: bool) -> RawExactResult {
+    let missing = selected - scanned;
+    RawExactResult {
+        generation: 1,
+        selected_sources: selected,
+        scanned_sources: scanned,
+        missing_sources: missing,
+        scanned_bytes: if scanned == 0 { 0 } else { 4096 },
+        matches,
+        // This fixture emits no items, so a non-zero match/gap total is an
+        // explicit presentation cut rather than a complete emitted prefix.
+        items: Vec::new(),
+        scan_complete: scanned == selected,
+        complete_negative: negative,
+        stop: if matches + missing == 0 {
+            StopReason::Complete
+        } else {
+            StopReason::OutputLimit
+        },
+    }
+}
+
+#[test]
+fn an_explicit_exact_selection_must_name_at_least_one_source() {
+    for ids in [
+        None,
+        Some(vec!["00000000-0000-4000-8000-000000000002".to_owned()]),
+    ] {
+        assert_eq!(
+            RawExactRequest {
+                literal: "needle".to_owned(),
+                source_ids: ids.clone(),
+                limit: 1,
+            }
+            .validate(),
+            Ok(())
+        );
+        assert_eq!(
+            DecodedUtf8Request {
+                literal: "needle".to_owned(),
+                source_ids: ids,
+                limit: 1,
+            }
+            .validate(),
+            Ok(())
+        );
+    }
+    // An empty selection has no scan population, so a vacuous complete scan
+    // over nothing could be read as a proven absence. It is refused instead.
+    assert_eq!(
+        RawExactRequest {
+            literal: "needle".to_owned(),
+            source_ids: Some(Vec::new()),
+            limit: 1,
+        }
+        .validate(),
+        Err(ProtocolError::EmptySelection)
+    );
+    assert_eq!(
+        DecodedUtf8Request {
+            literal: "needle".to_owned(),
+            source_ids: Some(Vec::new()),
+            limit: 1,
+        }
+        .validate(),
+        Err(ProtocolError::EmptySelection)
+    );
+    assert_eq!(
+        ProtocolError::EmptySelection.code(),
+        "EXACT_EMPTY_SELECTION"
+    );
+}
+
+#[test]
+fn a_complete_negative_needs_a_non_empty_scanned_population() {
+    // Scanned everything, found nothing, over a real population: a negative.
+    assert_eq!(raw_result(3, 3, 0, true).validate(1), Ok(()));
+    assert_eq!(
+        raw_result(3, 3, 0, false).validate(1),
+        Err(ProtocolError::InvalidMessage)
+    );
+    // Zero selected sources: complete scanning is vacuous and proves nothing.
+    assert_eq!(raw_result(0, 0, 0, false).validate(1), Ok(()));
+    assert_eq!(
+        raw_result(0, 0, 0, true).validate(1),
+        Err(ProtocolError::InvalidMessage)
+    );
+    // An incomplete scan is never a negative, whatever the population size.
+    assert_eq!(raw_result(3, 2, 0, false).validate(1), Ok(()));
+    assert_eq!(
+        raw_result(3, 2, 0, true).validate(1),
+        Err(ProtocolError::InvalidMessage)
+    );
+}
+
+#[test]
+fn a_window_summary_cannot_claim_a_negative_over_an_empty_selection() {
+    let corpus = |selected: u64| QuerySummary {
+        published_wanted_revision: 7,
+        published_sources: 3,
+        published_preparation_gaps: 0,
+        selected_sources: selected,
+        selected_preparation_gaps: 0,
+        control: ControlObservation::Known {
+            wanted_revision: 7,
+            known_control_lag: false,
+        },
+    };
+    let page = |selected: Option<u64>, negative: bool| WindowPage {
+        window_id: 1,
+        start_index: 0,
+        next_index: 0,
+        has_more: false,
+        items: Vec::new(),
+        page_stop: StopReason::Complete,
+        summary: WindowSummary {
+            generation: 1,
+            retained_items: 0,
+            found_matches: Some(0),
+            scan_complete: Some(true),
+            complete_negative: Some(negative),
+            result_stop: StopReason::Complete,
+            corpus: selected.map(corpus),
+        },
+    };
+    assert_eq!(page(Some(3), true).validate(), Ok(()));
+    assert_eq!(
+        page(Some(3), false).validate(),
+        Err(ProtocolError::InvalidMessage)
+    );
+    assert_eq!(page(Some(0), false).validate(), Ok(()));
+    assert_eq!(
+        page(Some(0), true).validate(),
+        Err(ProtocolError::InvalidMessage)
+    );
+    // Without the corpus facts only an unjustified true can be rejected.
+    assert_eq!(page(None, true).validate(), Ok(()));
+    assert_eq!(page(None, false).validate(), Ok(()));
+}

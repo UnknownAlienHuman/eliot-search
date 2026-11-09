@@ -91,8 +91,10 @@ struct ExactArgs {
     /// Exact UTF-8 literal bytes, at most 4096 bytes; no implicit decoding.
     #[schemars(length(min = 1, max = 4096))]
     literal: String,
-    /// Unique canonical source UUIDs. Omitted/null selects all; [] selects none.
-    #[schemars(extend("uniqueItems" = true))]
+    /// Unique canonical source UUIDs. Omitted/null selects all published sources;
+    /// an explicit list must name at least one, because an empty selection scans
+    /// nothing and cannot establish absence.
+    #[schemars(extend("uniqueItems" = true), length(min = 1))]
     source_ids: Option<Vec<String>>,
     #[serde(default = "default_limit")]
     #[schemars(range(min = 1, max = 64))]
@@ -122,7 +124,8 @@ enum QueryArgs {
     Raw {
         #[schemars(length(min = 1, max = 4096))]
         literal: String,
-        #[schemars(extend("uniqueItems" = true))]
+        /// Omitted/null selects all; an explicit list must name at least one source.
+        #[schemars(extend("uniqueItems" = true), length(min = 1))]
         source_ids: Option<Vec<String>>,
         #[serde(default = "default_limit")]
         #[schemars(range(min = 1, max = 64))]
@@ -131,7 +134,8 @@ enum QueryArgs {
     DecodedUtf8 {
         #[schemars(length(min = 1, max = 4096))]
         literal: String,
-        #[schemars(extend("uniqueItems" = true))]
+        /// Omitted/null selects all; an explicit list must name at least one source.
+        #[schemars(extend("uniqueItems" = true), length(min = 1))]
         source_ids: Option<Vec<String>>,
         #[serde(default = "default_limit")]
         #[schemars(range(min = 1, max = 64))]
@@ -270,6 +274,13 @@ pub fn remaining(deadline: Instant) -> Result<u64, &'static str> {
 }
 
 fn preflight_ids(ids: Option<&[String]>) -> Result<(), &'static str> {
+    // An explicit selection must name at least one source. The core refuses an
+    // empty selection because its completeness and complete-negative answers
+    // would be vacuously true over no scanned bytes; refusing here reports the
+    // same closed code without starting a child.
+    if ids.is_some_and(<[String]>::is_empty) {
+        return Err("EXACT_EMPTY_SELECTION");
+    }
     // Each canonical UUID alone needs 38 JSON bytes including quotes. Anything
     // larger cannot fit the existing core request frame, even before separators.
     if ids.is_some_and(|ids| ids.len() > MAX_CLIENT_FRAME_BYTES / 38) {
