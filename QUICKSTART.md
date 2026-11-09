@@ -16,26 +16,35 @@ separate CPU/workflow and observed replacement disk results close V1 for the sel
 ordinary-repo-1, real-repository workflows and isolated installed scope. Actual unsampled peaks, cold-cache
 and other-platform qualification are not claimed; this is not a fresh main build.
 
-## Agent/MCP delivery — IN_PROGRESS
+## Agent/MCP delivery — qualified native scopes
 
-The earlier V1 scope above is core CLI/resource/workflow evidence, not completion of the new user request to
-deliver MCP plus native Skills in five clients. [AD1](docs/audit/ANALYSIS_REGISTRY.md#agent-delivery) is now the
-active first unfinished delivery. The new [MCP binary owner](bins/eliot-search-mcp/FUNCTIONS.md) and
-[package/skill source](integrations/eliot-search/README.md) exist; do not register eliot-searchd's private framed
-stdio directly as MCP JSON-RPC.
+[AD1](docs/audit/ANALYSIS_REGISTRY.md#agent-delivery) is DONE for the five recorded native clients.
+The earlier V1 CLI/resource/workflow evidence retains its own scope. The
+[MCP binary](bins/eliot-search-mcp/FUNCTIONS.md) consumes the existing SDK; do not register the daemon's
+private framed stdio directly as MCP JSON-RPC. Public tool schemas define inputs.
 
-MCP argv requires an absolute data-root, uses a sibling daemon by default and needs qdrant-url for ranked
-operations. Its tool schemas default source-info on; no source-info launcher flag or lookup RPC is added.
-Candidate3 has CORE/MCP SOURCE PASS and locked check/strict Clippy/Release PASS; all reviewed P2 items are closed.
-Its matching version 0.0.0 trio passed the real package build with verified pins, archive contents and schemas.
+Use the current version 0.0.0 packaged command
+C:\Users\kleym\.eliot-search\agent-tools-20261108\package-v4\plugin\bin\eliot-search-mcp.exe
+with --data-root C:\Users\kleym\.eliot-search\agent-tools-20261108\corpus-search and
+--qdrant-url http://127.0.0.1:7637. The daemon is its sibling; ranked work needs the operator-owned Qdrant.
+The builder does not initialize/copy a dataset. The [package guide](integrations/eliot-search/README.md)
+gives native installation mappings and invocation prerequisites; no checkout or global PATH is required.
 
-Four coding-client Skill copies are installed; the current Codex host catalog discovers eliot-search.
-Claude Desktop account Skill upload/enablement was observed as by you, v1. Four coding MCP entries now use the
-verified shared package/data-root under .eliot-search; old AppData bindings are historical. Candidate3 has
-Sol-accepted SELECTED_NATIVE_PASS, including cleanup/continuation. The actual-repository shared root is READY;
-All four coding clients passed selected native context/answer paths; OpenCode requires the recorded explicit
-free-model/session-cap invocation. Only Desktop install/enablement/discovery and actual context/answer remain in AD1.
-Desktop MCPB installation awaits action-time approval and is NOT_RUN; package/config presence is not runtime proof.
+All five use the unchanged canonical Skill. Codex 0.161, Claude Code 2.1.278, signed AGY CLI 1.5.3 and
+OpenCode 2.0.32 passed their selected native context/answer paths on v3. Current owned registrations target
+package-v4; those four model workflows were not replayed. OpenCode's qualified scope uses the recorded explicit
+Nemotron free model/session-only cap and corrected answer chronology. Keep client allowlists session-scoped.
+
+Desktop 4.23118.0 / Opus 5.5 Extra passed normal Chat with the native account Skill and the documented
+mcpServers.eliot-search entry in its physical Roaming\Claude\claude_desktop_config.json. It used the actual
+local v4 MCP for Search/Exact, retained Open/Expand and successful Close. Existing settings/ACL were preserved.
+No Cowork or MCPB software installation is claimed. MCPB remains optional BUILT_NOT_INSTALLED; the obsolete
+Install approval request was withdrawn.
+
+Main ed8ce5b4 contains only Open schema/description clarification with equivalent validation and unchanged
+DTO/parser/handlers. Matching v4 package/schema/pin checks passed; the CLI/daemon and Skill are unchanged.
+The observed g1 inventory is the registered selection of 361 sources, gap0, not a whole-repository guarantee.
+Saved paths remain historical with live_status:not_checked; known CONTROL lag does not verify current files.
 
 ## Index and search
 

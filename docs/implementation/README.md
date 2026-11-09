@@ -223,35 +223,40 @@ The long-root baseline failed Gridstore OS3 before replacement and remains prese
 Short direct operator storage is valid, not a universal MAX_PATH limit or source fix. Optional legacy observer
 capture error and raw CONTROL oracle scope are retained in the
 [qualification evidence](../audit/ANALYSIS_REGISTRY.md#a10-v1-candidate). This closed the prior selected core
-register; the later user-required AD1 delivery below is now active. O1 stays DEFERRED. Final Sol bounded resource/docs review precedes publication. No fresh main build, cold-cache,
+register; the later user-required AD1 delivery is qualified separately below. O1 stays DEFERRED. No fresh main build, cold-cache,
 Unix or universal unsampled-peak qualification is claimed.
 Optional #219/#239/#248/#334/#336 remain selected source-backed orientation/comparison/Git/document capabilities. Optional donors join existing
 consumers. No encryption or restricted-user phase. Qdrant Edge, if studied later, is a replacement experiment.
 
-### 6. User-required agent delivery — IN_PROGRESS
+### 6. User-required agent delivery — DONE in recorded native scopes
 
-[AD1](../audit/ANALYSIS_REGISTRY.md#agent-delivery) connects one real MCP JSON-RPC SDK consumer, the shared
-canonical Skill/package source and native delivery in Codex, Claude Code, Claude Desktop/Cowork, OpenCode and
-Antigravity. MCP was optional to the earlier baseline; it is now explicitly selected user work, not deferred O1.
+[AD1](../audit/ANALYSIS_REGISTRY.md#agent-delivery) connects native Skill/tool/context/answer consumers in
+Codex 0.161, Claude Code 2.1.278, AGY CLI 1.5.3, OpenCode 2.0.32 and Claude Desktop 4.23118.0.
+The concrete path is native client -> eliot-search-mcp JSON-RPC -> QueryClient/OwnedQuerySession ->
+owned daemon/private frames -> existing retained query owners. No proxy or second state owner is added.
 
-The core SDK/wire includes default-false captured-source annotations with NotChecked/typed Unavailable; legacy
-false output and private frame budgets remain unchanged. The MCP tool schemas default opt-in on. This metadata
-does not establish live freshness, add a source_info RPC, or qualify MCP transport from private-frame checks.
+The default-false SDK/wire source annotations preserve legacy output and private frame budgets; MCP schemas
+default them on. Saved hints use the original captured source with NotChecked/typed Unavailable, without
+a source_info RPC or live filesystem verification. Candidate3 CORE/MCP SOURCE PASS and selected SDK native
+cleanup/continuation scope remain distinct from the five actual host workflows.
 
-Candidate3 has CORE/MCP SOURCE PASS, all reviewed P2 items closed and locked check/strict Clippy/Release PASS.
-The matching version 0.0.0 operator CLI/MCP/daemon trio passed the real package build, pin/member-hash and
-published-schema checks. Sol accepted SELECTED_NATIVE_PASS including unread-output cleanup, full window
-continuation and stale-handle refusal; this is the selected official-SDK scope, not five-host qualification.
+Main ed8ce5b4 changes only Open's self-contained schema/description. Resolved validation is equivalent;
+DTO/parser/handlers and the other six tool schemas are unchanged. The verified version 0.0.0 package-v4
+contains the v4 MCP, unchanged CLI/daemon and canonical Skill. All five current owned command targets use v4.
+The four coding-client model workflows keep v3 execution provenance; no v4 replay is claimed.
 
-Four coding-client Skill copies are installed and the current Codex host catalog discovers the Skill.
-Claude Desktop account Skill upload/enablement was observed as by you, v1 after the user-reported UI state change.
-The four owned coding-client MCP entries were updated to the shared .eliot-search package/data-root with other
-entries preserved; old AppData deployment is historical. The actual-repository shared root is READY and all
-four coding clients passed their selected native context/answer paths, including OpenCode's explicit
-free-model/session-cap invocation. Only Desktop installation/enablement/discovery and actual retained
-context/answer remain in AD1.
-Desktop MCPB install is NOT_RUN, with the shared-bundle review dialog waiting for action-time approval.
-Keep artifact/config/enablement/discovery/native-work outcomes distinct in the existing register.
+Desktop's separate v4 native proof used normal Chat / Opus 5.5 Extra, its enabled account Skill and the
+official local mcpServers config route. Search/Exact and retained Open/Expand/valid-handle Close returned
+actual Rust definitions/context and historical hints. Recovered argument errors and native answer-only
+clarifications remain in the evidence. OpenCode's effective answer includes the accepted 001/002/003
+corrections; model/invocation limits and session-only permissions/caps stay in the registry.
+
+The shared g1 inventory has 361 registered sources and zero preparation gaps. This is a selected saved
+snapshot, not whole-repository or live-file coverage. Skill/config presence, native work and source/package
+checks retain their separate evidence. Old v3/AppData packages are preserved; optional MCPB is
+BUILT_NOT_INSTALLED and its Install approval request was withdrawn. No Cowork/all-UI-variant claim follows.
+Sol DESKTOP_NATIVE_ACCEPTED closes the last AD1 gate. No READY mandatory row remains in the selected register;
+O1 remains DEFERRED. Application and operator-owned backend were left functional.
 
 <a id="lifetime-and-lock-order"></a>
 <a id="publication-and-retrieval"></a>

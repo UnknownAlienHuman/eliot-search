@@ -79,18 +79,29 @@ Expiry, EOF/disconnect and Close cancel/join active work, release the root/view 
 the implemented expiry/shutdown path also services output backpressure. No detached timeout worker, durable
 resume, renewal, grants or second state platform is added. Runtime qualification is limited as recorded below.
 
-## New MCP consumer status
+## MCP consumer status
 
-The [MCP owner](../../../bins/eliot-search-mcp/FUNCTIONS.md) maps the seven declared Search/Exact/window tools
-onto this existing SDK consumer; tool schemas, not copied private-wire JSON, define its public inputs. Its
-candidate3 transport/output/handle P2 fixes have MCP SOURCE PASS. The
-[canonical Skill and packages](../../../integrations/eliot-search/README.md) passed the real build; four coding
-Skill copies and Desktop account upload/enablement are observed, with Codex host-catalog discovery.
-Candidate3 cleanup/continuation is included in Sol-accepted SELECTED_NATIVE_PASS. Four coding-client MCP entries
-now use shared package/root paths. The actual-repository root is READY and all four coding clients passed
-selected native context/answer scopes. Only Desktop MCP installation/discovery and actual retained context/
-answer remain in [AD1](../../../docs/audit/ANALYSIS_REGISTRY.md#agent-delivery); its Install is still HOLD.
-Existing X1/A10 evidence below keeps its exact historical source scope; it does not qualify the new consumer.
+The [MCP owner](../../../bins/eliot-search-mcp/FUNCTIONS.md) maps seven Search/Exact/window tools onto this
+existing SDK. Its public schemas define inputs; MCP windows use the returned opaque window_handle, not the
+private numeric window_id in the CLI example above. Open's self-contained schema/description on main ed8ce5b4
+preserves resolved validation; DTO/parser/handlers and the other six schemas are unchanged.
+
+The verified [package-v4 and canonical Skill](../../../integrations/eliot-search/README.md) are current for all
+five owned registrations. The Skill and CLI/daemon are unchanged. Candidate3 selected SDK native cleanup/
+continuation PASS and four coding-client v3 model workflows retain their original provenance; no v4 replay is
+claimed. Codex 0.161, Claude Code 2.1.278, AGY CLI 1.5.3 and OpenCode 2.0.32 have accepted recorded native
+Skill/tool/context/answer scopes, including OpenCode's effective native 001/002/003 answer corrections.
+
+Desktop 4.23118.0 / Opus 5.5 Extra separately passed actual v4 normal Chat via official local mcpServers config
+and the native account Skill. Search/Exact and retained Open/Expand/valid-handle Close returned saved Rust
+context and citations. A numeric-handle refusal recovered using the actual handle; the answer's larger block
+is labelled abridged and the short literal signature/match scope are corrected natively without new Root calls.
+[AD1](../../../docs/audit/ANALYSIS_REGISTRY.md#agent-delivery) is DONE after Sol DESKTOP_NATIVE_ACCEPTED.
+MCPB is optional BUILT_NOT_INSTALLED; no Install approval gate or Cowork qualification remains.
+
+The shared g1 inventory is the registered selection of 361 sources/gap0, not whole-repository/live-file coverage.
+App/backend were left functional, with no service/autostart or across-runtime-exit availability claim.
+Existing X1/A10 evidence below keeps its exact historical source scope and is not relabelled as MCP proof.
 
 ## Verification scope
 

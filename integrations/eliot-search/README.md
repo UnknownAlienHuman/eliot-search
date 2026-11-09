@@ -110,45 +110,55 @@ The Skill ZIP contains exactly eliot-search/SKILL.md and no executables.
 
 See [Claude native Skill scope](https://code.claude.com/docs/en/skills#use-skills-in-cowork-and-cloud-sessions)
 and [account upload](https://support.claude.com/en/articles/12512180-use-skills-in-claude).
-Local MCP installation is independently available through the Desktop Extensions UI with the .mcpb;
-uploading a Skill does not register that MCP server or make local stdio a cloud connector.
+Desktop supports the ordinary local mcpServers config route for an existing binary; that is the delivered
+native route below. The optional .mcpb is a separate Extensions installer artifact. Uploading a Skill neither
+registers the MCP server nor makes local stdio a cloud connector.
 
-Artifact creation, native installation/enablement, skill discovery/use, and MCP initialize/tools-list/tool-call
-are separate outcomes. Four canonical coding-client Skill copies are installed; the current Codex host catalog
-discovers eliot-search. After a user-reported UI state change, Claude Desktop account upload/enablement was
-observed as by you, v1, with one SKILL.md and enabled switch. Existing custom Skills were preserved. The earlier
-DWM preflight failure is historical; it does not describe the current accessible UI. Desktop MCPB software
-installation awaits action-time approval and is NOT_RUN. The four owned coding-client MCP entries now use the
-shared package/data-root. Codex 0.161, Claude Code 2.1.278 and signed AGY CLI 1.5.3 passed native Skill/tool
-work, retained context/answer and Close/exit 0. AGY's actual wait/both EOF/root-release proof is retained.
-OpenCode 2.0.32 passed selected native Search/retained context/Close/answer on the audited free model below.
-Only Desktop MCP install/enablement/initialize/discovery and retained context/answer remain in AD1; no Desktop
-runtime follows from the four coding-client results.
+Artifact creation, native configuration/enablement, Skill discovery/use and actual MCP work are separate
+outcomes. All five recorded native scopes are accepted in [AD1](../../docs/audit/ANALYSIS_REGISTRY.md#agent-delivery).
+The unchanged canonical Skill SHA256 is 3DC3E8F73AD6E827DC1A3EF6C3208875BC593CE599F678947D73AE4D86D1242C.
+Four native coding-client copies and Desktop account upload/enablement (by you, v1) are retained; actual native
+chats selected the account Skill. Existing custom Skills and client/profile entries were preserved.
 
-Candidate3 has CORE/MCP SOURCE PASS with all reviewed P2 items closed and locked check/strict Clippy/Release PASS.
-The real builder exited 0 using the matching version 0.0.0 trio at
-C:\Development\Rust\targets\task-agent-mcp-build\run-20261108-v3-cancel-delivery\release-checked.
-Its current verified shared output is C:\Users\kleym\.eliot-search\agent-tools-20261108\package:
-the actual command is plugin/bin/eliot-search-mcp.exe, alongside searchd and the operator CLI.
-All three pins/copies, nine output files, archive members and published schemas passed; source-freeze hashes
-remained unchanged. DataRoot is C:\Users\kleym\.eliot-search\agent-tools-20261108\corpus-search and Qdrant URL
-is http://127.0.0.1:7637. Desktop keeps only the documented extension-directory macro for its binary; root/URL
-are literals, with no user_config. The actual Claude chooser accepted this shared MCPB and opened its review
-dialog; a fresh read-only observation during the client runs still showed Install pending. No input/query
-action was taken. The UI warns of access to everything on the computer, not a dataset sandbox.
+The current verified version 0.0.0 shared output is
+C:\Users\kleym\.eliot-search\agent-tools-20261108\package-v4; its actual command is
+plugin/bin/eliot-search-mcp.exe, alongside searchd and the operator CLI. MCP SHA256 is
+9ECA3FBE804F93584C458909C00725F4EE46AEBE62099E6C351329144DD4730A. CLI/daemon are unchanged v3 copies.
+The real v4 builder exited 0; trio pins, nine files, archive members and three published schemas passed.
+DataRoot is C:\Users\kleym\.eliot-search\agent-tools-20261108\corpus-search and URL http://127.0.0.1:7637.
+Build/package proof is under
+C:\Users\kleym\.eliot-search\agent-tools-20261108\logs\desktop-native-20261108\run-002-v4-inline:
+package-build.json and package-verification.json. Packaging did not open/initialize/copy the dataset.
 
-The first AppData/Codex MSIX-cache package is preserved as historical evidence, not the operational install.
-Its short AppData alias was invisible to Claude; all nine old package files remain byte-identical. Operational
-binary/data/backend paths must not depend on that alias or Codex cache. Selected backend locations are
-C:\Users\kleym\.es8\q\{s,sn,tmp}, with operator files under C:\Users\kleym\.es8\operator and HTTP/gRPC 7636/7637.
-This is an operator-location correction, not a Rust, database or protocol change.
+Main ed8ce5b4 changes only Open's self-contained schema/description. Sol SOURCE PASS, frozen checks and resolved
+schema-equivalence proof are under
+C:\Development\Rust\targets\task-agent-mcp-build\run-20261108-v4-self-contained-open.
+DTO/parser/handlers and the other six tools are unchanged. Candidate3 selected SDK native cleanup/continuation
+PASS remains at its original scope. Codex 0.161, Claude Code 2.1.278, signed AGY CLI 1.5.3 and OpenCode 2.0.32
+retain their accepted v3 native Skill/tool/context/answer/Close flows, with their original exit/custody proofs.
+All four current command-only bindings target v4; those model flows were not replayed on v4.
 
-Sol accepted candidate3 SELECTED_NATIVE_PASS including unread-output cleanup, full 1+63 window continuation
-and three stale-handle refusals. Packaging itself did not open/initialize the dataset or register/install
-anything. The actual-repository shared root is READY: generation 1, 361 sources, zero preparation gaps.
-The operator-owned backend remains intentionally live for client verification; no service/autostart is added.
-See [AD1 evidence](../../docs/audit/ANALYSIS_REGISTRY.md#agent-delivery) for exact shared root/package/pins,
-client outcomes and preserved failed attempts. AD1 remains IN_PROGRESS.
+Desktop 4.23118.0 / Opus 5.5 Extra has separate actual v4 normal-Chat proof using the enabled native account
+Skill and official mcpServers.eliot-search configuration in the physical
+C:\Users\kleym\AppData\Roaming\Claude\claude_desktop_config.json. The own command uses package-v4 and the root/URL
+above; other current fields and ACL were preserved through normal graceful reload. The observed native Desktop
+process ran that pinned binary. Search/Exact, actual Rust context, Open/Expand and valid-handle Close passed.
+The initial string-shaped Open rejection, recovered numeric-handle refusal and native answer-only corrections
+remain preserved. The larger code block is explicitly abridged; the short signature is literal. The one exact
+literal match is scoped to the registered g1 inventory, not semantic declaration uniqueness.
+
+The optional v4 MCPB SHA256 is 11707D89CF0D9AFCD18384773F71A2794329FC5E93CC8F556A03B2BDA41175C3.
+It is BUILT_NOT_INSTALLED. Its command uses the documented extension-directory macro with literal root/URL,
+but the native delivery used JSON config, not MCPB/Cowork. The unpressed v3 review is historical, and the
+Install approval request was withdrawn. The old shared-v3 and AppData/Codex-cache packages remain preserved;
+all eighteen old package files were unchanged. Operational paths do not depend on the invisible AppData alias.
+
+The shared g1 snapshot has 361 registered sources and zero preparation gaps, not a whole-repository/live-file
+coverage guarantee. Saved paths remain historical with live_status:not_checked; CONTROL lag is not a live-file
+audit. Backend storage remains C:\Users\kleym\.es8\q\{s,sn,tmp}, with operator files under .es8\operator and
+HTTP/gRPC 7636/7637. App/backend were left working; the final read-only readyz/TCP observation passed.
+No service/autostart or lifetime across whole Codex/runtime exit/reboot was created or verified.
+AD1 is DONE for the recorded five-client scopes after Sol DESKTOP_NATIVE_ACCEPTED.
 
 Reproduce native client work with a fresh session loading the installed Skill/MCP and the ready shared root.
 The recorded runs used existing authenticated native client/provider access.
@@ -163,9 +173,16 @@ Qualified OpenCode 2.0.32 uses run --standalone --model openrouter/nvidia/nemotr
 The fresh owned working directory's .opencode/opencode.jsonc sets
 providers.openrouter.models["nvidia/nemotron-3-ultra-550b-a55b:free"].limit.output to 4096 for that run.
 CodeMode execute.code must contain plain JavaScript using names from the native catalog. Actual ranked Search,
-retained Open/Expand, successful Close and grounded answer passed with exit 0 and ROOT_RELEASED. Two recovered
-argument errors, ordinary Busy/redundant Close refusals, the first Liquid CodeMode failure, and both paid Sol
-HTTP 402 pre-admission failures remain preserved. This is the selected free-model invocation scope.
+retained Open/Expand, successful Close and grounded answer passed with exit 0 and ROOT_RELEASED.
+Its effective answer is native 001 plus the 002 unit-span correction and 003 retraction, each preserved:
+catch strings do not establish MCP error reasons/order/counts; raw MCP responses are authoritative.
+Sol accepted the matched quotations/refs/ranges. Recovered argument errors, the first Liquid CodeMode failure
+and both paid Sol HTTP 402 pre-admission failures remain preserved. This is the selected free-model scope.
+
+Desktop's qualified invocation is normal Chat selecting the native account Skill and configured local MCP.
+Use a fresh chat after normal metadata reload; public tool schemas define arguments and returned opaque handles
+define windows. The saved seven-tool SDK catalog and actual native calls are separate from full host-schema
+fields, which the UI did not expose. No arbitrary model/UI variant is qualified by these observations.
 
 Use the exact command/proof artifacts linked from AD1, keep permissions/model caps session-scoped, preserve
 unrelated global settings, and close each retained window promptly. The qualified free-model run reused the

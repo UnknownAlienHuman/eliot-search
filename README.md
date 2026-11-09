@@ -12,7 +12,7 @@ register. A10 QuerySummary landed on main2a0462a6 with Rust source equal to 9cfa
 9cfa build provenance. V1 is DONE for the concrete Windows/Release ordinary-repo-1 resource scope,
 real-repository workflows and isolated installed pair, including observed replacement disk qualification.
 Actual unsampled peaks and cold-cache/other-platform behavior are not claimed. That earlier core scope is
-complete; the new user-required [AD1 agent delivery](docs/audit/ANALYSIS_REGISTRY.md#agent-delivery) is IN_PROGRESS.
+complete; [AD1 agent delivery](docs/audit/ANALYSIS_REGISTRY.md#agent-delivery) is DONE for the five recorded native-client scopes.
 
 | Need | Start here |
 |---|---|
@@ -22,7 +22,7 @@ complete; the new user-required [AD1 agent delivery](docs/audit/ANALYSIS_REGISTR
 | Find code and check a change | [Code map](docs/implementation/CODE_MAP.md), [working guide](docs/implementation/WORKING_GUIDE.md) |
 | Find a specific rule | [Documentation index](docs/README.md) |
 | Run | [Quickstart](QUICKSTART.md), with exact qualification scopes in the work register |
-| Agent/MCP delivery (IN_PROGRESS) | [Package/skill source](integrations/eliot-search/README.md), [MCP owner](bins/eliot-search-mcp/FUNCTIONS.md) |
+| Agent/MCP delivery | [Package/skill source](integrations/eliot-search/README.md), [MCP owner](bins/eliot-search-mcp/FUNCTIONS.md) |
 
 Use `index PATH` on an initialized root to admit and refresh that file/tree, then `index` in a new process to
 reload all stored selections, followed by `search`. Explicit PATH refreshes only that scope; bare index uses
@@ -33,16 +33,19 @@ are not claimed. Raw/DecodedUtf8 Exact, same-session windows and selected GC/exp
 Separate replacement observed-disk high-water passed <=4 GiB; the exact scopes, original versus supplemental
 metrics and retained UNKNOWN limits live in the work register. O1 optional depth remains DEFERRED.
 Confirmed deletion excludes a source from new generations while preserving retained objects and pinned views.
-New eliot-search-mcp source declares seven JSON-RPC tools over the existing SDK, with captured saved-path
-annotations available by opt-in. Candidate3 has CORE/MCP SOURCE PASS with all reviewed P2 items closed, and its
-matching version 0.0.0 Release trio passed the real package build. Four coding-client Skill copies are installed;
-the current Codex host catalog discovers the Skill. Claude Desktop account upload and enablement were observed
-(by you, v1). The four coding MCP entries now target the verified shared package/data-root under .eliot-search;
-the old AppData package is historical. Candidate3 has Sol-accepted SELECTED_NATIVE_PASS, including cleanup/
-continuation. The operational shared root is READY; all four coding clients passed their selected native
-context/answer scopes, including OpenCode's explicit free-model invocation. Only Desktop MCPB install/
-enablement/discovery and actual retained context/answer remain in AD1, awaiting action-time approval.
-See AD1 for exact artifacts and limits. Do not restore retired source/qualification frameworks.
+eliot-search-mcp exposes seven JSON-RPC tools over the existing SDK, with saved captured-source annotations.
+The current version 0.0.0 shared package-v4 contains the v4 MCP and unchanged CLI/daemon siblings. Main ed8ce5b4
+changes only Open's self-contained public schema/description; resolved validation, DTOs and handlers are unchanged.
+The canonical Skill is unchanged in all five clients. Codex 0.161, Claude Code 2.1.278, AGY CLI 1.5.3 and
+OpenCode 2.0.32 retain their accepted v3 native-flow provenance; all four current command paths target v4,
+without a claim of replaying those model workflows on v4.
+Claude Desktop 4.23118.0 / Opus 5.5 Extra passed normal Chat using the official local mcpServers config and
+native account Skill, including saved Rust context, exact citations and successful Close. This is not Cowork
+or an MCPB installation. The optional MCPB is BUILT_NOT_INSTALLED; its approval request was withdrawn.
+The shared g1 snapshot has 361 registered sources and zero preparation gaps; this does not establish whole-repository
+coverage or live filesystem freshness. [AD1](docs/audit/ANALYSIS_REGISTRY.md#agent-delivery) records exact client,
+answer-correction and preservation scopes. Old v3/AppData artifacts remain historical evidence.
+Do not restore retired source/qualification frameworks.
 
 ## License
 
