@@ -3,8 +3,8 @@
 
 ## Selected implementation baseline
 
-The connected consumer uses the exact SDK/server 1.20.0 cut. Current Windows qualification is recorded in the
-[registry](../audit/ANALYSIS_REGISTRY.md#evidence-status); this navigation page is not an installed-baseline claim.
+The bridge uses the Rust SDK API from 1.20 and requires a stable Qdrant server 1.20.0 or later.
+The [registry](../audit/ANALYSIS_REGISTRY.md#qdrant-update-2026-11-17) records the Windows execution scope.
 [Bridge dependency cut](../../crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md#dependency-cut) owns the
 SDK/server choice and gRPC endpoint; [root Quickstart](../../QUICKSTART.md) owns executed product commands.
 
@@ -43,7 +43,8 @@ upstream evidence only for a real adoption task; historical release observations
 
 | Change | Update and check together |
 |---|---|
-| Client/server patch | Consumer Cargo entry, lock, exact server artifact/version and donor evidence; compile actual bridge and consumers. |
+| Server update | Verify the actual server version, schema, publication and a retained search on real data. |
+| Rust SDK update | Update the lockfile within the supported SDK range and compile the bridge and its consumers. |
 | Schema or retrieval meaning | Physical profile and fresh-generation publication; never relabel old data. |
 | Request-only scoring | Query-profile consumer; do not rebuild for k/b alone. |
 | Working Windows command | Root Quickstart plus registry revision/platform/limits, after executing it. |

@@ -154,7 +154,11 @@ pub fn execute(
     }
     check(deadline, cancel)?;
     result.scan_complete = result.missing_sources == 0;
-    result.complete_negative = result.scan_complete && result.matches == 0;
+    // An empty scan population proves nothing. A vacuous negative over zero
+    // selected sources is never reported as a complete negative; the caller
+    // still receives the exact zero-source denominator.
+    result.complete_negative =
+        result.scan_complete && result.matches == 0 && result.selected_sources != 0;
     let total = result
         .matches
         .checked_add(result.missing_sources)

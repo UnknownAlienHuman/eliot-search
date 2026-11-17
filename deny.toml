@@ -3,21 +3,34 @@ all-features = true
 
 [advisories]
 yanked = "deny"
+# rmcp 3.9.0 depends on chrono directly and through schemars/chrono04.
+# rmcp 3.11.0 still requires both. Recheck on the next rmcp update or by 2026-12-17.
+ignore = [
+  { id = "RUSTSEC-2026-0543", reason = "Maintenance advisory for the MCP SDK's transitive chrono dependency; no released SDK removes it yet." },
+]
 
 [licenses]
 allow = [
   "MIT",
   "Apache-2.0",
   "BSD-2-Clause",
+  # matchit (MIT AND BSD-3-Clause, via axum/tonic) and subtle (BSD-3-Clause).
+  "BSD-3-Clause",
   "Unicode-3.0",
   "ISC",
   "Zlib",
+  # Vendored ignore is Unlicense OR MIT; record both of its actual terms.
+  "Unlicense",
 ]
 confidence-threshold = 0.93
 
 [bans]
 multiple-versions = "warn"
 wildcards = "deny"
+# Workspace members are path dependencies declared without a version, which is
+# the normal shape for a private unpublished workspace. The wildcard ban still
+# applies to every registry dependency.
+allow-wildcard-paths = true
 
 [sources]
 unknown-registry = "deny"

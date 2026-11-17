@@ -248,7 +248,9 @@ pub fn execute(
     }
     check(deadline, cancel)?;
     result.scan_complete = result.gap_sources == 0;
-    result.complete_negative = result.scan_complete && result.matches == 0;
+    // An empty scan population proves nothing; see raw_exact::execute.
+    result.complete_negative =
+        result.scan_complete && result.matches == 0 && result.selected_sources != 0;
     let total = result
         .matches
         .checked_add(result.gap_sources)

@@ -230,3 +230,6 @@ pub struct CurrentSourceRecord {
     /// Immutable bytes retained before this row was committed.
     pub object_ref: ObjectRef,
 }
+
+#[cfg(test)]
+mod tests;

@@ -1,5 +1,9 @@
 # Lexical retrieval — explicit Qdrant 1.20 physical and query profiles
 
+> **Retained policy: this package was removed. The retrieval profile is implemented server-side by [the
+> bridge](../search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md) through the Qdrant Code tokenizer and BM25
+> text index. The rules below are canonical; the API is not.**
+
 This owner defines the concrete lexical meaning consumed by preparation, publication and query. It does not own
 source identity, publication state, scope, evidence or Exact. R052 removes hidden Qdrant defaults and separates
 physical index schema from query-time BM25 scoring.

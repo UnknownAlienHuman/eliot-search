@@ -17,7 +17,7 @@ fn source(bytes: &[u8]) -> CurrentSourceRecord {
             inode: 2,
         },
         object_ref: ObjectRef::source(
-            blake3::hash(bytes).to_hex().as_str().parse().unwrap(),
+            search_contracts::Blake3Digest32::from_bytes(*blake3::hash(bytes).as_bytes()),
             u64::try_from(bytes.len()).unwrap(),
         ),
     }

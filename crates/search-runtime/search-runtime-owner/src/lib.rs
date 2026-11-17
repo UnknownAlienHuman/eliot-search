@@ -13,6 +13,9 @@
 
 pub mod plain_root;
 
+#[cfg(test)]
+mod tests;
+
 pub use plain_root::{
     ARCHIVE_COMPLETE_MARKER, CONTROL_DB_FILE, CONTROL_DIR, INCOMPLETE_IMPORT_MARKER, INIT_MARKER,
     LOCK_FILE, MANIFEST_FILE, OBJECT_DIR, PlainRootError, PlainRootGuard, PlainRootInspection,

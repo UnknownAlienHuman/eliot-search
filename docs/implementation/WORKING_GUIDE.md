@@ -99,15 +99,37 @@ cargo +1.98.0 clippy --locked -p eliot-searchd --bin eliot-searchd -- -D warning
 
 Replace the example owner with changed packages and include immediate API consumers. If selected code is
 feature-gated, name the smallest feature set that actually compiles it; default-only success cannot qualify
-uncompiled code. Do not use `full-baseline`, `--all-features`, `--all-targets` or workspace-wide aliases by habit.
+uncompiled code. Keep the inner loop narrow: do not reach for `--all-features` or workspace-wide aliases by habit.
 Windows-only changes need the Windows target/native check; Linux cfg exclusion is not verification of them.
 
 Record exact command, commit, target/features and result. On failure, separate new diagnostics from existing
 unrelated debt with one relevant base/head comparison. Do not suppress lints globally or repair unrelated test
 harnesses. Missing toolchain/platform means NOT_RUN, not PASS. These example commands are not claimed runs.
 
-Tests and broad native/relevance/scale runs come after the connected product. Keep later cases with their owner
-and [stage checklist](TEST_CUTOVER.md); do not require a new suite or proof system before implementation.
+<a id="merge-gate"></a>
+## Merge gate
+
+The narrow owner checks above are the inner loop, not the merge gate. Before publishing a source change, run the
+whole closure once, including every test target:
+
+```sh
+cargo +1.98.0 clippy --workspace --all-targets --locked -- -D warnings
+cargo +1.98.0 test --workspace --locked
+cargo deny --locked check
+```
+
+`--all-targets` is mandatory here and is the only command that compiles `#[cfg(test)]` and `tests/**`. An
+owner-narrow `--lib`/`--bin` check cannot see a test target at all, so a test that stopped compiling stays
+invisible to every inner-loop command and to the manual workflow. This exact gap kept
+`search-prep/search-unitizer/src/tests.rs` broken for 47 commits after `f45a0f6e` removed
+`impl FromStr for Blake3Digest32`: production code was green the whole time.
+
+A failing or non-compiling test target blocks the merge. Deleting or `#[ignore]`-ing it to pass is not a repair.
+`cargo deny` enforces the committed [`deny.toml`](../../deny.toml) advisory, licence, ban and source policy; it
+was previously never executed by any documented command.
+
+Broad native, relevance and scale runs remain separate qualification and keep their owner and
+[stage checklist](TEST_CUTOVER.md). They are not a prerequisite for this gate.
 
 ## Documentation-only checks
 

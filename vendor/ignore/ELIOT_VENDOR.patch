@@ -1,0 +1,236 @@
+diff --git a/src/dir.rs b/src/dir.rs
+index a4fb51a..2ef04e7 100644
+--- a/src/dir.rs
++++ b/src/dir.rs
+@@ -160,0 +161,2 @@ struct IgnoreInner {
++    /// Errors loading the global ignore configuration, reported with each root.
++    global_error: Option<Error>,
+@@ -198,0 +201,2 @@ impl Ignore {
++        let mut errs = PartialErrorBuilder::default();
++        errs.maybe_push(self.inner.global_error.clone());
+@@ -206 +210 @@ impl Ignore {
+-            return (self.clone(), None);
++            return (self.clone(), errs.into_error_option());
+@@ -213,6 +217,3 @@ impl Ignore {
+-            Err(_) => {
+-                // There's not much we can do here, so just return our
+-                // existing matcher. We drop the error to be consistent
+-                // with our general pattern of ignoring I/O errors when
+-                // processing ignore files.
+-                return (self.clone(), None);
++            Err(err) => {
++                errs.push(Error::Io(err).with_path(path.as_ref()));
++                return (self.clone(), errs.into_error_option());
+@@ -228 +228,0 @@ impl Ignore {
+-        let mut errs = PartialErrorBuilder::default();
+@@ -271 +271 @@ impl Ignore {
+-    /// Note that all I/O errors are completely ignored.
++    /// Missing optional files are ignored; other I/O failures are returned.
+@@ -373,0 +374 @@ impl Ignore {
++        let mut errs = PartialErrorBuilder::default();
+@@ -379 +380,10 @@ impl Ignore {
+-            dir.join(".git").metadata().ok().map(|md| md.file_type())
++            let git_path = dir.join(".git");
++            match git_path.metadata() {
++                Ok(metadata) => Some(metadata.file_type()),
++                Err(err) => {
++                    errs.push_ignore_not_found(
++                        Error::Io(err).with_path(git_path),
++                    );
++                    None
++                }
++            }
+@@ -383 +393 @@ impl Ignore {
+-        let has_jj = check_vcs_dir
++        let has_jj = if check_vcs_dir
+@@ -385 +395,14 @@ impl Ignore {
+-            && dir.join(".jj").exists();
++        {
++            let jj_path = dir.join(".jj");
++            match jj_path.metadata() {
++                Ok(_) => true,
++                Err(err) => {
++                    errs.push_ignore_not_found(
++                        Error::Io(err).with_path(jj_path),
++                    );
++                    false
++                }
++            }
++        } else {
++            false
++        };
+@@ -388 +410,0 @@ impl Ignore {
+-        let mut errs = PartialErrorBuilder::default();
+@@ -490,0 +513 @@ impl Ignore {
++            global_error: self.inner.global_error.clone(),
+@@ -850,2 +873,2 @@ impl IgnoreBuilder {
+-        let git_global_matcher = if !self.opts.git_global {
+-            Gitignore::empty()
++        let (git_global_matcher, global_error) = if !self.opts.git_global {
++            (Gitignore::empty(), None)
+@@ -858 +881 @@ impl IgnoreBuilder {
+-            if let Some(err) = err {
++            if let Some(ref err) = err {
+@@ -861 +884 @@ impl IgnoreBuilder {
+-            gi
++            (gi, err)
+@@ -866 +889 @@ impl IgnoreBuilder {
+-            Gitignore::empty()
++            (Gitignore::empty(), None)
+@@ -885,0 +909 @@ impl IgnoreBuilder {
++                global_error,
+@@ -1046 +1070 @@ impl IgnoreBuilder {
+-/// I/O errors are ignored.
++/// Missing optional files are ignored; other I/O failures are returned.
+@@ -1058,15 +1082 @@ pub(crate) fn create_gitignore<T: AsRef<OsStr>>(
+-        // This check is not necessary, but is added for performance. Namely,
+-        // a simple stat call checking for existence can often be just a bit
+-        // quicker than actually trying to open a file. Since the number of
+-        // directories without ignore files likely greatly exceeds the number
+-        // with ignore files, this check generally makes sense.
+-        //
+-        // However, until demonstrated otherwise, we speculatively do not do
+-        // this on Windows since Windows is notorious for having slow file
+-        // system operations. Namely, it's not clear whether this analysis
+-        // makes sense on Windows.
+-        //
+-        // For more details: https://github.com/BurntSushi/ripgrep/pull/1381
+-        if cfg!(windows) || gipath.exists() {
+-            errs.maybe_push_ignore_io(builder.add(gipath));
+-        }
++        errs.maybe_push_ignore_not_found(builder.add(gipath));
+@@ -1121 +1131,4 @@ fn resolve_git_commondir(
+-        Err(_) => return Err(None),
++        Err(err) if err.kind() == io::ErrorKind::NotFound => return Err(None),
++        Err(err) => {
++            return Err(Some(Error::Io(err).with_path(git_commondir_file())));
++        }
+diff --git a/src/gitignore.rs b/src/gitignore.rs
+index eb8b89e..2e0381c 100644
+--- a/src/gitignore.rs
++++ b/src/gitignore.rs
+@@ -12 +12 @@ use std::{
+-    io::{BufRead, BufReader, Read},
++    io::{BufRead, BufReader},
+@@ -101 +101 @@ impl Gitignore {
+-    /// Note that I/O errors are ignored. For more granular control over
++    /// Missing optional files are ignored. For more granular control over
+@@ -110 +110 @@ impl Gitignore {
+-        errs.maybe_push_ignore_io(builder.add(path));
++        errs.maybe_push_ignore_not_found(builder.add(path));
+@@ -381,2 +381,5 @@ impl GitignoreBuilder {
+-        match gitconfig_excludes_path() {
+-            None => (Gitignore::empty(), None),
++        let (path, config_error) = gitconfig_excludes_path_with_errors();
++        let mut errs = PartialErrorBuilder::default();
++        errs.maybe_push(config_error);
++        match path {
++            None => (Gitignore::empty(), errs.into_error_option()),
+@@ -384,11 +387,6 @@ impl GitignoreBuilder {
+-                if !path.is_file() {
+-                    (Gitignore::empty(), None)
+-                } else {
+-                    let mut errs = PartialErrorBuilder::default();
+-                    errs.maybe_push_ignore_io(self.add(path));
+-                    match self.build() {
+-                        Ok(gi) => (gi, errs.into_error_option()),
+-                        Err(err) => {
+-                            errs.push(err);
+-                            (Gitignore::empty(), errs.into_error_option())
+-                        }
++                errs.maybe_push_ignore_not_found(self.add(path));
++                match self.build() {
++                    Ok(gi) => (gi, errs.into_error_option()),
++                    Err(err) => {
++                        errs.push(err);
++                        (Gitignore::empty(), errs.into_error_option())
+@@ -586,0 +585,5 @@ pub fn gitconfig_excludes_path() -> Option<PathBuf> {
++    gitconfig_excludes_path_with_errors().0
++}
++
++fn gitconfig_excludes_path_with_errors() -> (Option<PathBuf>, Option<Error>) {
++    let mut errs = PartialErrorBuilder::default();
+@@ -591 +594 @@ pub fn gitconfig_excludes_path() -> Option<PathBuf> {
+-    gitconfig_global_env_contents()
++    let path = gitconfig_global_env_contents(&mut errs)
+@@ -594 +597,2 @@ pub fn gitconfig_excludes_path() -> Option<PathBuf> {
+-            gitconfig_home_contents().and_then(|x| parse_excludes_file(&x))
++            gitconfig_home_contents(&mut errs)
++                .and_then(|x| parse_excludes_file(&x))
+@@ -597 +601,2 @@ pub fn gitconfig_excludes_path() -> Option<PathBuf> {
+-            gitconfig_xdg_contents().and_then(|x| parse_excludes_file(&x))
++            gitconfig_xdg_contents(&mut errs)
++                .and_then(|x| parse_excludes_file(&x))
+@@ -602 +607,2 @@ pub fn gitconfig_excludes_path() -> Option<PathBuf> {
+-            gitconfig_system_contents().and_then(|x| parse_excludes_file(&x))
++            gitconfig_system_contents(&mut errs)
++                .and_then(|x| parse_excludes_file(&x))
+@@ -604 +610,2 @@ pub fn gitconfig_excludes_path() -> Option<PathBuf> {
+-        .or_else(excludes_file_default)
++        .or_else(excludes_file_default);
++    (path, errs.into_error_option())
+@@ -609 +616,3 @@ pub fn gitconfig_excludes_path() -> Option<PathBuf> {
+-fn gitconfig_global_env_contents() -> Option<Vec<u8>> {
++fn gitconfig_global_env_contents(
++    errs: &mut PartialErrorBuilder,
++) -> Option<Vec<u8>> {
+@@ -614,3 +623 @@ fn gitconfig_global_env_contents() -> Option<Vec<u8>> {
+-    let mut file = BufReader::new(File::open(path).ok()?);
+-    let mut contents = vec![];
+-    file.read_to_end(&mut contents).ok().map(|_| contents)
++    read_optional_config(path, errs)
+@@ -622 +629 @@ fn gitconfig_global_env_contents() -> Option<Vec<u8>> {
+-fn gitconfig_system_contents() -> Option<Vec<u8>> {
++fn gitconfig_system_contents(errs: &mut PartialErrorBuilder) -> Option<Vec<u8>> {
+@@ -627,3 +634 @@ fn gitconfig_system_contents() -> Option<Vec<u8>> {
+-    let mut file = BufReader::new(File::open(path).ok()?);
+-    let mut contents = vec![];
+-    file.read_to_end(&mut contents).ok().map(|_| contents)
++    read_optional_config(path, errs)
+@@ -634 +639 @@ fn gitconfig_system_contents() -> Option<Vec<u8>> {
+-fn gitconfig_home_contents() -> Option<Vec<u8>> {
++fn gitconfig_home_contents(errs: &mut PartialErrorBuilder) -> Option<Vec<u8>> {
+@@ -636,3 +641 @@ fn gitconfig_home_contents() -> Option<Vec<u8>> {
+-    let mut file = BufReader::new(File::open(home.join(".gitconfig")).ok()?);
+-    let mut contents = vec![];
+-    file.read_to_end(&mut contents).ok().map(|_| contents)
++    read_optional_config(home.join(".gitconfig"), errs)
+@@ -643 +646 @@ fn gitconfig_home_contents() -> Option<Vec<u8>> {
+-fn gitconfig_xdg_contents() -> Option<Vec<u8>> {
++fn gitconfig_xdg_contents(errs: &mut PartialErrorBuilder) -> Option<Vec<u8>> {
+@@ -649,3 +652,14 @@ fn gitconfig_xdg_contents() -> Option<Vec<u8>> {
+-    let mut file = BufReader::new(File::open(path).ok()?);
+-    let mut contents = vec![];
+-    file.read_to_end(&mut contents).ok().map(|_| contents)
++    read_optional_config(path, errs)
++}
++
++fn read_optional_config(
++    path: PathBuf,
++    errs: &mut PartialErrorBuilder,
++) -> Option<Vec<u8>> {
++    match std::fs::read(&path) {
++        Ok(contents) => Some(contents),
++        Err(err) => {
++            errs.push_ignore_not_found(Error::Io(err).with_path(path));
++            None
++        }
++    }
+diff --git a/src/lib.rs b/src/lib.rs
+index b9c9a3e..4b9d47e 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -380,2 +380,5 @@ impl PartialErrorBuilder {
+-    fn push_ignore_io(&mut self, err: Error) {
+-        if !err.is_io() {
++    fn push_ignore_not_found(&mut self, err: Error) {
++        if !err
++            .io_error()
++            .is_some_and(|io| io.kind() == std::io::ErrorKind::NotFound)
++        {
+@@ -392 +395 @@ impl PartialErrorBuilder {
+-    fn maybe_push_ignore_io(&mut self, err: Option<Error>) {
++    fn maybe_push_ignore_not_found(&mut self, err: Option<Error>) {
+@@ -394 +397 @@ impl PartialErrorBuilder {
+-            self.push_ignore_io(err);
++            self.push_ignore_not_found(err);

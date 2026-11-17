@@ -1,5 +1,9 @@
 # Publication — complete generations before measured incrementality
 
+> **Retained policy: this package was removed. The actual publisher is
+> [published_corpus.rs](../../../bins/eliot-searchd/src/published_corpus.rs) with [CONTROL
+> publication](../../search-control-redb/src/publication.rs). The rules below are canonical; the API is not.**
+
 One serialized publisher owns fixed build input, external effects, matching durable evidence/current state, view
 installation and finite cleanup obligations. It owns no reader/parser/query window or second recovery platform.
 

@@ -21,7 +21,11 @@ listener, negotiation layer or host configuration writer is installed.
   (default/max 120000), include_source_info (default true).
 - eliot_exact: mode raw/decoded_utf8, literal, optional source_ids, limit,
   timeout_ms and include_source_info. Omitted/null source_ids selects all
-  published sources; [] selects none. UUIDs are canonical and unique.
+  published sources. UUIDs are canonical and unique, and an explicit list
+  must name at least one source: [] scans nothing, so it is refused as
+  EXACT_EMPTY_SELECTION by the published minItems schema, by the adapter
+  preflight and by the core request validator. The same bound applies to
+  the nested window Raw/DecodedUtf8 selections.
 - eliot_window_open: query in the existing WindowQuery mode/request shape,
   page_size (default 16, 1..64), ttl_ms (default/max 120000), timeout_ms and
   include_source_info.

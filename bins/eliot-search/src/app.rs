@@ -2,7 +2,7 @@
 
 mod watch;
 
-use search_provider_protocol::{DecodedUtf8Request, RawExactRequest};
+use search_provider_protocol::{DecodedUtf8Request, ProtocolError, RawExactRequest};
 use search_source_registry::{MAX_PREPARATION_RESPONSE_BYTES, MAX_PUBLICATION_RESPONSE_BYTES};
 use std::env;
 use std::ffi::{OsStr, OsString};
@@ -85,11 +85,13 @@ enum Parsed {
         settings: Vec<OsString>,
         daemon: Option<PathBuf>,
         request: RawExactRequest,
+        source_info: bool,
     },
     DecodedUtf8 {
         settings: Vec<OsString>,
         daemon: Option<PathBuf>,
         request: DecodedUtf8Request,
+        source_info: bool,
     },
     Root {
         command: RootCommand,
@@ -111,6 +113,8 @@ struct PublicationRequest {
     endpoint: Option<String>,
     query: Option<String>,
     limit: Option<usize>,
+    /// Client-side request for saved locators on emitted items; never a daemon setting.
+    source_info: bool,
 }
 
 #[derive(Default)]
@@ -543,6 +547,14 @@ fn parse(arguments: &[OsString]) -> Result<Parsed, &'static str> {
             import_retry = true;
             settings.push(argument.clone());
             index += 1;
+        } else if argument == OsStr::new("--source-info") {
+            // Client-side output selection. It is never forwarded as a daemon
+            // setting, so it cannot alter root, preparation or publication work.
+            if publication.source_info || !matches!(root_command, RootCommand::Search) {
+                return Err("USAGE_ERROR");
+            }
+            publication.source_info = true;
+            index += 1;
         } else if argument == OsStr::new("--file") {
             if source_file_seen || !matches!(root_command, RootCommand::RetainFile) {
                 return Err("USAGE_ERROR");
@@ -613,6 +625,7 @@ fn parse_exact(arguments: &[OsString]) -> Result<Parsed, &'static str> {
     let mut literal = None;
     let mut source_id = None;
     let mut limit = None;
+    let mut source_info = false;
     let mut index = 1;
     while index < arguments.len() {
         let argument = &arguments[index];
@@ -624,6 +637,14 @@ fn parse_exact(arguments: &[OsString]) -> Result<Parsed, &'static str> {
                 {
                     return Err("USAGE_ERROR");
                 }
+                index += 1;
+                continue;
+            }
+            Some("--source-info") => {
+                if source_info {
+                    return Err("USAGE_ERROR");
+                }
+                source_info = true;
                 index += 1;
                 continue;
             }
@@ -689,6 +710,7 @@ fn parse_exact(arguments: &[OsString]) -> Result<Parsed, &'static str> {
         limit.unwrap_or(10),
         settings,
         daemon,
+        source_info,
     )
 }
 
@@ -699,18 +721,22 @@ fn build_exact_request(
     limit: u8,
     settings: Vec<OsString>,
     daemon: Option<PathBuf>,
+    source_info: bool,
 ) -> Result<Parsed, &'static str> {
+    // Report the actual closed protocol code. An explicitly empty selection is
+    // EXACT_EMPTY_SELECTION, not a generic usage error.
     if decoded_utf8 {
         let request = DecodedUtf8Request {
             literal,
             source_ids,
             limit,
         };
-        request.validate().map_err(|_| "USAGE_ERROR")?;
+        request.validate().map_err(ProtocolError::code)?;
         Ok(Parsed::DecodedUtf8 {
             settings,
             daemon,
             request,
+            source_info,
         })
     } else {
         let request = RawExactRequest {
@@ -718,11 +744,12 @@ fn build_exact_request(
             source_ids,
             limit,
         };
-        request.validate().map_err(|_| "USAGE_ERROR")?;
+        request.validate().map_err(ProtocolError::code)?;
         Ok(Parsed::RawExact {
             settings,
             daemon,
             request,
+            source_info,
         })
     }
 }
@@ -1200,8 +1227,9 @@ fn print_help() {
         "  eliot-search publish-prepared --qdrant-url URL [--data-root ROOT] [--config-file PATH] [--daemon PATH]\n",
         "  eliot-search index [PATH] --qdrant-url URL [--data-root ROOT] [--config-file PATH] [--daemon PATH]\n",
         "  eliot-search watch [--interval-ms N] --qdrant-url URL [--data-root ROOT] [--config-file PATH] [--daemon PATH]\n",
-        "  eliot-search search --query TEXT [--limit N] --qdrant-url URL [--data-root ROOT] [--config-file PATH] [--daemon PATH]\n",
-        "  eliot-search exact --raw --literal TEXT --data-root ROOT [--source-id UUID] [--limit N] [--config-file PATH] [--daemon PATH]\n",
+        "  eliot-search search --query TEXT [--limit N] [--source-info] --qdrant-url URL [--data-root ROOT] [--config-file PATH] [--daemon PATH]\n",
+        "    --source-info adds each item's saved locator; retained metadata, never a live-path claim\n",
+        "  eliot-search exact --raw --literal TEXT --data-root ROOT [--source-id UUID] [--limit N] [--source-info] [--config-file PATH] [--daemon PATH]\n",
         "  eliot-search exact --decoded-utf8 --literal TEXT --data-root ROOT [--source-id UUID] [--limit N] [--config-file PATH] [--daemon PATH]\n",
     ));
 }
@@ -1210,6 +1238,7 @@ fn run_raw_exact(
     settings: Vec<OsString>,
     explicit_daemon: Option<PathBuf>,
     request: RawExactRequest,
+    source_info: bool,
     started: Instant,
 ) -> i32 {
     let Some(deadline) = started.checked_add(COMMAND_TIMEOUT) else {
@@ -1221,13 +1250,14 @@ fn run_raw_exact(
     };
     let mut arguments = vec![OsString::from("--search-stdio")];
     arguments.extend(settings);
-    crate::search_command::run_raw_exact(&daemon, &arguments, request, deadline)
+    crate::search_command::run_raw_exact(&daemon, &arguments, request, source_info, deadline)
 }
 
 fn run_decoded_utf8(
     settings: Vec<OsString>,
     explicit_daemon: Option<PathBuf>,
     request: DecodedUtf8Request,
+    source_info: bool,
     started: Instant,
 ) -> i32 {
     let Some(deadline) = started.checked_add(COMMAND_TIMEOUT) else {
@@ -1239,7 +1269,7 @@ fn run_decoded_utf8(
     };
     let mut arguments = vec![OsString::from("--search-stdio")];
     arguments.extend(settings);
-    crate::search_command::run_decoded_utf8(&daemon, &arguments, request, deadline)
+    crate::search_command::run_decoded_utf8(&daemon, &arguments, request, source_info, deadline)
 }
 
 fn run_session(settings: Vec<OsString>, explicit_daemon: Option<PathBuf>, started: Instant) -> i32 {
@@ -1253,6 +1283,30 @@ fn run_session(settings: Vec<OsString>, explicit_daemon: Option<PathBuf>, starte
     let mut arguments = vec![OsString::from("--session-stdio")];
     arguments.extend(settings);
     crate::search_command::run_session(&daemon, &arguments, deadline)
+}
+
+/// Runs the ranked search command through the owned framed child.
+fn run_ranked_search(
+    daemon: &Path,
+    settings: Vec<OsString>,
+    publication: PublicationRequest,
+    deadline: Instant,
+) -> i32 {
+    let Some(query) = publication.query else {
+        return emit_error("USAGE_ERROR");
+    };
+    let Ok(limit) = u8::try_from(publication.limit.unwrap_or(10)) else {
+        return emit_error("USAGE_ERROR");
+    };
+    let mut arguments = vec![OsString::from("--search-stdio")];
+    arguments.extend(settings);
+    crate::search_command::run(
+        daemon,
+        &arguments,
+        search_provider_protocol::SearchRequest { query, limit },
+        publication.source_info,
+        deadline,
+    )
 }
 
 pub fn run_main() -> i32 {
@@ -1272,15 +1326,17 @@ pub fn run_main() -> i32 {
             settings,
             daemon,
             request,
+            source_info,
         } => {
-            return run_raw_exact(settings, daemon, request, started);
+            return run_raw_exact(settings, daemon, request, source_info, started);
         }
         Parsed::DecodedUtf8 {
             settings,
             daemon,
             request,
+            source_info,
         } => {
-            return run_decoded_utf8(settings, daemon, request, started);
+            return run_decoded_utf8(settings, daemon, request, source_info, started);
         }
         Parsed::Root {
             command,
@@ -1310,20 +1366,7 @@ pub fn run_main() -> i32 {
         Err(error) => return emit_error(error),
     };
     if matches!(command, RootCommand::Search) {
-        let Some(query) = publication.query else {
-            return emit_error("USAGE_ERROR");
-        };
-        let Ok(limit) = u8::try_from(publication.limit.unwrap_or(10)) else {
-            return emit_error("USAGE_ERROR");
-        };
-        let mut arguments = vec![OsString::from("--search-stdio")];
-        arguments.extend(settings);
-        return crate::search_command::run(
-            &daemon,
-            &arguments,
-            search_provider_protocol::SearchRequest { query, limit },
-            deadline,
-        );
+        return run_ranked_search(&daemon, settings, publication, deadline);
     }
     let output = match capture_child(&daemon, command, &settings, deadline) {
         Ok(output) => output,

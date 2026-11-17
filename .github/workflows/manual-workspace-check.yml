@@ -9,13 +9,21 @@ on:
         default: windows-2025
         type: choice
         options: [windows-2025, ubuntu-24.04]
-      package:
-        description: One affected Cargo package
+      scope:
+        description: >
+          owner = one package target (inner loop);
+          merge-gate = whole workspace with every test target plus cargo deny
         required: true
+        default: merge-gate
+        type: choice
+        options: [merge-gate, owner]
+      package:
+        description: One affected Cargo package (scope=owner only)
+        required: false
         default: eliot-searchd
         type: string
       target:
-        description: Library or same-named installed binary
+        description: Library or same-named installed binary (scope=owner only)
         required: true
         default: bin
         type: choice
@@ -32,7 +40,7 @@ permissions:
 jobs:
   check:
     runs-on: ${{ inputs.runner }}
-    timeout-minutes: 20
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
@@ -45,7 +53,8 @@ jobs:
           rustup show active-toolchain
           rustup component add clippy
           rustc -Vv
-      - name: Check and Clippy without tests
+      - name: Owner target check and Clippy
+        if: inputs.scope == 'owner'
         shell: bash
         env:
           PACKAGE: ${{ inputs.package }}
@@ -65,3 +74,26 @@ jobs:
           cargo check "${args[@]}"
           cargo clippy "${args[@]}" -- -D warnings
           git diff --exit-code
+      # An owner-narrow --lib/--bin run never compiles a test target, so a test
+      # that stopped building stays invisible to it. --all-targets is the only
+      # command that sees #[cfg(test)] and tests/**; it is the merge gate.
+      - name: Merge gate, including every test target
+        if: inputs.scope == 'merge-gate'
+        shell: bash
+        env:
+          FEATURES: ${{ inputs.features }}
+        run: |
+          set -euo pipefail
+          args=(--workspace --all-targets --locked)
+          if [[ -n "$FEATURES" ]]; then args+=(--features "$FEATURES"); fi
+          git rev-parse HEAD
+          cargo clippy "${args[@]}" -- -D warnings
+          cargo test --workspace --locked
+          git diff --exit-code
+      - name: Dependency policy
+        if: inputs.scope == 'merge-gate'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo install cargo-deny --locked --version 0.20.2
+          cargo deny --locked check

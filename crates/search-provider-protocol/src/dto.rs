@@ -48,7 +48,7 @@ impl fmt::Debug for SearchRequest {
 pub struct RawExactRequest {
     /// UTF-8 argument bytes used literally, without decoding the retained input.
     pub literal: String,
-    /// None selects all published sources; Some(empty) selects none.
+    /// None selects all published sources; an explicit selection is non-empty.
     pub source_ids: Option<Vec<String>>,
     /// Maximum whole match/gap items returned, independent of scan completeness.
     pub limit: u8,
@@ -56,6 +56,11 @@ pub struct RawExactRequest {
 
 impl RawExactRequest {
     /// Validates the literal, canonical selection and finite output bound.
+    ///
+    /// An explicit `source_ids` selection must name at least one source. An
+    /// empty selection has no scan population, so its completeness and
+    /// complete-negative answers would be vacuously true over nothing; the
+    /// request is refused instead of answered with that false authority.
     pub fn validate(&self) -> Result<(), ProtocolError> {
         if self.literal.is_empty()
             || self.literal.len() > MAX_QUERY_BYTES
@@ -65,6 +70,9 @@ impl RawExactRequest {
             return Err(ProtocolError::InvalidMessage);
         }
         if let Some(ids) = &self.source_ids {
+            if ids.is_empty() {
+                return Err(ProtocolError::EmptySelection);
+            }
             for (index, id) in ids.iter().enumerate() {
                 if !canonical_uuid(id) || ids[..index].contains(id) {
                     return Err(ProtocolError::InvalidMessage);
@@ -81,7 +89,7 @@ impl RawExactRequest {
 pub struct DecodedUtf8Request {
     /// Exact UTF-8 literal, without normalization or case folding.
     pub literal: String,
-    /// None selects all committed sources; Some(empty) selects none.
+    /// None selects all committed sources; an explicit selection is non-empty.
     pub source_ids: Option<Vec<String>>,
     /// Maximum whole emitted items, independent of complete input scanning.
     pub limit: u8,
@@ -89,6 +97,11 @@ pub struct DecodedUtf8Request {
 
 impl DecodedUtf8Request {
     /// Validates literal bytes, source selection syntax and finite output bounds.
+    ///
+    /// An explicit `source_ids` selection must name at least one source, for the
+    /// same reason as [`RawExactRequest::validate`]: an empty selection has no
+    /// scan population, and its vacuous completeness answer would be reported as
+    /// a proven absence.
     pub fn validate(&self) -> Result<(), ProtocolError> {
         if self.literal.is_empty()
             || self.literal.len() > MAX_QUERY_BYTES
@@ -98,6 +111,9 @@ impl DecodedUtf8Request {
             return Err(ProtocolError::InvalidMessage);
         }
         if let Some(ids) = &self.source_ids {
+            if ids.is_empty() {
+                return Err(ProtocolError::EmptySelection);
+            }
             for (index, id) in ids.iter().enumerate() {
                 if !canonical_uuid(id) || ids[..index].contains(id) {
                     return Err(ProtocolError::InvalidMessage);
@@ -730,7 +746,7 @@ pub struct RawExactResult {
     pub items: Vec<RawExactItem>,
     /// Every selected retained input was verified and fully scanned; false for missing inputs.
     pub scan_complete: bool,
-    /// True only for complete scanning, zero matches and no missing input.
+    /// True only for a non-empty selection, complete scanning, zero matches and no missing input.
     pub complete_negative: bool,
     /// Complete emitted items versus a whole-item presentation cut.
     pub stop: StopReason,
@@ -789,7 +805,8 @@ impl RawExactResult {
             || self.items.len() > usize::from(requested_limit)
             || self.scanned_sources.checked_add(self.missing_sources) != Some(self.selected_sources)
             || self.scan_complete != (self.scanned_sources == self.selected_sources)
-            || self.complete_negative != (self.scan_complete && self.matches == 0)
+            || self.complete_negative
+                != (self.scan_complete && self.matches == 0 && self.selected_sources != 0)
             || self.matches > self.scanned_bytes
             || (self.scanned_sources == 0 && self.scanned_bytes != 0)
             || u64::try_from(self.items.len())
@@ -959,7 +976,7 @@ pub struct DecodedUtf8Result {
     pub items: Vec<DecodedUtf8Item>,
     /// Every selected source had a verified fully scanned representation.
     pub scan_complete: bool,
-    /// Complete scanning, zero matches and no representation gap.
+    /// Non-empty selection, complete scanning, zero matches and no representation gap.
     pub complete_negative: bool,
     /// Emitted prefix completeness, independent of scanning completeness.
     pub stop: StopReason,
@@ -1001,7 +1018,8 @@ impl DecodedUtf8Result {
             || self.items.len() > usize::from(requested_limit)
             || self.scanned_sources.checked_add(self.gap_sources) != Some(self.selected_sources)
             || self.scan_complete != (self.scanned_sources == self.selected_sources)
-            || self.complete_negative != (self.scan_complete && self.matches == 0)
+            || self.complete_negative
+                != (self.scan_complete && self.matches == 0 && self.selected_sources != 0)
             || self.matches > self.scanned_bytes
             || (self.scanned_sources == 0 && self.scanned_bytes != 0)
             || self.items.len() as u64 > total
@@ -1645,8 +1663,18 @@ impl WindowPage {
                 (None, None, None) | (Some(_), Some(_), Some(_))
             )
             || summary.complete_negative.is_some_and(|negative| {
-                negative
-                    != (summary.scan_complete == Some(true) && summary.found_matches == Some(0))
+                // Scanned-everything with zero matches is only a complete
+                // negative over a non-empty population. When the corpus facts
+                // were requested they decide both directions; without them only
+                // an unjustified true can be rejected here.
+                let justified =
+                    summary.scan_complete == Some(true) && summary.found_matches == Some(0);
+                summary
+                    .corpus
+                    .as_ref()
+                    .map_or(negative && !justified, |corpus| {
+                        negative != (justified && corpus.selected_sources != 0)
+                    })
             })
         {
             return Err(ProtocolError::InvalidMessage);

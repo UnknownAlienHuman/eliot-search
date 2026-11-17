@@ -13,9 +13,10 @@ path = "src/lib.rs"
 [dependencies]
 search-contracts.workspace = true
 qdrant-client.workspace = true
+semver = "1.0"
 tonic.workspace = true
 prost.workspace = true
-tokio = { version = "=1.53.1", features = ["rt-multi-thread", "time", "net"] }
+tokio = { version = "=1.53.3", features = ["rt-multi-thread", "time", "net"] }
 
 [lints]
 workspace = true
