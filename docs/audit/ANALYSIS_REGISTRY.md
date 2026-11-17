@@ -27,7 +27,8 @@ Historical V1/core evidence, current package/configuration and actual client wor
 <a id="resume-after-interruption"></a>
 ## Next task
 
-**B-2 is READY.** Cap ranked units per source while preserving useful results from other files.
+**B-3 is READY.** Add retained line locations to Exact and readable raw context without weakening byte evidence.
+The [source diversity check](#ranked-source-diversity-2026-11-17) closes B-2 within its measured scope.
 The [Expand check](#expand-adjacent-ranges-2026-11-17) closes B-10. The
 [interrupted publication check](#publication-interruption-2026-11-17) and native source CAS test cover
 the selected durable slice of A-3. Broader failure coverage remains open.
@@ -112,7 +113,8 @@ DONE below is the named delivered scope, not completion of the product.
 | B-1 / DONE, recorded Windows Release scope | U1/X1/AD1 | [Daemon](../../bins/eliot-searchd/FUNCTIONS.md#read-only-search-path), [protocol](../../crates/search-provider-protocol/FUNCTIONS.md) and CLI/MCP/window consumers | Bounded verified excerpts and live Expand, with measured response sizes and exact byte readback. |
 | A-3 / PARTIAL | Q1/R1 | [CONTROL publication](../../crates/search-control-redb/FUNCTIONS.md#publication-state-and-snapshot) and [daemon](../../bins/eliot-searchd/FUNCTIONS.md) | Observed native backend loss, guarded retry, kept current evidence and source CAS. Other durable and child failure cases remain open. |
 | B-10 / DONE, recorded Windows Release scope | B-1/X1 | [Window](../../crates/search-query/search-continuation/FUNCTIONS.md#expansion) and [protocol](../../crates/search-provider-protocol/FUNCTIONS.md) | Expand returns separately cited new before/after ranges, with the original anchor verified. |
-| B-2 / READY | B-9/B-1 | [Bridge](../../crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md#query-scoring-profile) and daemon | Limit occupancy per retained source and measure implementation-file discovery on the real Research corpus. |
+| B-2 / DONE, recorded Windows Release scope | B-9/B-1 | [Bridge](../../crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md#query-scoring-profile) and daemon | At most two ranked units per source. Native CLI and MCP window verify the cap on the real Research corpus. |
+| B-3 / READY | U1/X1 | [Exact](../../crates/search-query/search-exact/FUNCTIONS.md) and protocol | Give exact retained line locations and readable context while preserving Raw and UTF-8 coordinate domains. |
 
 [Implementation](../implementation/README.md#delivery-sequence) owns delivery order. Stage 3B is conditional
 on measured Stage 3A budgets failing; there is no separate global rewrite programme.
@@ -253,6 +255,20 @@ A Luna reader explained why ignore rules work outside Git using just two retaine
 bytes of text). On the 3,217-source Research corpus, another Luna reader located `distill.ts` fifth
 and could cite the format declaration. Its excerpt did not establish the enforcement branch. Three
 earlier hits came from the same test file, leaving B-2 open.
+
+<a id="ranked-source-diversity-2026-11-17"></a>
+### Ranked source diversity, 2026-11-17
+
+On the 3,217-source recovered Research corpus and Qdrant 1.20.2, the compact distillation query used to
+return three hits from `src/workflows/distill-model.test.ts` ahead of the implementation. The capped
+Release CLI returned five results from four registered sources, with two hits from that test file.
+The selected `src/workflows/distill.ts` moved from fifth to fourth. The separately admitted older
+revision of the same path remained a separate source with its own citation. Limit 64 returned 64 items
+from 55 sources, at most two each. MCP Open and Continue matched the one-shot result prefix.
+
+The single observed elapsed times were 124 ms (limit five) and 252 ms (limit 64). Restoring diversity
+adds backend work when grouping is needed. These observations do not establish p95 or verified
+implementation enforcement from the first excerpt alone.
 
 <a id="agent-delivery"></a>
 ### AD1 agent delivery — DONE in recorded native scopes

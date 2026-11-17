@@ -200,8 +200,15 @@ The bridge submits one Qdrant batch with top-k per exact class filter and whole-
 returned BM25 scores by 1.0 (primary), 0.65 (documentation) or 0.35 (vendor). A positive constant preserves
 ordering within each class, so at most three times k nominations suffice for the weighted top-k, up to ties
 at a lane's cutoff. The bridge bounds each lane and validates that returned class labels match their filters.
-Legacy collections remain readable with their original unweighted order. Explicit publication replaces
+Legacy collections use unweighted BM25. Explicit publication replaces
 them with a fresh classified generation through the existing guarded commit.
+
+Ranked results contain at most two units per source. If the first ranked prefix exceeds that cap,
+use [Qdrant Query Groups](https://api.qdrant.tech/api-reference/search/query-points-groups) by the existing
+`source_id` payload for classes with repeated sources. Each grouped request asks for at most k
+groups of two with the same BM25 parameters and class filter. Validate the group identity against every
+hit's routing payload before merging and truncating the weighted order. The common prefix that already
+meets the cap completes without another backend call. The grouping path works with existing collections.
 
 `TextQuery` ranks documents containing any query token. A full-text `MatchText` filter requires all filter-query
 subwords in any order. With Code tokenizer, ranking queries also receive joined camel/snake tokens while filters
