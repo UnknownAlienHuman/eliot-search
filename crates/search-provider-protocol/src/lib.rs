@@ -11,10 +11,11 @@ pub use dto::{
     ClientFrame, ControlObservation, DecodedUtf8Gap, DecodedUtf8Item, DecodedUtf8Match,
     DecodedUtf8Request, DecodedUtf8Result, EvidenceMetadata, ExpansionContent, FailureCode,
     ObjectKindDto, ObjectRefDto, QueryOutcome, QuerySummary, RawExactGap, RawExactItem,
-    RawExactMatch, RawExactRequest, RawExactResult, RawSourceRef, SearchGap, SearchHit, SearchItem,
-    SearchRequest, SessionClientFrame, SessionOutcome, SessionReply, SourceInfo,
-    SourceInfoUnavailableReason, SourceLiveStatus, StopReason, SummaryUnavailableReason, Terminal,
-    WindowEntry, WindowExpansion, WindowItem, WindowPage, WindowQuery, WindowSummary,
+    RawExactMatch, RawExactRequest, RawExactResult, RawSourceRef, SearchExcerpt, SearchGap,
+    SearchHit, SearchItem, SearchRequest, SessionClientFrame, SessionOutcome, SessionReply,
+    SourceInfo, SourceInfoUnavailableReason, SourceLiveStatus, StopReason,
+    SummaryUnavailableReason, Terminal, WindowEntry, WindowExpansion, WindowItem, WindowPage,
+    WindowQuery, WindowSummary,
 };
 pub use error::ProtocolError;
 pub use frame::{
@@ -32,8 +33,10 @@ pub const MAX_BODY_BYTES: usize = MAX_FRAME_BYTES - FRAME_PREFIX_BYTES;
 pub const MAX_QUERY_BYTES: usize = 4096;
 /// Maximum nominations, including explicit missing-object gaps.
 pub const MAX_ITEMS: usize = 64;
-/// Maximum complete prepared unit text; text is never shortened to fit output.
+/// Maximum complete prepared unit referenced by a ranked citation.
 pub const MAX_UNIT_TEXT_BYTES: usize = 65_536;
+/// Maximum verified UTF-8 excerpt bytes in a ranked result.
+pub const MAX_SEARCH_EXCERPT_BYTES: usize = 512;
 /// Original one-shot operation allowance, transmitted as a remaining duration.
 pub const MAX_REMAINING_MS: u64 = 120_000;
 /// Finite request-frame allowance including worst-case JSON query escaping.

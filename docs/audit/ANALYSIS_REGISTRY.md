@@ -27,9 +27,9 @@ Historical V1/core evidence, current package/configuration and actual client wor
 <a id="resume-after-interruption"></a>
 ## Next task
 
-**B-1 is READY.** Reuse verified prepared units for bounded excerpts on Search and connect their exact
-coordinates to the existing window Expand. Measure actual response bytes and the first useful result
-on the same real corpora used for B-9.
+**A-3 is READY.** Exercise real publication interruption and guarded recovery, then cover remaining
+durable source and publication paths from the audit. The [excerpt check](#ranked-excerpts-2026-11-17)
+closes B-1 within its measured scope.
 The [November 17 ranking check](#source-class-ranking-2026-11-17) closes B-9 within its measured scope.
 The [November 17 Qdrant check](#qdrant-update-2026-11-17) qualifies the stable server version floor against
 three native releases. The installed backend has an operator stop request and remains stopped.
@@ -107,7 +107,8 @@ DONE below is the named delivered scope, not completion of the product.
 | V1 / DONE, selected Windows/Release scope | X1/M1 selected shipped paths | [Qualification](../implementation/TEST_CUTOVER.md), #215 | Actual ordinary-repo-1 performance/CPU/observed replacement disk, full real-repository workflows and isolated installed pair. Source9cfa/main2a Rust equivalence; scope/UNKNOWN limits below. |
 | AD1 / DONE, recorded five-client native scopes | V1/core SDK | [MCP owner](../../bins/eliot-search-mcp/FUNCTIONS.md), [package/Skill](../../integrations/eliot-search/README.md), native-client delivery owners | Actual Skill/tool/context/grounded-answer/Close scopes accepted in four coding clients plus Desktop normal Chat, initially via local mcpServers and subsequently via the installed v4 MCPB. Current targets, original four v3 flow provenance, corrected native answers and source/package/SDK limits are recorded below. |
 | B-9 / DONE, recorded Windows Release scope | Q1/U1/AD1 | [Bridge](../../crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md#query-scoring-profile) and [daemon](../../bins/eliot-searchd/FUNCTIONS.md#read-only-search-path) | Store source classes on a fresh generation and rank within a pinned view. Verified on 366 actual Search sources and exercised on 3,215 Research sources. |
-| B-1 / READY | U1/X1/AD1 | [Daemon](../../bins/eliot-searchd/FUNCTIONS.md#read-only-search-path), [protocol](../../crates/search-provider-protocol/FUNCTIONS.md) and actual CLI/MCP/window consumers | Return a short verified excerpt with exact retained coordinates and expand through a live window. Measure real result sizes and confirm evidence binding. |
+| B-1 / DONE, recorded Windows Release scope | U1/X1/AD1 | [Daemon](../../bins/eliot-searchd/FUNCTIONS.md#read-only-search-path), [protocol](../../crates/search-provider-protocol/FUNCTIONS.md) and CLI/MCP/window consumers | Bounded verified excerpts and live Expand, with measured response sizes and exact byte readback. |
+| A-3 / READY | Q1/R1 | [CONTROL publication](../../crates/search-control-redb/FUNCTIONS.md#publication-state-and-snapshot) and [daemon](../../bins/eliot-searchd/FUNCTIONS.md) | Verify real interruption, guarded recovery and durable current/evidence bindings. |
 
 [Implementation](../implementation/README.md#delivery-sequence) owns delivery order. Stage 3B is conditional
 on measured Stage 3A budgets failing; there is no separate global rewrite programme.
@@ -196,6 +197,26 @@ On a tracked Eliot Research snapshot at `2f5f75c1a5d01d01bb83cf32cec1ddf4464aa77
 24–30 ms and returned 64–89 KB. The distillation implementation appeared fifth, with three test units
 from one file above it. These timings are individual observations. They leave excerpt size and
 per-source diversity open. Installed client deployment remains unverified.
+
+<a id="ranked-excerpts-2026-11-17"></a>
+### Ranked excerpts, 2026-11-17
+
+On Windows Release with native Qdrant 1.20.2, ranked Search returned `excerpt` (absolute start, end and
+up to 512 verified UTF-8 bytes) alongside the existing unit citation. CLI and MCP use the same producer.
+One-shot Search returns a standalone citation; Open/Continue retain the actual scoped window for Expand.
+
+| Real query, limit 5 | Sources | Previous JSON bytes | Excerpt JSON bytes |
+|---|---:|---:|---:|
+| require_git ignore rules outside a git repository | 366 | 74,398 | 7,304 |
+| TokenizerType Code bm25_scoring | 366 | 55,606 | 7,376 |
+| ModelPicker model gateway selection save | 3,215 | 64,292 | 7,031 |
+| compact-k3-v1 distillation strict schema | 3,215 | 89,043 | 7,128 |
+
+The two Search repository queries kept the point order and every excerpt matched the indicated bytes in
+the previous complete retained unit. The first `require_git` result opened in MCP with the same citation
+and text. Expand added 32 bytes before and 48 after the 512-byte excerpt, returning 592 bytes that matched
+the original file's range. Continue kept the original order and Close completed. One-shot timings for
+these four observations were 20–33 ms. Installed client deployment and statistical latency remain unverified.
 
 <a id="agent-delivery"></a>
 ### AD1 agent delivery — DONE in recorded native scopes

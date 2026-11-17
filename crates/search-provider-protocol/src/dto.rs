@@ -440,7 +440,19 @@ fn source_info_requested(info: Option<&SourceInfo>, requested: bool) -> Result<(
     Ok(())
 }
 
-/// One complete verified prepared unit in final rank order.
+/// Verified bytes inside the cited prepared unit, using absolute source byte coordinates.
+#[derive(Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SearchExcerpt {
+    /// Inclusive byte start in the captured UTF-8 source.
+    pub start: u64,
+    /// Exclusive byte end in the captured UTF-8 source.
+    pub end: u64,
+    /// Exact UTF-8 text in this range.
+    pub text: String,
+}
+
+/// One verified excerpt and its prepared unit citation in final rank order.
 #[derive(Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SearchHit {
@@ -450,8 +462,8 @@ pub struct SearchHit {
     pub score: f32,
     /// Immutable retained citation.
     pub evidence: EvidenceMetadata,
-    /// Exact full UTF-8 unit; never clipped for transport.
-    pub unit_text: String,
+    /// Short verified context within the cited unit.
+    pub excerpt: SearchExcerpt,
     /// Optional saved locator, tied to this item's published source binding.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source_info: Option<SourceInfo>,
@@ -463,7 +475,7 @@ impl fmt::Debug for SearchHit {
             .field("rank", &self.rank)
             .field("score", &self.score)
             .field("evidence", &self.evidence)
-            .field("unit_text_bytes", &self.unit_text.len())
+            .field("excerpt_bytes", &self.excerpt.text.len())
             .field("source_info_present", &self.source_info.is_some())
             .finish()
     }
@@ -562,9 +574,13 @@ impl SearchItem {
         }
         let score = match self {
             Self::Hit(hit) => {
-                if hit.unit_text.len() > MAX_UNIT_TEXT_BYTES
-                    || u64::try_from(hit.unit_text.len()).ok()
-                        != hit.evidence.end.checked_sub(hit.evidence.start)
+                let excerpt = &hit.excerpt;
+                if excerpt.text.is_empty()
+                    || excerpt.text.len() > crate::MAX_SEARCH_EXCERPT_BYTES
+                    || excerpt.start < hit.evidence.start
+                    || excerpt.end > hit.evidence.end
+                    || u64::try_from(excerpt.text.len()).ok()
+                        != excerpt.end.checked_sub(excerpt.start)
                 {
                     return Err(ProtocolError::InvalidMessage);
                 }
@@ -2007,9 +2023,9 @@ impl WindowExpansion {
                     &e.source_id,
                     &e.input,
                     Some(&e.prepared),
-                    e.start,
-                    e.end,
-                    Some(hit.unit_text.as_str()),
+                    hit.excerpt.start,
+                    hit.excerpt.end,
+                    Some(hit.excerpt.text.as_str()),
                     None,
                     None,
                 )

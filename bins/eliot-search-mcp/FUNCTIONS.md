@@ -62,7 +62,7 @@ ranked Search.
 ## Evidence, summary and saved source hints
 
 One-shot results include the entire actual validated Terminal: evidence items,
-full unit text or exact bytes_hex, immutable citations, scan/gap/completeness facts
+short ranked excerpts or literal Exact results, immutable citations, scan/gap/completeness facts
 and the pinned corpus summary. No statistics-only replacement, lossy byte decode,
 live-path fallback or unverified text truncation is used.
 

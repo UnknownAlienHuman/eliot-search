@@ -39,8 +39,8 @@ impl<'a> Anchor<'a> {
                 input: &hit.evidence.input,
                 source: None,
                 prepared: Some(&hit.evidence.prepared),
-                range: hit.evidence.start..hit.evidence.end,
-                original: &hit.unit_text,
+                range: hit.excerpt.start..hit.excerpt.end,
+                original: &hit.excerpt.text,
             }),
             WindowItem::Raw(RawExactItem::Match(hit)) => Ok(Self {
                 id: &hit.source.source_id,

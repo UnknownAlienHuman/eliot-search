@@ -103,7 +103,8 @@ not silently promoted into selections. Nor are unrelated legacy rows implicitly 
 still returns PUBLICATION_SOURCE_NOT_PREPARED if any current row lacks matching preparation.
 
 Unchanged native identity plus ObjectRef preserves the logical source head and avoids a new collection.
-Search returns verified retained units and is read-only. ec9fb6f selection-reload source/native checks passed
+Search returns short verified excerpts with retained-unit citations and is read-only. Open a live window to
+expand an emitted excerpt. ec9fb6f selection-reload source/native checks passed
 in the scopes recorded in the [registry](docs/audit/ANALYSIS_REGISTRY.md#resume); earlier cases retain their own
 binary scope. Later query/window and maintenance scopes are recorded in the registry; they are not pending
 merely because the older evidence above used another source revision.

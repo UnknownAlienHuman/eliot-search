@@ -16,8 +16,9 @@ Cancelled contains no result; Failed carries
 a validated 1..=64 byte uppercase/digit/underscore FailureCode. Unknown and duplicate DTO fields fail.
 
 `SearchItem` is tagged `kind = hit|gap`. Both carry original contiguous one-based rank, finite f32 score
-(any sign) after any source-class weighting and EvidenceMetadata. Hit adds the exact full UTF-8 unit_text,
-at most 65536 bytes.
+(any sign) after any source-class weighting and EvidenceMetadata. Hit adds `excerpt` with `start`, `end`
+and exact UTF-8 `text` of at most 512 bytes. The excerpt range is contained in the cited unit's absolute
+source byte range. Window Expand validates the returned neighborhood against the emitted excerpt.
 Gap adds only SOURCE_OBJECT_MISSING or PREPARED_OBJECT_MISSING. Corruption/routing/range failures
 are Failed outcomes, never missing-object gaps or fabricated empty results.
 
@@ -28,7 +29,7 @@ most 8 MiB; a prepared object is nonempty and at most 64 MiB. The point ID binds
 Rank and score remain outside the immutable retained citation; no live-path claim or revision ledger is sent.
 
 The daemon resolves evidence and its captured source/preparation from the same published read snapshot,
-verifies both retained objects and decoder/range/line bindings, and supplies the full unit. The wire's
+verifies both retained objects and decoder/range/line bindings, and supplies the excerpt. The wire's
 structural checks do not perform those storage/backend checks.
 
 ## Saved captured-source annotations

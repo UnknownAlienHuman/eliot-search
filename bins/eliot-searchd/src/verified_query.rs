@@ -7,8 +7,8 @@ use search_control_redb::publication::{
     PointEvidence, PublicationError, PublishedView, ResolvedPoint,
 };
 use search_provider_protocol::{
-    EvidenceMetadata, FailureCode, ObjectKindDto, ObjectRefDto, SearchGap, SearchHit, SearchItem,
-    SearchRequest, SourceInfo,
+    EvidenceMetadata, FailureCode, MAX_SEARCH_EXCERPT_BYTES, ObjectKindDto, ObjectRefDto,
+    SearchExcerpt, SearchGap, SearchHit, SearchItem, SearchRequest, SourceInfo,
 };
 use search_qdrant_bridge::{Backend, BackendError, BackendLimits, Hit};
 use search_revision_store::{ObjectStoreError, read_object};
@@ -183,15 +183,66 @@ fn verify_unit<'a>(
     Ok(text)
 }
 
+fn excerpt_terms(query: &str) -> Vec<String> {
+    let mut terms: Vec<_> = query
+        .split(|character: char| !character.is_alphanumeric() && character != '_')
+        .filter(|term| (3..=MAX_SEARCH_EXCERPT_BYTES).contains(&term.len()))
+        .map(str::to_ascii_lowercase)
+        .collect();
+    terms
+        .sort_unstable_by(|left, right| right.len().cmp(&left.len()).then_with(|| left.cmp(right)));
+    terms.dedup();
+    terms.truncate(8);
+    terms
+}
+
+fn excerpt(text: &str, unit_start: u64, terms: &[String]) -> Result<SearchExcerpt> {
+    let mut start = 0;
+    if text.len() > MAX_SEARCH_EXCERPT_BYTES && !terms.is_empty() {
+        // Locate a literal preview anchor in the already verified unit.
+        // ASCII case conversion preserves every UTF-8 byte boundary.
+        let folded = text.to_ascii_lowercase();
+        if let Some((offset, term)) = terms
+            .iter()
+            .find_map(|term| folded.find(term).map(|offset| (offset, term)))
+        {
+            let left_context = (MAX_SEARCH_EXCERPT_BYTES - term.len()) / 2;
+            start = offset
+                .saturating_sub(left_context)
+                .min(text.len() - MAX_SEARCH_EXCERPT_BYTES);
+            start = text.ceil_char_boundary(start);
+        }
+    }
+    let end = text.floor_char_boundary((start + MAX_SEARCH_EXCERPT_BYTES).min(text.len()));
+    let slice = &text[start..end];
+    let mut owned = String::new();
+    owned
+        .try_reserve_exact(slice.len())
+        .map_err(|_| QueryFailure::Code("QUERY_ALLOCATION_FAILED"))?;
+    owned.push_str(slice);
+    let absolute = |offset: usize| {
+        u64::try_from(offset)
+            .ok()
+            .and_then(|offset| unit_start.checked_add(offset))
+            .ok_or(QueryFailure::Code("EVIDENCE_RANGE_INVALID"))
+    };
+    Ok(SearchExcerpt {
+        start: absolute(start)?,
+        end: absolute(end)?,
+        text: owned,
+    })
+}
+
 fn fill_group(
     root: &PlainRootGuard,
     generation: u64,
     first: usize,
     points: &[RankedPoint],
     slots: &mut [Option<SearchItem>],
-    deadline: Instant,
-    cancel: &AtomicBool,
+    terms: &[String],
+    budget: (Instant, &AtomicBool),
 ) -> Result<()> {
+    let (deadline, cancel) = budget;
     let binding = &points[first].resolved;
     let indices: Vec<_> = points
         .iter()
@@ -247,16 +298,11 @@ fn fill_group(
         check(deadline, cancel)?;
         let point = &points[index];
         let text = verify_unit(&source, &prepared, &point.resolved.evidence)?;
-        let mut unit_text = String::new();
-        unit_text
-            .try_reserve_exact(text.len())
-            .map_err(|_| QueryFailure::Code("QUERY_ALLOCATION_FAILED"))?;
-        unit_text.push_str(text);
         slots[index] = Some(SearchItem::Hit(SearchHit {
             rank: point.rank,
             score: point.hit.score,
             evidence: metadata(generation, point),
-            unit_text,
+            excerpt: excerpt(text, point.resolved.evidence.start, terms)?,
             source_info: point.source_info.clone(),
         }));
     }
@@ -331,6 +377,7 @@ pub fn execute(
         });
     }
     let mut slots: Vec<Option<SearchItem>> = (0..points.len()).map(|_| None).collect();
+    let terms = excerpt_terms(&request.query);
     let mut items = Vec::new();
     items
         .try_reserve_exact(points.len())
@@ -343,8 +390,8 @@ pub fn execute(
                 index,
                 &points,
                 &mut slots,
-                deadline,
-                cancel,
+                &terms,
+                (deadline, cancel),
             )?;
         }
         items.push(

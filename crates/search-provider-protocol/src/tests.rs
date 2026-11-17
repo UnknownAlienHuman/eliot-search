@@ -32,7 +32,11 @@ fn hit(rank: u8, text: &str) -> SearchItem {
             starts_at_line_boundary: true,
             ends_at_line_boundary: false,
         },
-        unit_text: text.into(),
+        excerpt: SearchExcerpt {
+            start,
+            end: start + u64::try_from(text.len()).expect("finite fixture"),
+            text: text.into(),
+        },
         source_info: None,
     })
 }
@@ -149,9 +153,20 @@ fn closed_schema_rejects_duplicate_unknown_and_wrong_direction_fields() {
 }
 
 #[test]
-fn whole_worst_escaped_units_stop_at_largest_fitting_rank_prefix() {
-    let text = "\u{1}".repeat(MAX_UNIT_TEXT_BYTES);
-    let items = (1..=64).map(|rank| hit(rank, &text)).collect();
+fn whole_items_with_worst_escaped_source_info_stop_at_fitting_rank_prefix() {
+    let text = "\u{1}".repeat(MAX_SEARCH_EXCERPT_BYTES);
+    let path = "\u{1}".repeat(MAX_UNIT_TEXT_BYTES);
+    let with_source = |rank| {
+        let SearchItem::Hit(mut card) = hit(rank, &text) else {
+            panic!("hit");
+        };
+        card.source_info = Some(SourceInfo::Available {
+            saved_path_hint: path.clone(),
+            live_status: SourceLiveStatus::NotChecked,
+        });
+        SearchItem::Hit(card)
+    };
+    let items = (1..=64).map(with_source).collect();
     let bytes = prepare_complete(1, 1, items, None).expect("bounded terminal");
     assert!(bytes.len() <= MAX_FRAME_BYTES);
     assert_eq!(
@@ -170,10 +185,10 @@ fn whole_worst_escaped_units_stop_at_largest_fitting_rank_prefix() {
         let SearchItem::Hit(card) = item else {
             panic!("hit");
         };
-        assert_eq!(card.unit_text, text);
+        assert_eq!(card.excerpt.text, text);
     }
     let next_rank = u8::try_from(items.len() + 1).expect("bounded rank");
-    items.push(hit(next_rank, &text));
+    items.push(with_source(next_rank));
     assert_eq!(
         encode_terminal_frame(&decoded),
         Err(ProtocolError::FrameTooLarge)
@@ -181,19 +196,26 @@ fn whole_worst_escaped_units_stop_at_largest_fitting_rank_prefix() {
 }
 
 #[test]
-fn double_escaped_full_units_need_output_stop_without_shrinking_units() {
-    let text = "\\".repeat(MAX_UNIT_TEXT_BYTES);
+fn escaped_excerpts_fit_at_max_rank_count_and_cannot_leave_their_unit() {
+    let text = "\\".repeat(MAX_SEARCH_EXCERPT_BYTES);
     let bytes = prepare_complete(1, 1, (1..=64).map(|rank| hit(rank, &text)).collect(), None)
         .expect("frame");
     let decoded = decode_terminal_frame(&bytes, 64).expect("terminal");
     let QueryOutcome::Complete { items, stop, .. } = decoded.outcome else {
         panic!("complete");
     };
-    assert_eq!(stop, StopReason::OutputLimit);
-    assert!(items.len() < 64);
+    assert_eq!(stop, StopReason::Complete);
+    assert_eq!(items.len(), 64);
     assert!(items.iter().all(
-        |item| matches!(item, SearchItem::Hit(card) if card.unit_text.len() == MAX_UNIT_TEXT_BYTES)
+        |item| matches!(item, SearchItem::Hit(card) if card.excerpt.text.len() == MAX_SEARCH_EXCERPT_BYTES)
     ));
+    let mut outside = hit(1, &text);
+    let SearchItem::Hit(card) = &mut outside else {
+        panic!("hit");
+    };
+    card.excerpt.start += 1;
+    card.excerpt.end += 1;
+    assert!(encode_terminal_frame(&terminal(vec![outside])).is_err());
 }
 
 #[test]

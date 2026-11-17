@@ -41,6 +41,8 @@ Do not copy schema/default tables here. Changing request scoring alone does not 
 Free-text ranking is not a hidden Boolean/phrase/exact-identifier grammar; byte spelling uses retained-source Exact.
 The [source-class profile](../search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md#query-scoring-profile)
 keeps primary code, documentation and vendored candidates in the same selected population while weighting their ranks.
+Ranked responses carry an excerpt of up to 512 verified UTF-8 bytes with an absolute source range inside
+the cited unit. Open a live [window](search-continuation/FUNCTIONS.md) to expand context around an emitted excerpt.
 
 ## Scope and IDF
 

@@ -145,9 +145,11 @@ native RO snapshot. It verifies source IDs and the class derived from each captu
 
 Group returned points by captured binding. Verify both Source and Prepared ObjectRefs by actual length/BLAKE3,
 decode with the captured source/settings and compare source/prepared bytes plus every selected unit's ordinal,
-byte/line range and boundary facts. Emit the exact full UTF-8 unit and citation. A missing returned Source or
-Prepared object is an explicit item Gap; corruption/routing/range mismatch is a typed failure. Unreturned source
-bodies are not read. A newer current preparation does not replace the pinned capture.
+byte/line range and boundary facts. Emit the unit citation and a UTF-8 excerpt of up to 512 bytes. The daemon
+prefers a literal query-term location in the verified unit and uses the beginning of the unit when no term
+is found. The excerpt carries its own absolute source byte range and serves as the anchor for window Expand.
+A missing returned Source or Prepared object is an explicit item Gap. Corruption or a routing/range mismatch
+is a typed failure. Unreturned source bodies are not read.
 
 Search never writes CONTROL/collections, publishes, prepares, reconciles or opens live source paths.
 Root/view stay held through complete terminal flush; the worker is joined before teardown.
