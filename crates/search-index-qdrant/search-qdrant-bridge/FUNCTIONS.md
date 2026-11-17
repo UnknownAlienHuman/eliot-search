@@ -5,9 +5,10 @@ response/filter/point types remain private. Publication and query share one daem
 
 ## Dependency cut
 
-The selected dependency cut is exact client/server **1.20.0**, with the workspace lock resolved by its designated
-owner. Startup observes the live exact server version and authentication, then collection operations verify the
-selected profile. Source inspection, compilation and native execution remain separate evidence.
+The bridge uses the Rust SDK API introduced in **1.20**. Cargo resolves a compatible SDK from the lockfile.
+Startup requires a stable Qdrant server **1.20.0 or later** and verifies authentication. Publication and query
+then verify the actual collection profile. The version floor marks availability of the Code tokenizer and BM25
+text queries. See the [Windows run](../../../docs/audit/ANALYSIS_REGISTRY.md#qdrant-update-2026-11-17) for measured versions.
 
 Official Rust tag `v1.20.0` provides the selected surface:
 

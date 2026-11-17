@@ -1,7 +1,7 @@
 # Qdrant bridge
 
 The concrete Backend privately owns one reusable tonic channel and one Tokio runtime over the exact
-Qdrant 1.20.0 SDK's public generated clients. SDK/transport types and actual credentials remain inside
+Qdrant Rust SDK's public generated clients. SDK/transport types and actual credentials remain inside
 this crate. [FUNCTIONS.md](FUNCTIONS.md) owns the selected physical/query profile and acceptance rules.
 
 Publication supplies fixed complete PointInput pages. Pure batch_request_bytes measures their actual

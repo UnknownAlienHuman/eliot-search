@@ -38,9 +38,8 @@ search-qdrant-bridge = { path = "crates/search-index-qdrant/search-qdrant-bridge
 search-provider-protocol = { path = "crates/search-provider-protocol" }
 search-provider-client = { path = "crates/search-provider-client" }
 
-# Single vendor-SDK pin. Only search-qdrant-bridge may inherit this
-# dependency; its exact version must match the qualified client receipt.
-qdrant-client = { version = "=1.20.0", default-features = false }
+# Only search-qdrant-bridge consumes the SDK. Its text-query API starts at 1.20.
+qdrant-client = { version = "1.20", default-features = false }
 tonic = { version = "=0.14.6", features = ["transport", "tls-native-roots", "tls-ring"] }
 prost = "=0.14.3"
 # 1.53.3 is the first 1.53 patch that closes RUSTSEC-2026-0386 (AsyncFd I/O

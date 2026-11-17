@@ -128,7 +128,7 @@ The closed JSON response contains operation/state, collection/generation and sou
 Publication accepts no --query/--limit and returns no user hits. The independent saved-point canary remains.
 
 Only an explicit same-host loopback gRPC URL is accepted; the ordinary local port is 6334. The operator starts
-Qdrant 1.20.0. An existing optional key comes from ELIOT_QDRANT_API_KEY, never argv/output. The existing 135168-byte
+Qdrant (stable 1.20 or later). An existing optional key comes from ELIOT_QDRANT_API_KEY, never argv/output. The existing 135168-byte
 publication stdout cap is a bound, not a requirement to fill it or return nominations.
 [Publication](../../crates/search-index-qdrant/search-publication/FUNCTIONS.md#current-q1-consumer) and
 [CONTROL](../../crates/search-control-redb/FUNCTIONS.md#publication-state-and-snapshot) own readiness/current/evidence.

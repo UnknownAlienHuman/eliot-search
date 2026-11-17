@@ -68,7 +68,7 @@ PreparationSettings affects output identity; fail-only execution ceilings do not
     eliot-search publish-prepared --qdrant-url http://127.0.0.1:6334 --data-root "C:\example\root"
     eliot-search search --query "identifier" --qdrant-url http://127.0.0.1:6334 --data-root "C:\example\root"
 
-The operator starts the selected local Qdrant 1.20.0 service. Q1 captures all retained sources and matching
+The operator starts local Qdrant (stable 1.20 or later). Q1 captures all retained sources and matching
 preparations, publishes actual saved unit text, verifies the backend and checked canary, and installs current
 plus a complete validated evidence snapshot. A source/settings/outcome mutation advances the shared non-reset
 wanted guard atomically. Reference pages contain no text; publication hydrates each source's saved Prepared

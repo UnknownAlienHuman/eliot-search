@@ -11,6 +11,7 @@ use qdrant_client::qdrant::{
     HealthCheckRequest, ListCollectionsRequest, collections_client::CollectionsClient,
     points_client::PointsClient, qdrant_client::QdrantClient,
 };
+use semver::Version;
 use tokio::runtime::{Builder, Handle, Runtime};
 use tonic::metadata::{Ascii, MetadataValue};
 use tonic::transport::{Channel, ClientTlsConfig, Endpoint};
@@ -38,8 +39,8 @@ pub struct Backend {
 impl Backend {
     /// Connects to an explicit loopback gRPC URL and verifies server/authentication.
     ///
-    /// The selected server patch is exactly 1.20.0. This does not prove index
-    /// readiness or adopt/rebuild any collection. No discovery or auth retry occurs.
+    /// Requires a stable server with the text-index API introduced in 1.20.
+    /// Collection readiness is checked separately by the publication and query paths.
     ///
     /// # Errors
     ///
@@ -107,7 +108,9 @@ impl Backend {
             .max_decoding_message_size(self.limits.max_response_bytes);
         let request = self.request(HealthCheckRequest {}, deadline, cancelled)?;
         let reply = self.call(root.health_check(request), deadline, cancelled, false)?;
-        if reply.version != "1.20.0" {
+        let version =
+            Version::parse(&reply.version).map_err(|_| BackendError::UnsupportedServer)?;
+        if !version.pre.is_empty() || version < Version::new(1, 20, 0) {
             return Err(BackendError::UnsupportedServer);
         }
         let mut collections = self.collections();

@@ -19,7 +19,7 @@ pub enum BackendError {
     AllocationFailed,
     /// The server refused the supplied authentication.
     Authentication,
-    /// The observed server version is not the selected exact patch.
+    /// The reported server version is below the text-index API floor, prerelease, or invalid.
     UnsupportedServer,
     /// The collection or text index differs from the fixed physical profile.
     SchemaMismatch,

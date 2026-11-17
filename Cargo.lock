@@ -1318,6 +1318,7 @@ dependencies = [
  "prost",
  "qdrant-client",
  "search-contracts",
+ "semver",
  "tokio",
  "tonic",
 ]

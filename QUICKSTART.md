@@ -4,7 +4,7 @@
 
 Run these in order. Each section below holds the exact commands.
 
-1. Start the operator-owned Qdrant 1.20.0 service on a loopback endpoint.
+1. Start an operator-owned Qdrant service (stable 1.20 or later) on a loopback endpoint.
 2. Build the sibling pair and initialize a data root: [Index and search](#index-and-search).
 3. Admit a tree and publish it: `index PATH`, then `search`.
 4. For agent clients, install the MCP package: [Agent/MCP delivery](#agentmcp-delivery--qualified-native-scopes)
@@ -80,7 +80,7 @@ The commands below explicitly select that release pair. If Cargo's target direct
 replace .\target with that actual directory; retain the release subdirectory and matching --daemon path.
 Other bare executable examples below describe command syntax, not DEBUG performance qualification.
 
-Start the operator-owned Qdrant 1.20.0 service first. Initialize a new application data root once; index opens
+Start the operator-owned Qdrant service first. Initialize a new application data root once; index opens
 an existing current root and does not initialize it. Paths below are placeholders, separate from user originals:
 
     .\target\release\eliot-search.exe initialize-data-root --data-root "C:\example\data-root" --daemon .\target\release\eliot-searchd.exe
@@ -195,7 +195,7 @@ metadata. This returns stored text, not Qdrant search results or citations.
 
 ## Publish the prepared corpus
 
-Start the selected same-host Qdrant 1.20.0 service as its operator, with separately owned storage. The ordinary
+Start the same-host Qdrant service as its operator, with separately owned storage. The ordinary
 gRPC endpoint is port 6334; the application neither starts nor stops that service. Use a current application
 root whose selected sources already have matching preparation outcomes:
 

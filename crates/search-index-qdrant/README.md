@@ -15,7 +15,7 @@ owns stage order; the recipes below own algorithms.
 | Current/retired view guards | [View lifetime](search-publication/FUNCTIONS.md#view-lifetime-and-whole-generation-cleanup); fold old pins/reclaimer helpers into their real consumers |
 | Optional process-supervisor policy | [Removal boundary](search-qdrant-supervisor/FUNCTIONS.md); not a connection prerequisite |
 
-The active exact client/server profile is 1.20.0. Only the bridge consumes the SDK; vectorless InsertOnly uses
+Only the bridge consumes the Rust SDK. It requires stable Qdrant 1.20 or later. Vectorless InsertOnly uses
 the required empty NamedVectors container with zero vector entries. The bridge owns schema/request mapping.
 Publication and read-only search are connected; exact native scopes belong in the work register. Dormant
 supervisor/identity/pins/reclaimer Rust packages are removed; their retained recipes are policy, not services.
