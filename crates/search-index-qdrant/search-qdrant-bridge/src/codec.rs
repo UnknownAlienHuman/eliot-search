@@ -12,6 +12,7 @@ use search_contracts::SourceId;
 
 use crate::backend::check;
 use crate::model::collection_name;
+use crate::schema::{CLASS_FIELD, TEXT_FIELD};
 use crate::{BackendError, MAX_PAGE_POINTS, MAX_POINT_TEXT_BYTES, MAX_REQUEST_BYTES, PointInput};
 
 pub fn encode_batch(
@@ -51,21 +52,28 @@ pub fn encode_batch(
         .map_err(|_| BackendError::AllocationFailed)?;
     for point in points {
         check(deadline, cancelled)?;
+        let mut payload = HashMap::from([
+            (
+                "source_id".to_owned(),
+                string_value(point.source_id.to_string()),
+            ),
+            (
+                TEXT_FIELD.to_owned(),
+                string_value(point.retrieval_text.to_owned()),
+            ),
+        ]);
+        if let Some(class) = point.source_class {
+            payload.insert(
+                CLASS_FIELD.to_owned(),
+                string_value(class.keyword().to_owned()),
+            );
+        }
         encoded.push(PointStruct::new(
             point_id(point.id),
             NamedVectors {
                 vectors: HashMap::default(),
             },
-            HashMap::from([
-                (
-                    "source_id".to_owned(),
-                    string_value(point.source_id.to_string()),
-                ),
-                (
-                    "retrieval_text".to_owned(),
-                    string_value(point.retrieval_text.to_owned()),
-                ),
-            ]),
+            payload,
         ));
     }
     let request = UpsertPoints {

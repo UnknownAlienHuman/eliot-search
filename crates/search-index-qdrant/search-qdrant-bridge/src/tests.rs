@@ -18,6 +18,7 @@ fn point(id: u8, text: &str) -> PointInput<'_> {
     PointInput {
         id: [id; 16],
         source_id: SourceId::from_bytes([2; 16]),
+        source_class: None,
         retrieval_text: text,
     }
 }

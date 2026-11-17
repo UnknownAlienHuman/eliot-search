@@ -116,7 +116,8 @@ No operation executes input or implicitly starts a network/model/Qdrant service.
    Each pass retains one verified buffer/decoded view across adjacent pages of that source and releases it on
    source change or pass end. Check all unit/range facts and the exact SDK encoded request bytes.
 3. Build/verify the vectorless generation through the bridge: InsertOnly/wait, full schema/point/payload/count
-   readback and independent source-backed singleton TextQuery canary.
+   readback and a source-backed singleton TextQuery canary scoped to the expected source class. Class comes
+   from the captured locator. An explicit publication upgrades a legacy generation by building a new one.
 4. Compare/commit current, predecessor cleanup and pending clear atomically; open the completely validated
    matching native RO snapshot before reporting generation state/counts. The shared ControlWriter closes before
    acceptance/CAS/view; no write transaction spans object/backend I/O.
@@ -139,8 +140,8 @@ and [operator storage guidance](../../crates/search-runtime/search-runtime-owner
 [framed_search.rs](src/framed_search.rs) services Query/Cancel while one joinable synchronous worker runs
 [verified_query.rs](src/verified_query.rs) outside the I/O runtime. The worker opens the root and pin_published,
 which does bounded committed-header/table checks without a complete generation scan. It queries the exact
-committed collection, preserves backend order and point-resolves only returned evidence plus CapturedSource
-from that same native RO snapshot.
+committed collection and point-resolves only the final ranked nominations plus CapturedSource from that same
+native RO snapshot. It verifies source IDs and the class derived from each captured locator.
 
 Group returned points by captured binding. Verify both Source and Prepared ObjectRefs by actual length/BLAKE3,
 decode with the captured source/settings and compare source/prepared bytes plus every selected unit's ordinal,

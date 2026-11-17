@@ -66,6 +66,37 @@ impl BackendLimits {
     }
 }
 
+/// Heuristic retrieval class derived from the captured source locator.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SourceClass {
+    /// Primary corpus content, including unclassified sources.
+    Primary,
+    /// Documentation and notes.
+    Documentation,
+    /// Vendored material.
+    Vendor,
+}
+
+impl SourceClass {
+    pub(crate) const ALL: [Self; 3] = [Self::Primary, Self::Documentation, Self::Vendor];
+
+    pub(crate) const fn keyword(self) -> &'static str {
+        match self {
+            Self::Primary => "primary",
+            Self::Documentation => "documentation",
+            Self::Vendor => "vendor",
+        }
+    }
+
+    pub(crate) const fn weight(self) -> f32 {
+        match self {
+            Self::Primary => 1.0,
+            Self::Documentation => 0.65,
+            Self::Vendor => 0.35,
+        }
+    }
+}
+
 /// One publication-owned fixed point, borrowing actual prepared unit text.
 #[derive(Clone, Copy)]
 pub struct PointInput<'a> {
@@ -73,6 +104,8 @@ pub struct PointInput<'a> {
     pub id: [u8; 16],
     /// Persisted source identity routed through CONTROL evidence.
     pub source_id: SourceId,
+    /// Source class indexed with this point. Legacy generations have no class.
+    pub source_class: Option<SourceClass>,
     /// Complete exact retrieval text; no locally generated aliases or vectors.
     pub retrieval_text: &'a str,
 }
@@ -95,8 +128,10 @@ pub struct Hit {
     pub id: [u8; 16],
     /// Routing identity to cross-check against current view evidence.
     pub source_id: SourceId,
-    /// Finite server BM25 score.
+    /// Finite server BM25 score multiplied by the generation's source-class weight.
     pub score: f32,
+    /// Indexed class to cross-check against the captured source locator.
+    pub source_class: Option<SourceClass>,
 }
 
 pub fn collection_name(name: &str) -> Result<(), BackendError> {

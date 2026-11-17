@@ -39,6 +39,8 @@ process cannot reuse them. A citation establishes provenance, not relevance, uni
 [bridge](../search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md) owns exact SDK mapping and readback.
 Do not copy schema/default tables here. Changing request scoring alone does not rebuild the physical index.
 Free-text ranking is not a hidden Boolean/phrase/exact-identifier grammar; byte spelling uses retained-source Exact.
+The [source-class profile](../search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md#query-scoring-profile)
+keeps primary code, documentation and vendored candidates in the same selected population while weighting their ranks.
 
 ## Scope and IDF
 

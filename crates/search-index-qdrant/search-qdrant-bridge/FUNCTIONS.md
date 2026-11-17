@@ -45,8 +45,9 @@ between whole units before persisting pages. No handwritten protobuf-size formul
 
 The concrete methods are connect, create_generation, verify_schema, insert_only, verify_points, count_exact,
 query_text, exists and delete_generation. Connection checks authentication without adopting a collection.
-verify_points compares the actual IDs, complete text and source routing internally, with no vectors. query_text
-returns only IDs, source routing and finite score. Source and point IDs are cross-checked with CONTROL by the caller.
+verify_points compares IDs, complete text, source ID and the captured class for classified generations, with no
+vectors. query_text returns only IDs, source routing, the indexed class and a finite ranking score.
+The daemon checks each returned source ID and class against the same pinned CONTROL capture.
 
 BackendError::code is content-free. A possibly dispatched create/insert/delete failure or incomplete wait result
 returns UnknownDispatch; publication keeps the durable pending target unserved. Matching readback alone never
@@ -189,6 +190,18 @@ b=0.75
 
 Client validates finite `k >= 0` and finite `0 <= b <= 1` before building `TextQuery`. Changing only k/b does not
 rebuild the collection; capture the query profile in `RequestContext`. Do not set a baseline score threshold.
+
+The classified layout adds a pinned keyword index on `source_class` with HNSW disabled. The daemon classifies
+the native locator captured with publication. A parent directory component named `vendor` takes precedence,
+followed by documentation extensions `md`, `markdown`, `rst` and `adoc`. Comparisons are ASCII
+case-insensitive. Other or undecodable locators use the primary class. The index stores only the class label.
+
+The bridge submits one Qdrant batch with top-k per exact class filter and whole-collection IDF. Multiply the
+returned BM25 scores by 1.0 (primary), 0.65 (documentation) or 0.35 (vendor). A positive constant preserves
+ordering within each class, so at most three times k nominations suffice for the weighted top-k, up to ties
+at a lane's cutoff. The bridge bounds each lane and validates that returned class labels match their filters.
+Legacy collections remain readable with their original unweighted order. Explicit publication replaces
+them with a fresh classified generation through the existing guarded commit.
 
 `TextQuery` ranks documents containing any query token. A full-text `MatchText` filter requires all filter-query
 subwords in any order. With Code tokenizer, ranking queries also receive joined camel/snake tokens while filters

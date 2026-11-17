@@ -7,6 +7,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 
 use search_control_redb::current_preparation::PreparationOutcome;
+use search_control_redb::current_source::source_path_from_locator;
 use search_control_redb::plain_control::{ControlWriter, PlainControlError};
 use search_control_redb::publication::{
     self as control, CapturedSource, Generation, PendingGeneration, PendingOperation,
@@ -14,7 +15,7 @@ use search_control_redb::publication::{
 };
 use search_qdrant_bridge::{
     Backend, BackendError, BackendLimits, MAX_HITS, MAX_PAGE_BYTES, MAX_PAGE_POINTS,
-    MAX_QUERY_BYTES, MAX_REQUEST_BYTES, MAX_RESPONSE_BYTES, PointInput,
+    MAX_QUERY_BYTES, MAX_REQUEST_BYTES, MAX_RESPONSE_BYTES, PointInput, SourceClass,
 };
 use search_revision_store::{ObjectStoreError, read_object};
 use search_runtime_owner::{PlainRootError, PlainRootGuard, open_plain};
@@ -45,16 +46,43 @@ const fn limits() -> PreparationLimits {
 struct HydratedPoint {
     point: UploadPoint,
     text: String,
+    source_class: Option<SourceClass>,
+}
+
+impl HydratedPoint {
+    fn input(&self) -> PointInput<'_> {
+        PointInput {
+            id: self.point.id,
+            source_id: self.point.evidence.source_id,
+            source_class: self.source_class,
+            retrieval_text: &self.text,
+        }
+    }
 }
 
 fn inputs(page: &[HydratedPoint]) -> Vec<PointInput<'_>> {
-    page.iter()
-        .map(|point| PointInput {
-            id: point.point.id,
-            source_id: point.point.evidence.source_id,
-            retrieval_text: &point.text,
-        })
-        .collect()
+    page.iter().map(HydratedPoint::input).collect()
+}
+
+pub fn source_class(source: &CurrentSourceRecord) -> SourceClass {
+    let Ok(path) = source_path_from_locator(&source.locator) else {
+        return SourceClass::Primary;
+    };
+    if path.parent().is_some_and(|parent| {
+        parent
+            .components()
+            .any(|part| part.as_os_str().eq_ignore_ascii_case("vendor"))
+    }) {
+        SourceClass::Vendor
+    } else if path.extension().is_some_and(|extension| {
+        ["md", "markdown", "rst", "adoc"]
+            .iter()
+            .any(|name| extension.eq_ignore_ascii_case(name))
+    }) {
+        SourceClass::Documentation
+    } else {
+        SourceClass::Primary
+    }
 }
 
 fn unit_text<'a>(view: &'a PreparedUtf8<'_>, e: &PointEvidence) -> Result<&'a str, &'static str> {
@@ -81,6 +109,7 @@ fn hydrate_point(
     source: &CurrentSourceRecord,
     artifact: ObjectRef,
     point: UploadPoint,
+    source_class: Option<SourceClass>,
 ) -> Result<HydratedPoint, &'static str> {
     if point.evidence.source_namespace_id != source.source_namespace_id
         || point.evidence.input != source.object_ref
@@ -94,7 +123,11 @@ fn hydrate_point(
         .try_reserve_exact(text.len())
         .map_err(|_| "PUBLICATION_ALLOCATION_FAILED")?;
     owned.push_str(text);
-    Ok(HydratedPoint { point, text: owned })
+    Ok(HydratedPoint {
+        point,
+        text: owned,
+        source_class,
+    })
 }
 
 // One pass retains one verified object and its borrowing decoder view until the
@@ -165,6 +198,10 @@ fn visit_pages(
             cancel,
         )
         .map_err(PreparationError::code)?;
+        let class = generation
+            .source_classes
+            .then(|| source_class(&captured.source));
+        let hydrate = |point| hydrate_point(&view, &captured.source, artifact, point, class);
         loop {
             while points
                 .peek()
@@ -172,7 +209,7 @@ fn visit_pages(
             {
                 check(deadline, cancel)?;
                 let point = points.next().ok_or("PUBLICATION_CORRUPT")?;
-                hydrated.push(hydrate_point(&view, &captured.source, artifact, point)?);
+                hydrated.push(hydrate(point)?);
             }
             if points.peek().is_some() {
                 break;
@@ -210,6 +247,7 @@ fn stage_complete_page(
     pending: &PendingGeneration,
     page: UploadPage,
     prepared: &PreparedUtf8<'_>,
+    class: Option<SourceClass>,
     deadline: Instant,
     cancel: &AtomicBool,
 ) -> Result<(), &'static str> {
@@ -224,6 +262,7 @@ fn stage_complete_page(
                 Ok(PointInput {
                     id: point.id,
                     source_id: point.evidence.source_id,
+                    source_class: class,
                     retrieval_text: unit_text(prepared, &point.evidence)?,
                 })
             })
@@ -295,6 +334,10 @@ fn stage_source(
                 points: Vec::new(),
                 request_bytes: None,
             };
+            let class = pending
+                .generation
+                .source_classes
+                .then(|| source_class(&captured.source));
             for (ordinal, unit) in view.units().iter().enumerate() {
                 check(deadline, cancel)?;
                 let mut id = [0; 16];
@@ -333,11 +376,11 @@ fn stage_source(
                             request_bytes: None,
                         },
                     );
-                    stage_complete_page(staging, pending, full, &view, deadline, cancel)?;
+                    stage_complete_page(staging, pending, full, &view, class, deadline, cancel)?;
                 }
             }
             if !page.points.is_empty() {
-                stage_complete_page(staging, pending, page, &view, deadline, cancel)?;
+                stage_complete_page(staging, pending, page, &view, class, deadline, cancel)?;
             }
             staging
                 .finish_source(
@@ -399,7 +442,12 @@ fn upload(
             &pending,
             PendingOperation::Create,
             revision,
-            backend.create_generation(&collection, deadline, cancel),
+            backend.create_generation(
+                &collection,
+                pending.generation.source_classes,
+                deadline,
+                cancel,
+            ),
             deadline,
             cancel,
         )?;
@@ -409,7 +457,12 @@ fn upload(
             .ok_or("PUBLICATION_STALE")?;
     }
     backend
-        .verify_schema(&collection, deadline, cancel)
+        .verify_schema(
+            &collection,
+            pending.generation.source_classes,
+            deadline,
+            cancel,
+        )
         .map_err(BackendError::code)?;
     let generation = pending.generation.clone();
     visit_pages(
@@ -456,7 +509,7 @@ fn verify_generation(
         .map_err(PublicationError::code)?;
     let collection = generation.collection();
     backend
-        .verify_schema(&collection, deadline, cancel)
+        .verify_schema(&collection, generation.source_classes, deadline, cancel)
         .map_err(BackendError::code)?;
     let mut canary = None;
     let mut tokenless = true;
@@ -479,17 +532,7 @@ fn verify_generation(
                     && let Some(query) = canary_query(&point.text)
                 {
                     backend
-                        .verify_canary(
-                            &collection,
-                            PointInput {
-                                id: point.point.id,
-                                source_id: point.point.evidence.source_id,
-                                retrieval_text: &point.text,
-                            },
-                            query,
-                            deadline,
-                            cancel,
-                        )
+                        .verify_canary(&collection, point.input(), query, deadline, cancel)
                         .map_err(BackendError::code)?;
                     canary = Some(());
                 }
@@ -604,6 +647,13 @@ fn prepare_view(
                     .map_err(PublicationError::code)?;
             } else if pending.in_flight.is_some() {
                 return Err("PUBLICATION_EFFECT_UNRESOLVED");
+            } else if !pending.generation.source_classes {
+                writer
+                    .abandon_build(&pending, deadline, cancel)
+                    .map_err(PublicationError::code)?;
+                capture = writer
+                    .capture_corpus(deadline, cancel)
+                    .map_err(PublicationError::code)?;
             }
         }
         if let Some(pending) = &capture.pending
@@ -617,6 +667,10 @@ fn prepare_view(
         cleanup(backend, &writer, deadline, cancel)?;
         let reuse_current = if capture.pending.is_none()
             && capture.current_matches()
+            && capture
+                .current
+                .as_ref()
+                .is_some_and(|generation| generation.source_classes)
             && !superseded_unknown_build
         {
             let generation = capture

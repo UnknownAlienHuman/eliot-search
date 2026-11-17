@@ -88,7 +88,7 @@ impl Backend {
             collection_name: name.to_owned(),
             ids,
             with_vectors: Some(false.into()),
-            with_payload: Some(vec!["source_id", "retrieval_text"].into()),
+            with_payload: Some(vec!["source_id", schema::TEXT_FIELD, schema::CLASS_FIELD].into()),
             ..Default::default()
         };
         let request = self.request(message, deadline, cancelled)?;
@@ -104,15 +104,22 @@ impl Backend {
         for point in reply.result {
             check(deadline, cancelled)?;
             let id = decode_id(point.id.as_ref())?;
-            if !seen.insert(id) || point.vectors.is_some() || point.payload.len() != 2 {
+            if !seen.insert(id) || point.vectors.is_some() {
                 return Err(BackendError::PointMismatch);
             }
             let wanted = expected
                 .iter()
                 .find(|wanted| wanted.id == id)
                 .ok_or(BackendError::PointMismatch)?;
-            if source_id(&point.payload)? != wanted.source_id
-                || payload_string(&point.payload, "retrieval_text")? != wanted.retrieval_text
+            if point.payload.len() != 2 + usize::from(wanted.source_class.is_some())
+                || source_id(&point.payload)? != wanted.source_id
+                || payload_string(&point.payload, schema::TEXT_FIELD)? != wanted.retrieval_text
+                || match wanted.source_class {
+                    Some(class) => {
+                        payload_string(&point.payload, schema::CLASS_FIELD)? != class.keyword()
+                    }
+                    None => point.payload.contains_key(schema::CLASS_FIELD),
+                }
             {
                 return Err(BackendError::PointMismatch);
             }

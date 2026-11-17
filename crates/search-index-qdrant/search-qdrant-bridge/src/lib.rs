@@ -14,6 +14,7 @@ pub use error::BackendError;
 pub use model::{
     BackendLimits, DEFAULT_HITS, Hit, MAX_HITS, MAX_PAGE_BYTES, MAX_PAGE_POINTS,
     MAX_POINT_TEXT_BYTES, MAX_QUERY_BYTES, MAX_REQUEST_BYTES, MAX_RESPONSE_BYTES, PointInput,
+    SourceClass,
 };
 
 #[cfg(test)]

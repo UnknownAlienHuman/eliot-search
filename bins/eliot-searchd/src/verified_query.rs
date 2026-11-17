@@ -287,13 +287,19 @@ pub fn execute(
     .map_err(QueryFailure::backend)?;
     let collection = view.generation.collection();
     backend
-        .verify_schema(&collection, deadline, cancel)
+        .verify_schema(
+            &collection,
+            view.generation.source_classes,
+            deadline,
+            cancel,
+        )
         .map_err(QueryFailure::backend)?;
     let hits = backend
         .query_text(
             &collection,
             &request.query,
             usize::from(request.limit),
+            view.generation.source_classes,
             deadline,
             cancel,
         )
@@ -307,7 +313,12 @@ pub fn execute(
         let resolved = view
             .resolve_point(hit.id)
             .map_err(QueryFailure::publication)?;
-        if hit.source_id != resolved.evidence.source_id || !hit.score.is_finite() {
+        if hit.source_id != resolved.evidence.source_id
+            || !hit.score.is_finite()
+            || hit.source_class.is_some_and(|class| {
+                class != crate::published_corpus::source_class(&resolved.captured.source)
+            })
+        {
             return Err(QueryFailure::Code("QUERY_POINT_ROUTE_MISMATCH"));
         }
         let source_info =

@@ -440,13 +440,13 @@ fn source_info_requested(info: Option<&SourceInfo>, requested: bool) -> Result<(
     Ok(())
 }
 
-/// One complete verified prepared unit in backend rank order.
+/// One complete verified prepared unit in final rank order.
 #[derive(Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SearchHit {
-    /// Original contiguous one-based backend rank.
+    /// Contiguous one-based rank in the final search order.
     pub rank: u8,
-    /// Finite backend score, without normalization or a positivity rule.
+    /// Finite ranking score. Classified generations apply a source-class weight to BM25.
     pub score: f32,
     /// Immutable retained citation.
     pub evidence: EvidenceMetadata,

@@ -27,7 +27,10 @@ Historical V1/core evidence, current package/configuration and actual client wor
 <a id="resume-after-interruption"></a>
 ## Next task
 
-**No READY unfinished mandatory row remains in the selected register.**
+**B-1 is READY.** Reuse verified prepared units for bounded excerpts on Search and connect their exact
+coordinates to the existing window Expand. Measure actual response bytes and the first useful result
+on the same real corpora used for B-9.
+The [November 17 ranking check](#source-class-ranking-2026-11-17) closes B-9 within its measured scope.
 The [November 17 Qdrant check](#qdrant-update-2026-11-17) qualifies the stable server version floor against
 three native releases. The installed backend has an operator stop request and remains stopped.
 AD1 is DONE at the recorded native-client/version/model scopes after Sol DESKTOP_NATIVE_ACCEPTED.
@@ -103,6 +106,8 @@ DONE below is the named delivered scope, not completion of the product.
 | O1 / DEFERRED | Connected baseline + actual need | [Selected depth](../product/AGENT_ANALYSIS_FRAMEWORK.md#optional-depth) | Add only an actual source-backed consumer; remove unused scaffolds. |
 | V1 / DONE, selected Windows/Release scope | X1/M1 selected shipped paths | [Qualification](../implementation/TEST_CUTOVER.md), #215 | Actual ordinary-repo-1 performance/CPU/observed replacement disk, full real-repository workflows and isolated installed pair. Source9cfa/main2a Rust equivalence; scope/UNKNOWN limits below. |
 | AD1 / DONE, recorded five-client native scopes | V1/core SDK | [MCP owner](../../bins/eliot-search-mcp/FUNCTIONS.md), [package/Skill](../../integrations/eliot-search/README.md), native-client delivery owners | Actual Skill/tool/context/grounded-answer/Close scopes accepted in four coding clients plus Desktop normal Chat, initially via local mcpServers and subsequently via the installed v4 MCPB. Current targets, original four v3 flow provenance, corrected native answers and source/package/SDK limits are recorded below. |
+| B-9 / DONE, recorded Windows Release scope | Q1/U1/AD1 | [Bridge](../../crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md#query-scoring-profile) and [daemon](../../bins/eliot-searchd/FUNCTIONS.md#read-only-search-path) | Store source classes on a fresh generation and rank within a pinned view. Verified on 366 actual Search sources and exercised on 3,215 Research sources. |
+| B-1 / READY | U1/X1/AD1 | [Daemon](../../bins/eliot-searchd/FUNCTIONS.md#read-only-search-path), [protocol](../../crates/search-provider-protocol/FUNCTIONS.md) and actual CLI/MCP/window consumers | Return a short verified excerpt with exact retained coordinates and expand through a live window. Measure real result sizes and confirm evidence binding. |
 
 [Implementation](../implementation/README.md#delivery-sequence) owns delivery order. Stage 3B is conditional
 on measured Stage 3A budgets failing; there is no separate global rewrite programme.
@@ -171,6 +176,26 @@ requirement allows compatible Rust SDK updates. The measured lock still resolves
 
 These runs cover isolated publication and snapshot recovery. An in-place storage upgrade, installed client
 deployment and other server versions remain unverified.
+
+<a id="source-class-ranking-2026-11-17"></a>
+### Source-class ranking, 2026-11-17
+
+On local Qdrant 1.20.2, Windows Release with Rust 1.98.0, the new daemon read a legacy generation and
+`publish-prepared` built its classified replacement from the same retained 366 sources and 553 units.
+The keyword index covered 160 primary, 160 documentation and 233 vendor points. With
+`require_git ignore rules outside a git repository`, all five legacy hits were vendor units.
+`native_root_command.rs` moved from 15th to first with identical retained text, input digest and raw BM25.
+For `partially written publication generation visibility pending commit`, first moved from vendor docs
+to `crates/search-control-redb/src/publication.rs`; `published_corpus.rs` moved into second place.
+`schema.rs` kept first place for the tokenizer query, and the vendor-specific identifier
+`global_gitignores_relative_to` still found its vendor source. The MCP Search and Open/Continue/Close
+returned the same pinned ranked prefix and used the real sibling daemon.
+
+On a tracked Eliot Research snapshot at `2f5f75c1a5d01d01bb83cf32cec1ddf4464aa779`, real Index published
+3,215 selected sources with 18 preparation gaps in 82.5 seconds. Two single-shot ranked queries took
+24–30 ms and returned 64–89 KB. The distillation implementation appeared fifth, with three test units
+from one file above it. These timings are individual observations. They leave excerpt size and
+per-source diversity open. Installed client deployment remains unverified.
 
 <a id="agent-delivery"></a>
 ### AD1 agent delivery — DONE in recorded native scopes

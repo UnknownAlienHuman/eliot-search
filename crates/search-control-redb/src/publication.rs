@@ -134,6 +134,9 @@ pub struct Generation {
     pub point_count: u64,
     /// Number of actual complete upload pages.
     pub page_count: u64,
+    /// Whether uploads include the immutable indexed source class.
+    #[serde(default)]
+    pub source_classes: bool,
 }
 impl Generation {
     /// Exact collection name fixed before any remote effects.
@@ -665,6 +668,7 @@ impl ControlWriter {
                         .count() as u64,
                     point_count: 0,
                     page_count: 0,
+                    source_classes: true,
                 },
                 capture_complete: false,
                 created: false,

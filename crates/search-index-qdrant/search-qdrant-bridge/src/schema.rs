@@ -2,14 +2,15 @@
 
 use qdrant_client::qdrant::{
     CollectionInfo, CollectionStatus, CreateCollection, CreateFieldIndexCollection, FieldType,
-    Memory, PayloadIndexParams, PayloadSchemaType, ShardingMethod, TextIndexParams,
-    TextIndexParamsBuilder, TextScoringType, TokenizerType, UpdateStatus, payload_index_params,
-    stemming_algorithm, vectors_config,
+    KeywordIndexParamsBuilder, Memory, PayloadIndexParams, PayloadSchemaType, ShardingMethod,
+    TextIndexParams, TextIndexParamsBuilder, TextScoringType, TokenizerType, UpdateStatus,
+    payload_index_params, stemming_algorithm, vectors_config,
 };
 
 use crate::BackendError;
 
 pub const TEXT_FIELD: &str = "retrieval_text";
+pub const CLASS_FIELD: &str = "source_class";
 
 pub fn create_collection(name: &str) -> CreateCollection {
     CreateCollection {
@@ -49,7 +50,26 @@ pub fn create_text_index(name: &str) -> CreateFieldIndexCollection {
     }
 }
 
-pub fn verify(info: &CollectionInfo) -> Result<(), BackendError> {
+pub fn create_class_index(name: &str) -> CreateFieldIndexCollection {
+    CreateFieldIndexCollection {
+        collection_name: name.to_owned(),
+        field_name: CLASS_FIELD.to_owned(),
+        field_type: Some(FieldType::Keyword.into()),
+        field_index_params: Some(PayloadIndexParams {
+            index_params: Some(payload_index_params::IndexParams::KeywordIndexParams(
+                KeywordIndexParamsBuilder::default()
+                    .is_tenant(false)
+                    .enable_hnsw(false)
+                    .memory(Memory::Pinned)
+                    .build(),
+            )),
+        }),
+        wait: Some(true),
+        ..Default::default()
+    }
+}
+
+pub fn verify(info: &CollectionInfo, source_classes: bool) -> Result<(), BackendError> {
     if info.status != i32::from(CollectionStatus::Green) {
         return Err(BackendError::BackendRefused);
     }
@@ -74,7 +94,7 @@ pub fn verify(info: &CollectionInfo) -> Result<(), BackendError> {
         .sparse_vectors_config
         .as_ref()
         .is_some_and(|sparse| !sparse.map.is_empty())
-        || info.payload_schema.len() != 1
+        || info.payload_schema.len() != 1 + usize::from(source_classes)
     {
         return Err(BackendError::SchemaMismatch);
     }
@@ -92,7 +112,27 @@ pub fn verify(info: &CollectionInfo) -> Result<(), BackendError> {
     else {
         return Err(BackendError::SchemaMismatch);
     };
-    verify_text(params)
+    verify_text(params)?;
+    if source_classes {
+        let class = info
+            .payload_schema
+            .get(CLASS_FIELD)
+            .ok_or(BackendError::SchemaMismatch)?;
+        if class.data_type != i32::from(PayloadSchemaType::Keyword)
+            || !matches!(
+                class.params.as_ref().and_then(|params| params.index_params.as_ref()),
+                Some(payload_index_params::IndexParams::KeywordIndexParams(params))
+                    if !params.is_tenant.unwrap_or(false)
+                        && params.enable_hnsw == Some(false)
+                        && params.memory == Some(i32::from(Memory::Pinned))
+                        && params.prefix.is_none()
+                        && params.nested.is_none()
+            )
+        {
+            return Err(BackendError::SchemaMismatch);
+        }
+    }
+    Ok(())
 }
 
 fn verify_text(params: &TextIndexParams) -> Result<(), BackendError> {

@@ -3,7 +3,9 @@
 use std::sync::atomic::AtomicBool;
 use std::time::Instant;
 
-use qdrant_client::qdrant::{CollectionExistsRequest, DeleteCollection, GetCollectionInfoRequest};
+use qdrant_client::qdrant::{
+    CollectionExistsRequest, CreateFieldIndexCollection, DeleteCollection, GetCollectionInfoRequest,
+};
 
 use super::Backend;
 use crate::model::collection_name;
@@ -20,6 +22,7 @@ impl Backend {
     pub fn create_generation(
         &self,
         name: &str,
+        source_classes: bool,
         deadline: Instant,
         cancelled: &AtomicBool,
     ) -> Result<(), BackendError> {
@@ -30,19 +33,31 @@ impl Backend {
         if !created.result {
             return Err(BackendError::BackendRefused);
         }
-        self.request(schema::create_text_index(name), deadline, cancelled)
-            .and_then(|request| {
-                let mut points = self.points();
-                let indexed = self.call(
-                    points.create_field_index(request),
-                    deadline,
-                    cancelled,
-                    true,
-                )?;
-                schema::completed(indexed.result.ok_or(BackendError::UnknownDispatch)?.status)
-            })
-            .and_then(|()| self.verify_schema(name, deadline, cancelled))
-            .map_err(|_| BackendError::UnknownDispatch)
+        (|| {
+            self.create_index(schema::create_text_index(name), deadline, cancelled)?;
+            if source_classes {
+                self.create_index(schema::create_class_index(name), deadline, cancelled)?;
+            }
+            self.verify_schema(name, source_classes, deadline, cancelled)
+        })()
+        .map_err(|_| BackendError::UnknownDispatch)
+    }
+
+    fn create_index(
+        &self,
+        index: CreateFieldIndexCollection,
+        deadline: Instant,
+        cancelled: &AtomicBool,
+    ) -> Result<(), BackendError> {
+        let request = self.request(index, deadline, cancelled)?;
+        let mut points = self.points();
+        let indexed = self.call(
+            points.create_field_index(request),
+            deadline,
+            cancelled,
+            true,
+        )?;
+        schema::completed(indexed.result.ok_or(BackendError::UnknownDispatch)?.status)
     }
 
     /// Verifies actual vectorless collection and complete fixed text-index parameters.
@@ -53,6 +68,7 @@ impl Backend {
     pub fn verify_schema(
         &self,
         name: &str,
+        source_classes: bool,
         deadline: Instant,
         cancelled: &AtomicBool,
     ) -> Result<(), BackendError> {
@@ -66,7 +82,10 @@ impl Backend {
             cancelled,
         )?;
         let reply = self.call(collections.get(request), deadline, cancelled, false)?;
-        schema::verify(&reply.result.ok_or(BackendError::MalformedResponse)?)
+        schema::verify(
+            &reply.result.ok_or(BackendError::MalformedResponse)?,
+            source_classes,
+        )
     }
 
     /// Observes exact logical collection existence without creating or adopting it.

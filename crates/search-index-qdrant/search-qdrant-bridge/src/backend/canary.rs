@@ -63,13 +63,20 @@ impl Backend {
 }
 
 fn query_message(name: &str, expected: PointInput<'_>, query: &str) -> QueryPoints {
+    let mut conditions = vec![Condition::has_id([point_id(expected.id)])];
+    if let Some(class) = expected.source_class {
+        conditions.push(Condition::matches(
+            schema::CLASS_FIELD,
+            class.keyword().to_owned(),
+        ));
+    }
     QueryPoints {
         collection_name: name.to_owned(),
         query: Some(Query::new_text(
             TextQueryBuilder::new(query).k(1.2).b(0.75).build(),
         )),
         using: Some(schema::TEXT_FIELD.to_owned()),
-        filter: Some(Filter::must([Condition::has_id([point_id(expected.id)])])),
+        filter: Some(Filter::must(conditions)),
         params: Some(SearchParams {
             idf: Some(IdfParams { corpus: None }),
             ..Default::default()
@@ -144,6 +151,7 @@ mod tests {
         PointInput {
             id: [1; 16],
             source_id: SourceId::from_bytes([2; 16]),
+            source_class: None,
             retrieval_text: "before AlphaWord after",
         }
     }

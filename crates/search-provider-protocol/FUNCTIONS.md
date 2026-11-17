@@ -16,7 +16,8 @@ Cancelled contains no result; Failed carries
 a validated 1..=64 byte uppercase/digit/underscore FailureCode. Unknown and duplicate DTO fields fail.
 
 `SearchItem` is tagged `kind = hit|gap`. Both carry original contiguous one-based rank, finite f32 score
-(any sign) and EvidenceMetadata. Hit adds the exact full UTF-8 unit_text, at most 65536 bytes.
+(any sign) after any source-class weighting and EvidenceMetadata. Hit adds the exact full UTF-8 unit_text,
+at most 65536 bytes.
 Gap adds only SOURCE_OBJECT_MISSING or PREPARED_OBJECT_MISSING. Corruption/routing/range failures
 are Failed outcomes, never missing-object gaps or fabricated empty results.
 
