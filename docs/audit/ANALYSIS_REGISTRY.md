@@ -28,6 +28,8 @@ Historical V1/core evidence, current package/configuration and actual client wor
 ## Next task
 
 **No READY unfinished mandatory row remains in the selected register.**
+The [November 17 Qdrant check](#qdrant-update-2026-11-17) qualifies the stable server version floor against
+three native releases. The installed backend has an operator stop request and remains stopped.
 AD1 is DONE at the recorded native-client/version/model scopes after Sol DESKTOP_NATIVE_ACCEPTED.
 Current shared package-v4 contains the v4 MCP and unchanged CLI/daemon/Skill; four coding targets use it directly,
 while Desktop now uses the matching copy installed by its v4 MCPB.
@@ -143,6 +145,32 @@ hydration reuse. No application encryption, grants, OS-secret platform or second
 <a id="evidence-status"></a>
 <a id="execution-evidence"></a>
 ## Verification and known blockers
+
+<a id="qdrant-update-2026-11-17"></a>
+### Qdrant update, 2026-11-17
+
+Windows x86-64, Rust 1.98.0. The bridge at `3543a07200ac596df0fc3ad0fc049c5c4981a020` accepts
+stable Qdrant from 1.20.0, the release that introduced Code tokenizer and server-side BM25. The Cargo
+requirement allows compatible Rust SDK updates. The measured lock still resolves SDK 1.20.0.
+[Qdrant 1.20 features](https://qdrant.tech/blog/qdrant-1.20.x/) and [1.20.2 release](https://github.com/qdrant/qdrant/releases/tag/v1.20.2).
+
+- Isolated, loopback Windows native servers. The 1.20.2 release ZIP matched published SHA-256
+  `7a5290b9ef1b204b250a1626ddafec580647ba3cc62ba1630b3a8efdc2718b32`. Used the official collection
+  snapshot upload API to restore a real 1.20.0 index to separate 1.20.2 storage.
+- The Release CLI ranked `TokenizerType Code bm25_scoring` on 1.20.0 and on the 1.20.2 restore. Both returned
+  five results with the same point IDs, input digests and unit text. Scores agreed within 0.00001. The first
+  file was the bridge's `schema.rs`. Live 1.19.2 returned `BACKEND_VERSION_UNSUPPORTED` (exit 2).
+- On 1.20.2, Release `initialize-data-root` and `index` published a fresh real checkout with 366 sources,
+  zero preparation gaps and 553 points. The live schema used Code/BM25 and an empty vector configuration.
+  The Release MCP listed seven tools, returned the five ranked hits and found `require_git(false)` in
+  `native_root_command.rs` via Raw Exact, with a complete scan of all 366 sources. A direct Qdrant
+  substring request checked eight matching payloads. ELIOT Exact continues to scan retained source bytes.
+- Locked owner check and three Release binaries, strict workspace Clippy on all targets, 59 workspace
+  tests and `cargo deny --locked check` passed. C-10 is tracked by the advisory-specific `deny.toml`
+  exception. Reviewing that exception is due on the next rmcp update or by 2026-12-17.
+
+These runs cover isolated publication and snapshot recovery. An in-place storage upgrade, installed client
+deployment and other server versions remain unverified.
 
 <a id="agent-delivery"></a>
 ### AD1 agent delivery — DONE in recorded native scopes
