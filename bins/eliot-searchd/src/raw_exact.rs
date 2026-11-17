@@ -13,7 +13,9 @@ use search_revision_store::{ObjectStoreError, read_object};
 use search_runtime_owner::PlainRootGuard;
 use search_source_registry::{CurrentSourceRecord, MAX_SOURCE_OBJECT_BYTES};
 
-use crate::exact_literal::{Literal, check, hex, select_sources, source_ref};
+use crate::exact_literal::{
+    LineCursor, Literal, check, hex, raw_ascii, select_sources, source_ref,
+};
 use crate::verified_query::QueryFailure;
 
 type Result<T> = std::result::Result<T, QueryFailure>;
@@ -55,6 +57,7 @@ fn scan_source(
     };
     // read_object accepts length/hash before any occurrence can become evidence.
     // The buffer dies on return, before the next selected object is acquired.
+    let mut lines = LineCursor::new();
     literal.scan(&bytes, deadline, cancel, |start, end| {
         result.matches = result
             .matches
@@ -70,7 +73,9 @@ fn scan_source(
                     .map_err(|_| QueryFailure::Code("EVIDENCE_RANGE_INVALID"))?,
                 end: u64::try_from(end)
                     .map_err(|_| QueryFailure::Code("EVIDENCE_RANGE_INVALID"))?,
+                line: lines.at(&bytes, start, deadline, cancel)?.0,
                 bytes_hex: hex(matched)?,
+                bytes_ascii: raw_ascii(matched)?,
                 source_info: None,
             }));
         }

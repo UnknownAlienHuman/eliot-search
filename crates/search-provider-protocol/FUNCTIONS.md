@@ -75,8 +75,9 @@ supports one optional --source-id; the DTO uses canonical unique UUIDs, omitted 
 explicit empty = none. Limit is 1..=64 whole match/gap items, independent of input scan completeness.
 
 RawSourceRef binds namespace/source UUIDs, row/registration revisions and the Source ObjectRef. A raw Match
-contains source/start/end/bytes_hex; a raw Gap contains source and only SOURCE_OBJECT_MISSING. No PreparedRef,
-unit/line coordinate or ranking score is invented. Corruption produces Failed, not a missing-object Gap.
+contains source/start/end, the one-based retained LF line, exact bytes_hex and a printable ASCII column.
+Raw Expand uses the same pair of columns for each side. Raw gaps report SOURCE_OBJECT_MISSING.
+Corruption fails the query.
 RawExactResult carries generation, selected_sources/scanned_sources/missing_sources, scanned_bytes, total
 matches, items, scan_complete, complete_negative and stop. Complete negative requires every selected source
 verified/scanned and zero matches/missing input. OutputLimit describes an emitted prefix, not incomplete input.
@@ -89,7 +90,8 @@ whole-card sizing behavior. Both operation variants use the existing Cancel/term
 ## Retained DecodedUtf8 request and result
 
 DecodedUtf8Request has the same literal/source_ids/limit bounds as RawExactRequest and a distinct operation tag.
-DecodedUtf8Match carries RawSourceRef/input, Prepared ObjectRef, representation_start/end, source_start/end and
+DecodedUtf8Match carries RawSourceRef/input, Prepared ObjectRef, representation_start/end, source_start/end,
+a one-based retained LF line, a verified line excerpt of at most 512 bytes, and
 exact text. The source and representation ranges must match the verified retained UTF-8 identity map; text byte
 length equals the range and request literal. The wire validates structure/request binding; the daemon verifies
 the actual stored objects, saved representation and source equality before producing the match.

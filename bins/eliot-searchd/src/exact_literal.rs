@@ -95,6 +95,61 @@ pub fn hex(bytes: &[u8]) -> Result<String> {
     Ok(text)
 }
 
+pub fn raw_ascii(bytes: &[u8]) -> Result<String> {
+    let mut text = String::new();
+    text.try_reserve_exact(bytes.len())
+        .map_err(|_| QueryFailure::Code("QUERY_ALLOCATION_FAILED"))?;
+    for &byte in bytes {
+        text.push(if (b' '..=b'~').contains(&byte) {
+            char::from(byte)
+        } else {
+            '.'
+        });
+    }
+    Ok(text)
+}
+
+/// LF-delimited coordinates for emitted matches in monotonically increasing byte order.
+pub struct LineCursor {
+    offset: usize,
+    line_start: usize,
+    number: u64,
+}
+
+impl LineCursor {
+    pub const fn new() -> Self {
+        Self {
+            offset: 0,
+            line_start: 0,
+            number: 1,
+        }
+    }
+
+    pub fn at(
+        &mut self,
+        bytes: &[u8],
+        offset: usize,
+        deadline: Instant,
+        cancel: &AtomicBool,
+    ) -> Result<(u64, usize)> {
+        let prefix = bytes
+            .get(self.offset..offset)
+            .ok_or(QueryFailure::Code("EVIDENCE_RANGE_INVALID"))?;
+        for (index, block) in prefix.chunks(BLOCK_BYTES).enumerate() {
+            check(deadline, cancel)?;
+            let start = self.offset + index * BLOCK_BYTES;
+            for (local, &byte) in block.iter().enumerate() {
+                if byte == b'\n' {
+                    self.number += 1;
+                    self.line_start = start + local + 1;
+                }
+            }
+        }
+        self.offset = offset;
+        Ok((self.number, self.line_start))
+    }
+}
+
 pub fn object_ref(reference: ObjectRef) -> Result<ObjectRefDto> {
     Ok(ObjectRefDto {
         version: reference.format_version,

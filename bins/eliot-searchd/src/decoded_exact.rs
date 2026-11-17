@@ -7,14 +7,14 @@ use search_control_redb::current_preparation::PreparationOutcome;
 use search_control_redb::publication::{CapturedSource, PublishedView};
 use search_provider_protocol::{
     DecodedUtf8Gap, DecodedUtf8Item, DecodedUtf8Match, DecodedUtf8Request, DecodedUtf8Result,
-    FailureCode, StopReason,
+    FailureCode, MAX_SEARCH_EXCERPT_BYTES, SearchExcerpt, StopReason,
 };
 use search_revision_store::{ObjectStoreError, read_object};
 use search_runtime_owner::PlainRootGuard;
 use search_source_registry::{MAX_SOURCE_OBJECT_BYTES, ObjectRef};
 use search_unitizer::{PreparationError, PreparationLimits, PreparedUtf8, decode_prepared_utf8};
 
-use crate::exact_literal::{Literal, check, object_ref, select_sources, source_ref};
+use crate::exact_literal::{LineCursor, Literal, check, object_ref, select_sources, source_ref};
 use crate::verified_query::QueryFailure;
 
 type Result<T> = std::result::Result<T, QueryFailure>;
@@ -114,6 +114,34 @@ pub fn visit_representation(
     Ok(None)
 }
 
+fn line_excerpt(text: &str, line_start: usize, anchor: usize) -> Result<SearchExcerpt> {
+    let start = text.ceil_char_boundary(anchor.saturating_sub(128).max(line_start));
+    let bound = (start + MAX_SEARCH_EXCERPT_BYTES).min(text.len());
+    let end = text
+        .as_bytes()
+        .get(anchor..bound)
+        .ok_or(QueryFailure::Code("EVIDENCE_RANGE_INVALID"))?
+        .iter()
+        .position(|&byte| byte == b'\n')
+        .map_or_else(
+            || text.floor_char_boundary(bound),
+            |next_lf| anchor + next_lf + 1,
+        );
+    let slice = text
+        .get(start..end)
+        .ok_or(QueryFailure::Code("EVIDENCE_RANGE_INVALID"))?;
+    let mut owned = String::new();
+    owned
+        .try_reserve_exact(slice.len())
+        .map_err(|_| QueryFailure::Code("QUERY_ALLOCATION_FAILED"))?;
+    owned.push_str(slice);
+    Ok(SearchExcerpt {
+        start: u64::try_from(start).map_err(|_| QueryFailure::Code("EVIDENCE_RANGE_INVALID"))?,
+        end: u64::try_from(end).map_err(|_| QueryFailure::Code("EVIDENCE_RANGE_INVALID"))?,
+        text: owned,
+    })
+}
+
 fn scan_source(
     root: &PlainRootGuard,
     captured: &CapturedSource,
@@ -126,6 +154,7 @@ fn scan_source(
     let binding = source_ref(&captured.source)?;
     let gap = visit_representation(root, captured, deadline, cancel, |artifact, view| {
         let prepared = object_ref(artifact)?;
+        let mut lines = LineCursor::new();
         // Scan the full representation, not individual unit descriptors.
         literal.scan(view.text().as_bytes(), deadline, cancel, |start, end| {
             result.matches = result
@@ -141,6 +170,9 @@ fn scan_source(
                 text.try_reserve_exact(matched.len())
                     .map_err(|_| QueryFailure::Code("QUERY_ALLOCATION_FAILED"))?;
                 text.push_str(matched);
+                let (line, line_start) =
+                    lines.at(view.text().as_bytes(), start, deadline, cancel)?;
+                let line_excerpt = line_excerpt(view.text(), line_start, start)?;
                 let start = u64::try_from(start)
                     .map_err(|_| QueryFailure::Code("EVIDENCE_RANGE_INVALID"))?;
                 let end =
@@ -152,6 +184,8 @@ fn scan_source(
                     representation_end: end,
                     source_start: start,
                     source_end: end,
+                    line,
+                    line_excerpt,
                     text,
                     source_info: None,
                 }));

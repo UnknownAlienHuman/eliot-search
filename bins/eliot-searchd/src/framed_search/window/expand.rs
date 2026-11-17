@@ -15,7 +15,7 @@ use search_runtime_owner::PlainRootGuard;
 use search_source_registry::MAX_SOURCE_OBJECT_BYTES;
 
 use crate::decoded_exact::visit_representation;
-use crate::exact_literal::{check, hex, object_ref, source_ref};
+use crate::exact_literal::{check, hex, object_ref, raw_ascii, source_ref};
 use crate::verified_query::QueryFailure;
 
 type Result<T> = std::result::Result<T, QueryFailure>;
@@ -112,6 +112,7 @@ fn raw_range(bytes: &[u8], range: &Range<usize>) -> Result<ExpansionContent> {
         .ok_or(QueryFailure::Code("WINDOW_RANGE_INVALID"))?;
     Ok(ExpansionContent::Raw {
         bytes_hex: hex(slice)?,
+        bytes_ascii: raw_ascii(slice)?,
     })
 }
 

@@ -18,7 +18,8 @@ inputs without points. Latest current/unpublished source rows never replace the 
 One private matcher preserves overlapping matches and state across bounded byte blocks, resetting per source.
 Each Source ObjectRef is verified by length/BLAKE3 before its occurrences become evidence; one object buffer
 is retained at a time. RawSourceRef carries namespace/source IDs, row/registration revisions and the Source
-ObjectRef. Matches contain raw byte start/end and exact bytes_hex, not prepared-unit or line coordinates.
+ObjectRef. Matches contain raw byte start/end, a one-based line counted using LF bytes, exact lowercase
+hex and a printable ASCII column. Bytes outside ASCII 0x20–0x7e appear as dots in that column.
 
 The complete result accounts selected/scanned/missing sources, scanned bytes and total matches. --limit N
 bounds whole emitted match/gap items to 1..64; it does not end input scanning. OutputLimit and scan_complete

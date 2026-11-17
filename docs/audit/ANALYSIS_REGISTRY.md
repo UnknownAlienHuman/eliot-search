@@ -27,7 +27,8 @@ Historical V1/core evidence, current package/configuration and actual client wor
 <a id="resume-after-interruption"></a>
 ## Next task
 
-**B-3 is READY.** Add retained line locations to Exact and readable raw context without weakening byte evidence.
+**B-11 is READY.** Add Exact selection by captured path and source class, preserving the explicit inventory denominator.
+The [Exact line check](#exact-line-context-2026-11-17) closes B-3 in its measured scope.
 The [source diversity check](#ranked-source-diversity-2026-11-17) closes B-2 within its measured scope.
 The [Expand check](#expand-adjacent-ranges-2026-11-17) closes B-10. The
 [interrupted publication check](#publication-interruption-2026-11-17) and native source CAS test cover
@@ -114,7 +115,8 @@ DONE below is the named delivered scope, not completion of the product.
 | A-3 / PARTIAL | Q1/R1 | [CONTROL publication](../../crates/search-control-redb/FUNCTIONS.md#publication-state-and-snapshot) and [daemon](../../bins/eliot-searchd/FUNCTIONS.md) | Observed native backend loss, guarded retry, kept current evidence and source CAS. Other durable and child failure cases remain open. |
 | B-10 / DONE, recorded Windows Release scope | B-1/X1 | [Window](../../crates/search-query/search-continuation/FUNCTIONS.md#expansion) and [protocol](../../crates/search-provider-protocol/FUNCTIONS.md) | Expand returns separately cited new before/after ranges, with the original anchor verified. |
 | B-2 / DONE, recorded Windows Release scope | B-9/B-1 | [Bridge](../../crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md#query-scoring-profile) and daemon | At most two ranked units per source. Native CLI and MCP window verify the cap on the real Research corpus. |
-| B-3 / READY | U1/X1 | [Exact](../../crates/search-query/search-exact/FUNCTIONS.md) and protocol | Give exact retained line locations and readable context while preserving Raw and UTF-8 coordinate domains. |
+| B-3 / DONE, recorded Windows Release scope | U1/X1 | [Exact](../../crates/search-query/search-exact/FUNCTIONS.md) and protocol | Native Raw and UTF-8 line locations, exact excerpts and raw ASCII columns checked against actual source bytes. |
+| B-11 / READY | B-3 | [Exact](../../crates/search-query/search-exact/FUNCTIONS.md), CLI and MCP | Filter the captured inventory by native path and source class. Preserve explicit selection and completeness semantics. |
 
 [Implementation](../implementation/README.md#delivery-sequence) owns delivery order. Stage 3B is conditional
 on measured Stage 3A budgets failing; there is no separate global rewrite programme.
@@ -269,6 +271,16 @@ from 55 sources, at most two each. MCP Open and Continue matched the one-shot re
 The single observed elapsed times were 124 ms (limit five) and 252 ms (limit 64). Restoring diversity
 adds backend work when grouping is needed. These observations do not establish p95 or verified
 implementation enforcement from the first excerpt alone.
+
+<a id="exact-line-context-2026-11-17"></a>
+### Exact line context, 2026-11-17
+
+With Windows Release MCP and the retained 366-source ELIOT Search corpus, Raw and Decoded UTF-8 both
+reported line 272 and 18 exact bytes for `require_git(false)` in the selected daemon source.
+The verified UTF-8 line excerpt was 33 bytes. Raw window Expand returned two 12-byte ranges whose
+hex and ASCII columns matched their exact retained bytes. The Cyrillic literal `Нейродрисни` returned
+line 52, 22 raw bytes represented by dots in the ASCII column, and a 154-byte verified UTF-8 line.
+Both probes compared the line counts, slices and ranges with the actual source bytes.
 
 <a id="agent-delivery"></a>
 ### AD1 agent delivery — DONE in recorded native scopes

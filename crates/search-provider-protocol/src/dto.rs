@@ -440,7 +440,7 @@ fn source_info_requested(info: Option<&SourceInfo>, requested: bool) -> Result<(
     Ok(())
 }
 
-/// Verified bytes inside the cited prepared unit, using absolute source byte coordinates.
+/// Bounded verified text using absolute source byte coordinates.
 #[derive(Clone, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SearchExcerpt {
@@ -450,6 +450,29 @@ pub struct SearchExcerpt {
     pub end: u64,
     /// Exact UTF-8 text in this range.
     pub text: String,
+}
+
+impl fmt::Debug for SearchExcerpt {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("SearchExcerpt")
+            .field("start", &self.start)
+            .field("end", &self.end)
+            .field("text_bytes", &self.text.len())
+            .finish()
+    }
+}
+
+impl SearchExcerpt {
+    fn validate(&self) -> Result<(), ProtocolError> {
+        if self.text.is_empty()
+            || self.text.len() > crate::MAX_SEARCH_EXCERPT_BYTES
+            || u64::try_from(self.text.len()).ok() != self.end.checked_sub(self.start)
+        {
+            return Err(ProtocolError::InvalidMessage);
+        }
+        Ok(())
+    }
 }
 
 /// One verified excerpt and its prepared unit citation in final rank order.
@@ -575,13 +598,8 @@ impl SearchItem {
         let score = match self {
             Self::Hit(hit) => {
                 let excerpt = &hit.excerpt;
-                if excerpt.text.is_empty()
-                    || excerpt.text.len() > crate::MAX_SEARCH_EXCERPT_BYTES
-                    || excerpt.start < hit.evidence.start
-                    || excerpt.end > hit.evidence.end
-                    || u64::try_from(excerpt.text.len()).ok()
-                        != excerpt.end.checked_sub(excerpt.start)
-                {
+                excerpt.validate()?;
+                if excerpt.start < hit.evidence.start || excerpt.end > hit.evidence.end {
                     return Err(ProtocolError::InvalidMessage);
                 }
                 hit.score
@@ -652,8 +670,12 @@ pub struct RawExactMatch {
     pub start: u64,
     /// Exclusive byte end in that raw object.
     pub end: u64,
+    /// One-based line at the match start, counting retained LF bytes.
+    pub line: u64,
     /// Exact matched bytes in lowercase hex, also valid for non-UTF-8 input.
     pub bytes_hex: String,
+    /// Printable ASCII column for the exact matched bytes. Other bytes are shown as dots.
+    pub bytes_ascii: String,
     /// Optional saved locator for the enclosing pinned source reference.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source_info: Option<SourceInfo>,
@@ -723,10 +745,13 @@ impl RawExactItem {
                     .filter(|n| *n != 0)
                     .ok_or(ProtocolError::InvalidMessage)?;
                 if hit.end > hit.source.input.bytes
+                    || hit.line == 0
+                    || hit.line - 1 > hit.start
                     || length > MAX_QUERY_BYTES as u64
-                    || !lower_hex(
+                    || !raw_columns(
                         &hit.bytes_hex,
-                        usize::try_from(length * 2).map_err(|_| ProtocolError::InvalidMessage)?,
+                        &hit.bytes_ascii,
+                        usize::try_from(length).map_err(|_| ProtocolError::InvalidMessage)?,
                     )
                 {
                     return Err(ProtocolError::InvalidMessage);
@@ -880,6 +905,10 @@ pub struct DecodedUtf8Match {
     pub source_start: u64,
     /// Exclusive source byte end, verified through the identity map.
     pub source_end: u64,
+    /// One-based LF-delimited line containing the match start.
+    pub line: u64,
+    /// Verified text around the match start on that retained line.
+    pub line_excerpt: SearchExcerpt,
     /// Exact matching UTF-8 text, including original BOM or line endings.
     pub text: String,
     /// Optional saved locator, independent of representation verification.
@@ -948,10 +977,16 @@ impl DecodedUtf8Item {
         match self {
             Self::Match(hit) => {
                 hit.prepared.validate(ObjectKindDto::Prepared)?;
+                hit.line_excerpt.validate()?;
                 if hit.representation_start >= hit.representation_end
                     || hit.source_start != hit.representation_start
                     || hit.source_end != hit.representation_end
                     || hit.source_end > hit.source.input.bytes
+                    || hit.line == 0
+                    || hit.line - 1 > hit.source_start
+                    || hit.line_excerpt.start > hit.source_start
+                    || hit.line_excerpt.end <= hit.source_start
+                    || hit.line_excerpt.end > hit.source.input.bytes
                     || hit.text.len() > MAX_QUERY_BYTES
                     || u64::try_from(hit.text.len()).ok()
                         != hit.source_end.checked_sub(hit.source_start)
@@ -1721,6 +1756,8 @@ pub enum ExpansionContent {
     Raw {
         /// Exact context bytes in lowercase hex.
         bytes_hex: String,
+        /// Printable ASCII column for these same bytes, with dots for other bytes.
+        bytes_ascii: String,
     },
     /// Exact retained UTF-8 context, preserving BOM and line endings.
     Utf8 {
@@ -1750,7 +1787,13 @@ impl ExpansionRange {
             .and_then(|size| usize::try_from(size).ok())
             .ok_or(ProtocolError::InvalidMessage)?;
         let valid = match (&self.content, utf8) {
-            (ExpansionContent::Raw { bytes_hex }, false) => lower_hex(bytes_hex, size * 2),
+            (
+                ExpansionContent::Raw {
+                    bytes_hex,
+                    bytes_ascii,
+                },
+                false,
+            ) => raw_columns(bytes_hex, bytes_ascii, size),
             (ExpansionContent::Utf8 { text }, true) => text.len() == size,
             _ => false,
         };
@@ -2113,6 +2156,33 @@ fn deserialize_items<'de, D: Deserializer<'de>, T: Deserialize<'de>>(
         }
     }
     deserializer.deserialize_seq(Items(std::marker::PhantomData))
+}
+
+fn raw_columns(hex: &str, ascii: &str, length: usize) -> bool {
+    if ascii.len() != length || !lower_hex(hex, length * 2) {
+        return false;
+    }
+    let nibble = |byte: u8| {
+        if byte <= b'9' {
+            byte - b'0'
+        } else {
+            byte - b'a' + 10
+        }
+    };
+    hex.as_bytes()
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .zip(ascii.bytes())
+        .all(|(pair, actual)| {
+            let byte = (nibble(pair[0]) << 4) | nibble(pair[1]);
+            actual
+                == if (b' '..=b'~').contains(&byte) {
+                    byte
+                } else {
+                    b'.'
+                }
+        })
 }
 
 fn lower_hex(value: &str, length: usize) -> bool {
