@@ -82,6 +82,11 @@ Preparation rows are ordinary Current-root user data. They do not change the roo
 <a id="publication-state-and-snapshot"></a>
 ## Publication state and snapshot
 
+The [native source CAS regression](tests/source_cas.rs) exercises the wanted-corpus guard and current
+source CAS against an actual redb file and native acquisitions, with current-row readback after reopen.
+The [interruption run](../../docs/audit/ANALYSIS_REGISTRY.md#publication-interruption-2026-11-17)
+exercises the publication caller against Qdrant during a real outage and retry.
+
 [publication.rs](src/publication.rs) owns five ordinary tables in this same control.redb:
 
 | Table | Actual responsibility |

@@ -19,5 +19,9 @@ serde.workspace = true
 serde_json.workspace = true
 blake3.workspace = true
 
+[dev-dependencies]
+search-safe-reader.workspace = true
+tempfile = { version = "3", default-features = false }
+
 [lints]
 workspace = true

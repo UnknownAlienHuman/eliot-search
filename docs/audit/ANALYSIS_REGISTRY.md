@@ -27,9 +27,10 @@ Historical V1/core evidence, current package/configuration and actual client wor
 <a id="resume-after-interruption"></a>
 ## Next task
 
-**A-3 is READY.** Exercise real publication interruption and guarded recovery, then cover remaining
-durable source and publication paths from the audit. The [excerpt check](#ranked-excerpts-2026-11-17)
-closes B-1 within its measured scope.
+**B-10 is READY.** Return the new verified before/after ranges from Expand. The
+[interrupted publication check](#publication-interruption-2026-11-17) and native source CAS test cover
+the selected durable slice of A-3. Broader failure coverage remains open.
+The [excerpt check](#ranked-excerpts-2026-11-17) closes B-1 within its measured scope.
 The [November 17 ranking check](#source-class-ranking-2026-11-17) closes B-9 within its measured scope.
 The [November 17 Qdrant check](#qdrant-update-2026-11-17) qualifies the stable server version floor against
 three native releases. The installed backend has an operator stop request and remains stopped.
@@ -108,7 +109,8 @@ DONE below is the named delivered scope, not completion of the product.
 | AD1 / DONE, recorded five-client native scopes | V1/core SDK | [MCP owner](../../bins/eliot-search-mcp/FUNCTIONS.md), [package/Skill](../../integrations/eliot-search/README.md), native-client delivery owners | Actual Skill/tool/context/grounded-answer/Close scopes accepted in four coding clients plus Desktop normal Chat, initially via local mcpServers and subsequently via the installed v4 MCPB. Current targets, original four v3 flow provenance, corrected native answers and source/package/SDK limits are recorded below. |
 | B-9 / DONE, recorded Windows Release scope | Q1/U1/AD1 | [Bridge](../../crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md#query-scoring-profile) and [daemon](../../bins/eliot-searchd/FUNCTIONS.md#read-only-search-path) | Store source classes on a fresh generation and rank within a pinned view. Verified on 366 actual Search sources and exercised on 3,215 Research sources. |
 | B-1 / DONE, recorded Windows Release scope | U1/X1/AD1 | [Daemon](../../bins/eliot-searchd/FUNCTIONS.md#read-only-search-path), [protocol](../../crates/search-provider-protocol/FUNCTIONS.md) and CLI/MCP/window consumers | Bounded verified excerpts and live Expand, with measured response sizes and exact byte readback. |
-| A-3 / READY | Q1/R1 | [CONTROL publication](../../crates/search-control-redb/FUNCTIONS.md#publication-state-and-snapshot) and [daemon](../../bins/eliot-searchd/FUNCTIONS.md) | Verify real interruption, guarded recovery and durable current/evidence bindings. |
+| A-3 / PARTIAL | Q1/R1 | [CONTROL publication](../../crates/search-control-redb/FUNCTIONS.md#publication-state-and-snapshot) and [daemon](../../bins/eliot-searchd/FUNCTIONS.md) | Observed native backend loss, guarded retry, kept current evidence and source CAS. Other durable and child failure cases remain open. |
+| B-10 / READY | B-1/X1 | [Window](../../crates/search-query/search-continuation/FUNCTIONS.md#expansion) and [protocol](../../crates/search-provider-protocol/FUNCTIONS.md) | Expand returns only separately cited new before/after ranges with the original anchor verified. |
 
 [Implementation](../implementation/README.md#delivery-sequence) owns delivery order. Stage 3B is conditional
 on measured Stage 3A budgets failing; there is no separate global rewrite programme.
@@ -217,6 +219,24 @@ the previous complete retained unit. The first `require_git` result opened in MC
 and text. Expand added 32 bytes before and 48 after the 512-byte excerpt, returning 592 bytes that matched
 the original file's range. Continue kept the original order and Close completed. One-shot timings for
 these four observations were 20–33 ms. Installed client deployment and statistical latency remain unverified.
+
+<a id="publication-interruption-2026-11-17"></a>
+### Publication interruption, 2026-11-17
+
+The isolated Windows Release binaries on source `30d68dca` indexed a real older Eliot Research source
+alongside the 3,216-source published generation. During the successor build, Qdrant 1.20.2 reported
+30 inserted points in generation 3. Stopping the isolated server caused `BACKEND_UNKNOWN_DISPATCH`
+and CLI exit 2. After restarting that server on its own storage, Search still returned generation 2
+with the same five point IDs and excerpt bytes and `known_control_lag: true`.
+
+Retrying the real file admission through CLI Index published generation 4 with 3,217 sources, 18 preparation
+gaps and no known lag. The unresolved generation 3 collection remained intact and unserved. The test
+observed a backend interruption during insertion and retry. Abrupt daemon termination and dirty-root repair
+remain unverified in this run.
+
+The CONTROL integration test acquires actual repository files through native handles, derives their
+BLAKE3 references and commits to a real redb file. It rejects a stale empty-corpus publication capture
+and a stale source update, then checks the newer row after closing and reopening CONTROL.
 
 <a id="agent-delivery"></a>
 ### AD1 agent delivery — DONE in recorded native scopes
