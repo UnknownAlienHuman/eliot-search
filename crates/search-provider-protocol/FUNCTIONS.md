@@ -69,10 +69,11 @@ every page. Existing total frame limits include the encoded summary; no quota is
 
 ## Raw Exact request and result
 
-RawExactRequest { literal, source_ids, limit } uses a nonempty UTF-8 String of at most 4096 bytes as a literal
+RawExactRequest { literal, source_ids, scope, limit } uses a nonempty UTF-8 String of at most 4096 bytes as a literal
 byte needle over undecoded retained input. Arbitrary non-UTF-8 needle encoding is not implemented. The CLI
-supports one optional --source-id; the DTO uses canonical unique UUIDs, omitted = all published sources and
-explicit empty = none. Limit is 1..=64 whole match/gap items, independent of input scan completeness.
+supports one optional --source-id. The DTO uses canonical unique UUIDs and an optional intersection
+with an absolute native path prefix of at most 4096 bytes or captured source class. An explicit empty
+selection gives EXACT_EMPTY_SELECTION. Limit is 1..=64 whole match/gap items, independent of scan completeness.
 
 RawSourceRef binds namespace/source UUIDs, row/registration revisions and the Source ObjectRef. A raw Match
 contains source/start/end, the one-based retained LF line, exact bytes_hex and a printable ASCII column.
@@ -89,7 +90,7 @@ whole-card sizing behavior. Both operation variants use the existing Cancel/term
 
 ## Retained DecodedUtf8 request and result
 
-DecodedUtf8Request has the same literal/source_ids/limit bounds as RawExactRequest and a distinct operation tag.
+DecodedUtf8Request has the same literal, selection and limit bounds as RawExactRequest and a distinct operation tag.
 DecodedUtf8Match carries RawSourceRef/input, Prepared ObjectRef, representation_start/end, source_start/end,
 a one-based retained LF line, a verified line excerpt of at most 512 bytes, and
 exact text. The source and representation ranges must match the verified retained UTF-8 identity map; text byte

@@ -2,6 +2,7 @@
 
 use serde::{Deserialize, Deserializer, Serialize, de};
 use std::fmt;
+use std::path::{Component, Path};
 
 use crate::{
     MAX_ITEMS, MAX_QUERY_BYTES, MAX_REMAINING_MS, MAX_UNIT_TEXT_BYTES, ProtocolError,
@@ -42,6 +43,61 @@ impl fmt::Debug for SearchRequest {
     }
 }
 
+/// Source classes based on the locator captured in the published inventory.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ExactSourceClass {
+    /// Primary content.
+    Primary,
+    /// Documentation by saved filename extension.
+    Documentation,
+    /// Sources under a saved vendor directory.
+    Vendor,
+}
+
+/// Explicit path and class constraints on the pinned Exact selection.
+#[derive(Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ExactScope {
+    /// Absolute native saved path prefix, compared on component boundaries.
+    pub path_prefix: Option<String>,
+    /// Source class derived from the same captured locator.
+    pub source_class: Option<ExactSourceClass>,
+}
+
+impl ExactScope {
+    /// Whether neither constraint is set.
+    #[must_use]
+    pub const fn is_empty(&self) -> bool {
+        self.path_prefix.is_none() && self.source_class.is_none()
+    }
+
+    fn validate(&self) -> Result<(), ProtocolError> {
+        if self.is_empty()
+            || self.path_prefix.as_ref().is_some_and(|value| {
+                let path = Path::new(value);
+                value.len() > crate::MAX_SCOPE_PATH_BYTES
+                    || value.as_bytes().contains(&0)
+                    || !path.is_absolute()
+                    || path.components().any(|part| part == Component::ParentDir)
+            })
+        {
+            return Err(ProtocolError::InvalidMessage);
+        }
+        Ok(())
+    }
+}
+
+impl fmt::Debug for ExactScope {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("ExactScope")
+            .field("path_bytes", &self.path_prefix.as_ref().map(String::len))
+            .field("source_class", &self.source_class)
+            .finish()
+    }
+}
+
 /// Literal byte search over selected sources in one committed inventory.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -50,6 +106,9 @@ pub struct RawExactRequest {
     pub literal: String,
     /// None selects all published sources; an explicit selection is non-empty.
     pub source_ids: Option<Vec<String>>,
+    /// Optional narrowing intersected with the source-ID selection.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scope: Option<ExactScope>,
     /// Maximum whole match/gap items returned, independent of scan completeness.
     pub limit: u8,
 }
@@ -79,6 +138,9 @@ impl RawExactRequest {
                 }
             }
         }
+        if let Some(scope) = &self.scope {
+            scope.validate()?;
+        }
         Ok(())
     }
 }
@@ -91,6 +153,9 @@ pub struct DecodedUtf8Request {
     pub literal: String,
     /// None selects all committed sources; an explicit selection is non-empty.
     pub source_ids: Option<Vec<String>>,
+    /// Optional narrowing intersected with the source-ID selection.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scope: Option<ExactScope>,
     /// Maximum whole emitted items, independent of complete input scanning.
     pub limit: u8,
 }
@@ -119,6 +184,9 @@ impl DecodedUtf8Request {
                     return Err(ProtocolError::InvalidMessage);
                 }
             }
+        }
+        if let Some(scope) = &self.scope {
+            scope.validate()?;
         }
         Ok(())
     }
@@ -802,12 +870,16 @@ impl RawExactResult {
         const DIGITS: &[u8; 16] = b"0123456789abcdef";
         request.validate()?;
         self.validate(request.limit)?;
+        if request.scope.is_some() && self.selected_sources == 0 {
+            return Err(ProtocolError::InvalidMessage);
+        }
         if let Some(ids) = &request.source_ids
-            && (u64::try_from(ids.len()).ok() != Some(self.selected_sources)
-                || self
-                    .items
-                    .iter()
-                    .any(|item| !ids.contains(&item.source().source_id)))
+            && (u64::try_from(ids.len()).ok().is_none_or(|count| {
+                !matches_selection_count(self.selected_sources, count, request.scope.is_some())
+            }) || self
+                .items
+                .iter()
+                .any(|item| !ids.contains(&item.source().source_id)))
         {
             return Err(ProtocolError::InvalidMessage);
         }
@@ -1038,12 +1110,16 @@ impl DecodedUtf8Result {
     pub fn validate_request(&self, request: &DecodedUtf8Request) -> Result<(), ProtocolError> {
         request.validate()?;
         self.validate(request.limit)?;
+        if request.scope.is_some() && self.selected_sources == 0 {
+            return Err(ProtocolError::InvalidMessage);
+        }
         if let Some(ids) = &request.source_ids
-            && (u64::try_from(ids.len()).ok() != Some(self.selected_sources)
-                || self
-                    .items
-                    .iter()
-                    .any(|item| !ids.contains(&item.source().source_id)))
+            && (u64::try_from(ids.len()).ok().is_none_or(|count| {
+                !matches_selection_count(self.selected_sources, count, request.scope.is_some())
+            }) || self
+                .items
+                .iter()
+                .any(|item| !ids.contains(&item.source().source_id)))
         {
             return Err(ProtocolError::InvalidMessage);
         }
@@ -1262,20 +1338,32 @@ impl QuerySummary {
         Ok(())
     }
 
-    fn validate_selection(&self, source_ids: Option<&[String]>) -> Result<(), ProtocolError> {
+    fn validate_selection(
+        &self,
+        source_ids: Option<&[String]>,
+        scoped: bool,
+    ) -> Result<(), ProtocolError> {
         self.validate()?;
         let selected = if let Some(ids) = source_ids {
             u64::try_from(ids.len()).map_err(|_| ProtocolError::InvalidMessage)?
         } else {
-            if self.selected_preparation_gaps != self.published_preparation_gaps {
-                return Err(ProtocolError::InvalidMessage);
-            }
             self.published_sources
         };
-        if self.selected_sources != selected {
+        if !matches_selection_count(self.selected_sources, selected, scoped)
+            || (self.selected_sources == self.published_sources
+                && self.selected_preparation_gaps != self.published_preparation_gaps)
+        {
             return Err(ProtocolError::InvalidMessage);
         }
         Ok(())
+    }
+}
+
+const fn matches_selection_count(count: u64, maximum: u64, scoped: bool) -> bool {
+    if scoped {
+        count != 0 && count <= maximum
+    } else {
+        count == maximum
     }
 }
 
@@ -1329,7 +1417,7 @@ impl Terminal {
             summary.validate()?;
             let selected = match &self.outcome {
                 QueryOutcome::Complete { .. } => {
-                    summary.validate_selection(None)?;
+                    summary.validate_selection(None, false)?;
                     summary.selected_sources
                 }
                 QueryOutcome::RawExact { result } => result.selected_sources,
@@ -1355,15 +1443,15 @@ impl Terminal {
             ClientFrame::Cancel { .. } => return Err(ProtocolError::InvalidMessage),
         };
         self.validate(limit)?;
-        let selection = match (request, &self.outcome) {
-            (ClientFrame::Query { .. }, QueryOutcome::Complete { .. }) => None,
+        let (selection, scoped) = match (request, &self.outcome) {
+            (ClientFrame::Query { .. }, QueryOutcome::Complete { .. }) => (None, false),
             (ClientFrame::RawExact { request, .. }, QueryOutcome::RawExact { result }) => {
                 result.validate_request(request)?;
-                request.source_ids.as_deref()
+                (request.source_ids.as_deref(), request.scope.is_some())
             }
             (ClientFrame::DecodedUtf8 { request, .. }, QueryOutcome::DecodedUtf8 { result }) => {
                 result.validate_request(request)?;
-                request.source_ids.as_deref()
+                (request.source_ids.as_deref(), request.scope.is_some())
             }
             (_, QueryOutcome::Cancelled | QueryOutcome::Failed { .. }) => return Ok(()),
             _ => return Err(ProtocolError::InvalidMessage),
@@ -1372,7 +1460,7 @@ impl Terminal {
             return Err(ProtocolError::InvalidMessage);
         }
         if let Some(summary) = &self.summary {
-            summary.validate_selection(selection)?;
+            summary.validate_selection(selection, scoped)?;
         }
         let requested = request.include_source_info();
         match &self.outcome {
@@ -1969,12 +2057,16 @@ impl WindowPage {
         self.validate()?;
         query.validate()?;
         if let Some(corpus) = &self.summary.corpus {
-            let selection = match query {
-                WindowQuery::Search(_) => None,
-                WindowQuery::Raw(request) => request.source_ids.as_deref(),
-                WindowQuery::DecodedUtf8(request) => request.source_ids.as_deref(),
+            let (selection, scoped) = match query {
+                WindowQuery::Search(_) => (None, false),
+                WindowQuery::Raw(request) => {
+                    (request.source_ids.as_deref(), request.scope.is_some())
+                }
+                WindowQuery::DecodedUtf8(request) => {
+                    (request.source_ids.as_deref(), request.scope.is_some())
+                }
             };
-            corpus.validate_selection(selection)?;
+            corpus.validate_selection(selection, scoped)?;
         }
         validate_page_size(page_size)?;
         let expected = usize::from(page_size)

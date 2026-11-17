@@ -1,11 +1,15 @@
 //! Shared bounded literal matching and pinned source selection for raw and UTF-8 Exact.
 
+use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 
 use search_contracts::SourceId;
-use search_control_redb::publication::CapturedSource;
-use search_provider_protocol::{ObjectKindDto, ObjectRefDto, RawSourceRef};
+use search_control_redb::{current_source::source_path_from_locator, publication::CapturedSource};
+use search_provider_protocol::{
+    ExactScope, ExactSourceClass, ObjectKindDto, ObjectRefDto, RawSourceRef,
+};
+use search_qdrant_bridge::SourceClass;
 use search_source_registry::{CurrentSourceRecord, ObjectKind, ObjectRef};
 
 use crate::verified_query::QueryFailure;
@@ -216,6 +220,7 @@ pub fn source_info(
 pub fn select_sources(
     mut inventory: Vec<CapturedSource>,
     ids: Option<&[String]>,
+    scope: Option<&ExactScope>,
     deadline: Instant,
     cancel: &AtomicBool,
 ) -> Result<Vec<CapturedSource>> {
@@ -237,6 +242,32 @@ pub fn select_sources(
             selected.push(id);
         }
         inventory.retain(|entry| selected.contains(&entry.source.source_id));
+    }
+    if let Some(scope) = scope {
+        let prefix = scope.path_prefix.as_deref().map(Path::new);
+        let class = scope.source_class.map(|class| match class {
+            ExactSourceClass::Primary => SourceClass::Primary,
+            ExactSourceClass::Documentation => SourceClass::Documentation,
+            ExactSourceClass::Vendor => SourceClass::Vendor,
+        });
+        let mut selected = Vec::new();
+        selected
+            .try_reserve_exact(inventory.len())
+            .map_err(|_| QueryFailure::Code("QUERY_ALLOCATION_FAILED"))?;
+        for entry in inventory {
+            check(deadline, cancel)?;
+            let path = source_path_from_locator(&entry.source.locator)
+                .map_err(|_| QueryFailure::Code("EXACT_SCOPE_UNRESOLVED"))?;
+            if prefix.is_none_or(|prefix| path.starts_with(prefix))
+                && class.is_none_or(|class| crate::published_corpus::classify_path(&path) == class)
+            {
+                selected.push(entry);
+            }
+        }
+        if selected.is_empty() {
+            return Err(QueryFailure::Code("EXACT_EMPTY_SELECTION"));
+        }
+        inventory = selected;
     }
     check(deadline, cancel)?;
     Ok(inventory)

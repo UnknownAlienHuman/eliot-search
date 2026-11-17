@@ -9,13 +9,13 @@ mod frame;
 
 pub use dto::{
     ClientFrame, ControlObservation, DecodedUtf8Gap, DecodedUtf8Item, DecodedUtf8Match,
-    DecodedUtf8Request, DecodedUtf8Result, EvidenceMetadata, ExpansionContent, ExpansionRange,
-    FailureCode, ObjectKindDto, ObjectRefDto, QueryOutcome, QuerySummary, RawExactGap,
-    RawExactItem, RawExactMatch, RawExactRequest, RawExactResult, RawSourceRef, SearchExcerpt,
-    SearchGap, SearchHit, SearchItem, SearchRequest, SessionClientFrame, SessionOutcome,
-    SessionReply, SourceInfo, SourceInfoUnavailableReason, SourceLiveStatus, StopReason,
-    SummaryUnavailableReason, Terminal, WindowEntry, WindowExpansion, WindowItem, WindowPage,
-    WindowQuery, WindowSummary,
+    DecodedUtf8Request, DecodedUtf8Result, EvidenceMetadata, ExactScope, ExactSourceClass,
+    ExpansionContent, ExpansionRange, FailureCode, ObjectKindDto, ObjectRefDto, QueryOutcome,
+    QuerySummary, RawExactGap, RawExactItem, RawExactMatch, RawExactRequest, RawExactResult,
+    RawSourceRef, SearchExcerpt, SearchGap, SearchHit, SearchItem, SearchRequest,
+    SessionClientFrame, SessionOutcome, SessionReply, SourceInfo, SourceInfoUnavailableReason,
+    SourceLiveStatus, StopReason, SummaryUnavailableReason, Terminal, WindowEntry, WindowExpansion,
+    WindowItem, WindowPage, WindowQuery, WindowSummary,
 };
 pub use error::ProtocolError;
 pub use frame::{
@@ -31,6 +31,8 @@ pub const FRAME_PREFIX_BYTES: usize = 4;
 pub const MAX_BODY_BYTES: usize = MAX_FRAME_BYTES - FRAME_PREFIX_BYTES;
 /// Exact UTF-8 query-byte ceiling of the real backend.
 pub const MAX_QUERY_BYTES: usize = 4096;
+/// Byte bound for an explicit saved path prefix in Exact.
+pub const MAX_SCOPE_PATH_BYTES: usize = 4096;
 /// Maximum nominations, including explicit missing-object gaps.
 pub const MAX_ITEMS: usize = 64;
 /// Maximum complete prepared unit referenced by a ranked citation.
@@ -40,7 +42,7 @@ pub const MAX_SEARCH_EXCERPT_BYTES: usize = 512;
 /// Original one-shot operation allowance, transmitted as a remaining duration.
 pub const MAX_REMAINING_MS: u64 = 120_000;
 /// Finite request-frame allowance including worst-case JSON query escaping.
-pub const MAX_CLIENT_FRAME_BYTES: usize = 6 * MAX_QUERY_BYTES + 4096;
+pub const MAX_CLIENT_FRAME_BYTES: usize = 6 * (MAX_QUERY_BYTES + MAX_SCOPE_PATH_BYTES) + 4096;
 /// This one-query child uses one nonzero correlation identity.
 pub const QUERY_REQUEST_ID: u64 = 1;
 

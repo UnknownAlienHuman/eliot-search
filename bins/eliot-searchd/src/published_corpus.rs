@@ -68,6 +68,10 @@ pub fn source_class(source: &CurrentSourceRecord) -> SourceClass {
     let Ok(path) = source_path_from_locator(&source.locator) else {
         return SourceClass::Primary;
     };
+    classify_path(&path)
+}
+
+pub fn classify_path(path: &Path) -> SourceClass {
     if path.parent().is_some_and(|parent| {
         parent
             .components()

@@ -21,6 +21,12 @@ is retained at a time. RawSourceRef carries namespace/source IDs, row/registrati
 ObjectRef. Matches contain raw byte start/end, a one-based line counted using LF bytes, exact lowercase
 hex and a printable ASCII column. Bytes outside ASCII 0x20–0x7e appear as dots in that column.
 
+Raw and Decoded UTF-8 Exact can narrow the pinned inventory with a saved absolute native path prefix
+and/or a source class (`primary`, `documentation` or `vendor`). The scope intersects any explicit
+source IDs and uses the ranked source classifier. Prefix comparison uses native path components.
+An unresolved locator fails the scoped query. An empty intersection gives `EXACT_EMPTY_SELECTION`.
+The selected denominator counts the actual intersection.
+
 The complete result accounts selected/scanned/missing sources, scanned bytes and total matches. --limit N
 bounds whole emitted match/gap items to 1..64; it does not end input scanning. OutputLimit and scan_complete
 are separate facts. Missing Source objects are explicit SOURCE_OBJECT_MISSING gaps; corruption is fatal.

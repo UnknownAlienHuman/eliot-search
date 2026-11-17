@@ -334,6 +334,7 @@ fn an_explicit_exact_selection_must_name_at_least_one_source() {
             RawExactRequest {
                 literal: "needle".to_owned(),
                 source_ids: ids.clone(),
+                scope: None,
                 limit: 1,
             }
             .validate(),
@@ -343,6 +344,7 @@ fn an_explicit_exact_selection_must_name_at_least_one_source() {
             DecodedUtf8Request {
                 literal: "needle".to_owned(),
                 source_ids: ids,
+                scope: None,
                 limit: 1,
             }
             .validate(),
@@ -355,6 +357,7 @@ fn an_explicit_exact_selection_must_name_at_least_one_source() {
         RawExactRequest {
             literal: "needle".to_owned(),
             source_ids: Some(Vec::new()),
+            scope: None,
             limit: 1,
         }
         .validate(),
@@ -364,6 +367,7 @@ fn an_explicit_exact_selection_must_name_at_least_one_source() {
         DecodedUtf8Request {
             literal: "needle".to_owned(),
             source_ids: Some(Vec::new()),
+            scope: None,
             limit: 1,
         }
         .validate(),

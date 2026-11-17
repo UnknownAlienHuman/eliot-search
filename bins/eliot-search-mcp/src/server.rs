@@ -11,9 +11,9 @@ use rmcp::service::RequestContext;
 use rmcp::{RoleServer, ServerHandler, schemars, tool, tool_handler, tool_router};
 use search_provider_client::{ClientError, QueryClient};
 use search_provider_protocol::{
-    DEFAULT_WINDOW_PAGE_SIZE, DecodedUtf8Request, MAX_CLIENT_FRAME_BYTES, MAX_REMAINING_MS,
-    MAX_WINDOW_TTL_MS, ProtocolError, QueryOutcome, RawExactRequest, SearchRequest, SessionOutcome,
-    SessionReply, WindowQuery,
+    DEFAULT_WINDOW_PAGE_SIZE, DecodedUtf8Request, ExactScope, ExactSourceClass,
+    MAX_CLIENT_FRAME_BYTES, MAX_REMAINING_MS, MAX_WINDOW_TTL_MS, ProtocolError, QueryOutcome,
+    RawExactRequest, SearchRequest, SessionOutcome, SessionReply, WindowQuery,
 };
 use serde::Deserialize;
 use serde_json::json;
@@ -85,6 +85,37 @@ enum ExactMode {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case")]
+enum ScopeClass {
+    Primary,
+    Documentation,
+    Vendor,
+}
+
+#[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+struct ExactScopeArgs {
+    /// Absolute native saved path prefix in the published view.
+    #[schemars(length(min = 1, max = 4096))]
+    path_prefix: Option<String>,
+    /// Class inferred from the captured locator.
+    source_class: Option<ScopeClass>,
+}
+
+impl From<ExactScopeArgs> for ExactScope {
+    fn from(scope: ExactScopeArgs) -> Self {
+        Self {
+            path_prefix: scope.path_prefix,
+            source_class: scope.source_class.map(|class| match class {
+                ScopeClass::Primary => ExactSourceClass::Primary,
+                ScopeClass::Documentation => ExactSourceClass::Documentation,
+                ScopeClass::Vendor => ExactSourceClass::Vendor,
+            }),
+        }
+    }
+}
+
+#[derive(Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 struct ExactArgs {
     mode: ExactMode,
@@ -96,6 +127,8 @@ struct ExactArgs {
     /// nothing and cannot establish absence.
     #[schemars(extend("uniqueItems" = true), length(min = 1))]
     source_ids: Option<Vec<String>>,
+    /// Narrow the selected inventory. Supply a path prefix, a class, or both.
+    scope: Option<ExactScopeArgs>,
     #[serde(default = "default_limit")]
     #[schemars(range(min = 1, max = 64))]
     limit: u8,
@@ -127,6 +160,7 @@ enum QueryArgs {
         /// Omitted/null selects all; an explicit list must name at least one source.
         #[schemars(extend("uniqueItems" = true), length(min = 1))]
         source_ids: Option<Vec<String>>,
+        scope: Option<ExactScopeArgs>,
         #[serde(default = "default_limit")]
         #[schemars(range(min = 1, max = 64))]
         limit: u8,
@@ -137,6 +171,7 @@ enum QueryArgs {
         /// Omitted/null selects all; an explicit list must name at least one source.
         #[schemars(extend("uniqueItems" = true), length(min = 1))]
         source_ids: Option<Vec<String>>,
+        scope: Option<ExactScopeArgs>,
         #[serde(default = "default_limit")]
         #[schemars(range(min = 1, max = 64))]
         limit: u8,
@@ -150,24 +185,28 @@ impl QueryArgs {
             Self::Raw {
                 literal,
                 source_ids,
+                scope,
                 limit,
             } => {
                 preflight_ids(source_ids.as_deref())?;
                 WindowQuery::Raw(RawExactRequest {
                     literal,
                     source_ids,
+                    scope: scope.map(Into::into),
                     limit,
                 })
             }
             Self::DecodedUtf8 {
                 literal,
                 source_ids,
+                scope,
                 limit,
             } => {
                 preflight_ids(source_ids.as_deref())?;
                 WindowQuery::DecodedUtf8(DecodedUtf8Request {
                     literal,
                     source_ids,
+                    scope: scope.map(Into::into),
                     limit,
                 })
             }
@@ -664,6 +703,7 @@ impl McpServer {
                     let request = RawExactRequest {
                         literal: args.literal,
                         source_ids: args.source_ids,
+                        scope: args.scope.map(Into::into),
                         limit: args.limit,
                     };
                     request.validate().map_err(ProtocolError::code)?;
@@ -673,6 +713,7 @@ impl McpServer {
                     let request = DecodedUtf8Request {
                         literal: args.literal,
                         source_ids: args.source_ids,
+                        scope: args.scope.map(Into::into),
                         limit: args.limit,
                     };
                     request.validate().map_err(ProtocolError::code)?;

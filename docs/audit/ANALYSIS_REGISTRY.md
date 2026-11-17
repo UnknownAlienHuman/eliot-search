@@ -27,7 +27,8 @@ Historical V1/core evidence, current package/configuration and actual client wor
 <a id="resume-after-interruption"></a>
 ## Next task
 
-**B-11 is READY.** Add Exact selection by captured path and source class, preserving the explicit inventory denominator.
+**C-8 is READY.** Exercise the native descendant-pipe deadline with a shorter injected test budget.
+The [Exact scope check](#exact-scoped-inventory-2026-11-17) closes B-11 in its measured scope.
 The [Exact line check](#exact-line-context-2026-11-17) closes B-3 in its measured scope.
 The [source diversity check](#ranked-source-diversity-2026-11-17) closes B-2 within its measured scope.
 The [Expand check](#expand-adjacent-ranges-2026-11-17) closes B-10. The
@@ -116,7 +117,8 @@ DONE below is the named delivered scope, not completion of the product.
 | B-10 / DONE, recorded Windows Release scope | B-1/X1 | [Window](../../crates/search-query/search-continuation/FUNCTIONS.md#expansion) and [protocol](../../crates/search-provider-protocol/FUNCTIONS.md) | Expand returns separately cited new before/after ranges, with the original anchor verified. |
 | B-2 / DONE, recorded Windows Release scope | B-9/B-1 | [Bridge](../../crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md#query-scoring-profile) and daemon | At most two ranked units per source. Native CLI and MCP window verify the cap on the real Research corpus. |
 | B-3 / DONE, recorded Windows Release scope | U1/X1 | [Exact](../../crates/search-query/search-exact/FUNCTIONS.md) and protocol | Native Raw and UTF-8 line locations, exact excerpts and raw ASCII columns checked against actual source bytes. |
-| B-11 / READY | B-3 | [Exact](../../crates/search-query/search-exact/FUNCTIONS.md), CLI and MCP | Filter the captured inventory by native path and source class. Preserve explicit selection and completeness semantics. |
+| B-11 / DONE, recorded Windows Release scope | B-3 | [Exact](../../crates/search-query/search-exact/FUNCTIONS.md), CLI and MCP | Scoped by captured path/class. Native CLI and MCP verified matching, complete-negative and empty intersection behavior. |
+| C-8 / READY | Root CLI | [CLI](../../bins/eliot-search/FUNCTIONS.md) | Keep the production deadline and test actual descendant pipes with a short budget. |
 
 [Implementation](../implementation/README.md#delivery-sequence) owns delivery order. Stage 3B is conditional
 on measured Stage 3A budgets failing; there is no separate global rewrite programme.
@@ -281,6 +283,17 @@ The verified UTF-8 line excerpt was 33 bytes. Raw window Expand returned two 12-
 hex and ASCII columns matched their exact retained bytes. The Cyrillic literal `Нейродрисни` returned
 line 52, 22 raw bytes represented by dots in the ASCII column, and a 154-byte verified UTF-8 line.
 Both probes compared the line counts, slices and ranges with the actual source bytes.
+
+<a id="exact-scoped-inventory-2026-11-17"></a>
+### Exact scoped inventory, 2026-11-17
+
+Windows Release CLI Raw Exact on the retained 366-source corpus found `require_git(false)` once
+across 20 primary sources under the daemon path (215,515 verified bytes) and five times across the
+24 sources under the vendor ignore path (382,099 bytes). The actual vendor identifier
+`global_gitignores_relative_to` produced complete negative in the same 20-source daemon scope.
+MCP intersected two real source IDs with that captured path and primary class, yielding one source
+and one match in Raw, Decoded UTF-8 and a live Raw window. An empty intersection returned
+`EXACT_EMPTY_SELECTION`.
 
 <a id="agent-delivery"></a>
 ### AD1 agent delivery — DONE in recorded native scopes

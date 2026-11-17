@@ -105,7 +105,13 @@ pub fn execute(
     let inventory = view
         .source_inventory(deadline, cancel)
         .map_err(QueryFailure::publication)?;
-    let inventory = select_sources(inventory, request.source_ids.as_deref(), deadline, cancel)?;
+    let inventory = select_sources(
+        inventory,
+        request.source_ids.as_deref(),
+        request.scope.as_ref(),
+        deadline,
+        cancel,
+    )?;
     let mut result = RawExactResult {
         generation: view.generation.sequence,
         selected_sources: u64::try_from(inventory.len())

@@ -267,6 +267,9 @@ Use the matching RELEASE siblings built above and an existing committed publishe
 
     .\target\release\eliot-search.exe exact --raw --literal "needle" --data-root "C:\example\data-root" --limit 10 --daemon .\target\release\eliot-searchd.exe
 
+Use `--path-prefix` with an absolute saved path or `--source-class primary|documentation|vendor`
+to narrow either Exact mode. Exact reports the actual selected denominator.
+
 Add --source-id UUID to scan one published source; omission scans all published sources, including Empty and
 PreparationGap inputs without points. The command itself needs no Qdrant endpoint/server and never publishes,
 prepares or opens live source paths. An initialized but unpublished root is not an empty successful scan.

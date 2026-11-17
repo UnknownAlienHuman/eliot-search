@@ -2,7 +2,9 @@
 
 mod watch;
 
-use search_provider_protocol::{DecodedUtf8Request, ProtocolError, RawExactRequest};
+use search_provider_protocol::{
+    DecodedUtf8Request, ExactScope, ExactSourceClass, ProtocolError, RawExactRequest,
+};
 use search_source_registry::{MAX_PREPARATION_RESPONSE_BYTES, MAX_PUBLICATION_RESPONSE_BYTES};
 use std::env;
 use std::ffi::{OsStr, OsString};
@@ -624,6 +626,7 @@ fn parse_exact(arguments: &[OsString]) -> Result<Parsed, &'static str> {
     let mut decoded_utf8 = None;
     let mut literal = None;
     let mut source_id = None;
+    let mut scope = ExactScope::default();
     let mut limit = None;
     let mut source_info = false;
     let mut index = 1;
@@ -649,10 +652,7 @@ fn parse_exact(arguments: &[OsString]) -> Result<Parsed, &'static str> {
                 continue;
             }
             Some("--literal" | "--source-id") => {
-                let value = arguments
-                    .get(index + 1)
-                    .and_then(|v| v.to_str())
-                    .ok_or("USAGE_ERROR")?;
+                let value = exact_option_text(arguments, index)?;
                 let slot = if argument == OsStr::new("--literal") {
                     &mut literal
                 } else {
@@ -661,6 +661,9 @@ fn parse_exact(arguments: &[OsString]) -> Result<Parsed, &'static str> {
                 if slot.replace(value.to_owned()).is_some() {
                     return Err("USAGE_ERROR");
                 }
+            }
+            Some(flag @ ("--path-prefix" | "--source-class")) => {
+                set_exact_scope(&mut scope, flag, exact_option_text(arguments, index)?)?;
             }
             Some("--limit") => {
                 if limit.is_some() {
@@ -705,20 +708,46 @@ fn parse_exact(arguments: &[OsString]) -> Result<Parsed, &'static str> {
     }
     build_exact_request(
         decoded_utf8.ok_or("USAGE_ERROR")?,
-        literal.ok_or("USAGE_ERROR")?,
-        source_id.map(|id| vec![id]),
-        limit.unwrap_or(10),
+        RawExactRequest {
+            literal: literal.ok_or("USAGE_ERROR")?,
+            source_ids: source_id.map(|id| vec![id]),
+            scope: (!scope.is_empty()).then_some(scope),
+            limit: limit.unwrap_or(10),
+        },
         settings,
         daemon,
         source_info,
     )
 }
 
+fn exact_option_text(arguments: &[OsString], index: usize) -> Result<&str, &'static str> {
+    arguments
+        .get(index + 1)
+        .and_then(|value| value.to_str())
+        .ok_or("USAGE_ERROR")
+}
+
+fn set_exact_scope(scope: &mut ExactScope, flag: &str, value: &str) -> Result<(), &'static str> {
+    let replaced = if flag == "--path-prefix" {
+        scope.path_prefix.replace(value.to_owned()).is_some()
+    } else {
+        let class = match value {
+            "primary" => ExactSourceClass::Primary,
+            "documentation" => ExactSourceClass::Documentation,
+            "vendor" => ExactSourceClass::Vendor,
+            _ => return Err("USAGE_ERROR"),
+        };
+        scope.source_class.replace(class).is_some()
+    };
+    if replaced {
+        return Err("USAGE_ERROR");
+    }
+    Ok(())
+}
+
 fn build_exact_request(
     decoded_utf8: bool,
-    literal: String,
-    source_ids: Option<Vec<String>>,
-    limit: u8,
+    raw: RawExactRequest,
     settings: Vec<OsString>,
     daemon: Option<PathBuf>,
     source_info: bool,
@@ -727,9 +756,10 @@ fn build_exact_request(
     // EXACT_EMPTY_SELECTION, not a generic usage error.
     if decoded_utf8 {
         let request = DecodedUtf8Request {
-            literal,
-            source_ids,
-            limit,
+            literal: raw.literal,
+            source_ids: raw.source_ids,
+            scope: raw.scope,
+            limit: raw.limit,
         };
         request.validate().map_err(ProtocolError::code)?;
         Ok(Parsed::DecodedUtf8 {
@@ -739,11 +769,7 @@ fn build_exact_request(
             source_info,
         })
     } else {
-        let request = RawExactRequest {
-            literal,
-            source_ids,
-            limit,
-        };
+        let request = raw;
         request.validate().map_err(ProtocolError::code)?;
         Ok(Parsed::RawExact {
             settings,
@@ -1229,8 +1255,8 @@ fn print_help() {
         "  eliot-search watch [--interval-ms N] --qdrant-url URL [--data-root ROOT] [--config-file PATH] [--daemon PATH]\n",
         "  eliot-search search --query TEXT [--limit N] [--source-info] --qdrant-url URL [--data-root ROOT] [--config-file PATH] [--daemon PATH]\n",
         "    --source-info adds each item's saved locator; retained metadata, never a live-path claim\n",
-        "  eliot-search exact --raw --literal TEXT --data-root ROOT [--source-id UUID] [--limit N] [--source-info] [--config-file PATH] [--daemon PATH]\n",
-        "  eliot-search exact --decoded-utf8 --literal TEXT --data-root ROOT [--source-id UUID] [--limit N] [--config-file PATH] [--daemon PATH]\n",
+        "  eliot-search exact --raw --literal TEXT --data-root ROOT [--source-id UUID] [--path-prefix PATH] [--source-class CLASS] [--limit N] [--source-info] [--config-file PATH] [--daemon PATH]\n",
+        "  eliot-search exact --decoded-utf8 --literal TEXT --data-root ROOT [--source-id UUID] [--path-prefix PATH] [--source-class CLASS] [--limit N] [--source-info] [--config-file PATH] [--daemon PATH]\n",
     ));
 }
 
