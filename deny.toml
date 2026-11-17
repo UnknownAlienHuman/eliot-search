@@ -3,6 +3,11 @@ all-features = true
 
 [advisories]
 yanked = "deny"
+# rmcp 3.9.0 depends on chrono directly and through schemars/chrono04.
+# rmcp 3.11.0 still requires both. Recheck on the next rmcp update or by 2026-12-17.
+ignore = [
+  { id = "RUSTSEC-2026-0543", reason = "Maintenance advisory for the MCP SDK's transitive chrono dependency; no released SDK removes it yet." },
+]
 
 [licenses]
 allow = [
