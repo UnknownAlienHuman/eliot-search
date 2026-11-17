@@ -103,6 +103,11 @@ settled cleanup, whereas the explicit window_cancel tool preserves healthy
 context when the correlated core cancellation does so. SDK local command
 rejection preserves a healthy window.
 
+The window owner submits data, Cancel and Close through the same SDK session.
+It settles normal data replies during the loop. On exit it finishes and reaps
+the session, settles remaining replies, clears the matching slot and publishes
+completion before releasing admission.
+
 A bounded raw stdin pump observes EOF independently of rmcp's writer/close mutex.
 It does not parse MCP. Exhausting its existing-16MiB-derived byte queue fails the
 connection instead of silently dropping input and continuing. EOF/output failure

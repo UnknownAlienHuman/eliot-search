@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 
 use search_provider_client::{ClientError, OwnedQuerySession};
 use search_provider_protocol::{
-    SESSION_WINDOW_ID, SessionClientFrame, SessionOutcome, WindowQuery,
+    SESSION_WINDOW_ID, SessionClientFrame, SessionOutcome, SessionReply, WindowQuery,
 };
 use serde_json::json;
 use tokio::sync::{OwnedSemaphorePermit, mpsc, oneshot, watch};
@@ -366,7 +366,241 @@ const fn observed_kind(outcome: &SessionOutcome) -> &'static str {
     }
 }
 
-#[allow(clippy::too_many_lines)]
+type DeferredReply = (oneshot::Sender<Outcome>, Outcome);
+
+fn submit_close(
+    session: &mut OwnedQuerySession,
+    sequence: &mut u64,
+) -> Result<Instant, &'static str> {
+    let deadline = cleanup_deadline();
+    session
+        .submit(
+            SessionClientFrame::Close {
+                request_id: next_id(sequence)?,
+            },
+            deadline,
+        )
+        .map_err(ClientError::code)?;
+    Ok(deadline)
+}
+
+fn submit_cancel(
+    session: &mut OwnedQuerySession,
+    handle: &str,
+    cancel: Cancel,
+    pending: Option<&Pending>,
+    waiter: &mut Option<oneshot::Sender<Outcome>>,
+) -> Result<(), &'static str> {
+    if cancel.handle != handle {
+        let _ = cancel.reply.send(Err("WINDOW_NOT_OPEN"));
+        return Ok(());
+    }
+    let Some(active) = pending else {
+        let _ = cancel.reply.send(text_reply(
+            &json!({
+                "window_handle":handle,"cancel_requested":false,"reason":"no_active_request"
+            }),
+            false,
+            Some(handle),
+        ));
+        return Ok(());
+    };
+    match session.submit(
+        SessionClientFrame::Cancel {
+            request_id: active.id,
+        },
+        cancel.deadline,
+    ) {
+        Ok(()) => *waiter = Some(cancel.reply),
+        Err(ClientError::CommandRejected { code, .. }) => {
+            let _ = cancel.reply.send(Err(code));
+        }
+        Err(error) => {
+            let code = error.code();
+            let _ = cancel.reply.send(Err(code));
+            return Err(code);
+        }
+    }
+    Ok(())
+}
+
+fn submit_data(
+    session: &mut OwnedQuerySession,
+    handle: &str,
+    command: Command,
+    pending: &mut Option<Pending>,
+    sequence: &mut u64,
+) -> Result<(), &'static str> {
+    let (requested, data, deadline, reply) = match command {
+        Command::Open(command) => {
+            let _ = command.reply.send(Err("MCP_ROOT_BUSY"));
+            return Ok(());
+        }
+        Command::Data {
+            handle,
+            data,
+            deadline,
+            reply,
+        } => (handle, data, deadline, reply),
+    };
+    if requested != handle {
+        let _ = reply.send(Err("WINDOW_NOT_OPEN"));
+        return Ok(());
+    }
+    if pending.is_some() {
+        let _ = reply.send(Err("SESSION_REQUEST_IN_FLIGHT"));
+        return Ok(());
+    }
+    let id = next_id(sequence)?;
+    let remaining_ms = match remaining(deadline) {
+        Ok(left) => left,
+        Err(code) => {
+            let _ = reply.send(Err(code));
+            return Ok(());
+        }
+    };
+    let frame = match data {
+        Data::Continue { page_size } => SessionClientFrame::Continue {
+            request_id: id,
+            remaining_ms,
+            window_id: SESSION_WINDOW_ID,
+            page_size,
+        },
+        Data::Expand {
+            item_index,
+            before_bytes,
+            after_bytes,
+        } => SessionClientFrame::Expand {
+            request_id: id,
+            remaining_ms,
+            window_id: SESSION_WINDOW_ID,
+            item_index,
+            before_bytes,
+            after_bytes,
+        },
+    };
+    match session.submit(frame, deadline) {
+        Ok(()) => {
+            *pending = Some(Pending {
+                id,
+                open: false,
+                deadline,
+                reply,
+            });
+        }
+        Err(ClientError::CommandRejected { code, .. }) => {
+            let _ = reply.send(Err(code));
+        }
+        Err(error) => {
+            let code = error.code();
+            let _ = reply.send(Err(code));
+            return Err(code);
+        }
+    }
+    Ok(())
+}
+
+fn settle_reply(
+    reply: SessionReply,
+    handle: &str,
+    close: &CancellationToken,
+    pending: &mut Option<Pending>,
+    cancel_waiter: &mut Option<oneshot::Sender<Outcome>>,
+    deferred_reply: &mut Option<DeferredReply>,
+) -> Option<Outcome> {
+    if let Some(waiter) = cancel_waiter.take() {
+        let _ = waiter.send(text_reply(
+            &json!({
+                "window_handle":handle,"cancel_requested":true,
+                "request_id":reply.request_id,"observed_outcome":observed_kind(&reply.outcome)
+            }),
+            false,
+            Some(handle),
+        ));
+    }
+    if matches!(
+        reply.outcome,
+        SessionOutcome::Closed {} | SessionOutcome::Expired {}
+    ) {
+        if let Some(active) = pending.take() {
+            let value = if active.open {
+                reply_result(None, reply.clone())
+            } else {
+                Err("WINDOW_CLOSED")
+            };
+            *deferred_reply = Some((active.reply, value));
+        }
+        return Some(reply_result(Some(handle), reply));
+    }
+    let Some(active) = pending.take() else {
+        return Some(Err("MCP_WINDOW_REPLY_WITHOUT_REQUEST"));
+    };
+    if active.open && !matches!(reply.outcome, SessionOutcome::Page { .. }) {
+        *deferred_reply = Some((active.reply, reply_result(None, reply)));
+        close.cancel();
+    } else {
+        if active.reply.is_closed() {
+            close.cancel();
+        }
+        let _ = active.reply.send(reply_result(Some(handle), reply));
+    }
+    None
+}
+
+async fn finish_session(session: Option<&mut OwnedQuerySession>) -> Result<(), &'static str> {
+    if let Some(session) = session
+        && !session.is_finished()
+    {
+        let completion = session
+            .finish(cleanup_deadline())
+            .await
+            .map_err(ClientError::code)?;
+        if !completion.status.success() {
+            return Err("QUERY_CHILD_EXIT_FAILED");
+        }
+    }
+    Ok(())
+}
+
+fn settle_waiters(
+    outcome: &Outcome,
+    initial_reply: Option<oneshot::Sender<Outcome>>,
+    pending: Option<Pending>,
+    cancel_waiter: Option<oneshot::Sender<Outcome>>,
+    deferred_reply: Option<DeferredReply>,
+) {
+    if let Some(reply) = initial_reply {
+        let _ = reply.send(outcome.clone());
+    }
+    let code = outcome.as_ref().err().copied().unwrap_or("WINDOW_CLOSED");
+    if let Some(active) = pending {
+        let _ = active.reply.send(Err(code));
+    }
+    if let Some(reply) = cancel_waiter {
+        let _ = reply.send(Err(code));
+    }
+    if let Some((reply, held)) = deferred_reply {
+        let settled = outcome.as_ref().err().copied().map_or(held, Err);
+        let _ = reply.send(settled);
+    }
+}
+
+fn publish_completion(
+    hub: &Hub,
+    handle: &str,
+    done: &watch::Sender<Option<Outcome>>,
+    outcome: Outcome,
+) -> Result<(), &'static str> {
+    {
+        let mut slot = hub.slot.lock().map_err(|_| "MCP_OWNER_STATE_CORRUPT")?;
+        if slot.as_ref().is_some_and(|slot| slot.handle == handle) {
+            *slot = None;
+        }
+    }
+    let _ = done.send_replace(Some(outcome));
+    Ok(())
+}
+
 async fn drive(
     hub: &Hub,
     config: &Config,
@@ -381,178 +615,96 @@ async fn drive(
         close,
         done,
     } = command;
-    let Open {
-        query,
-        page_size,
-        ttl_ms,
-        include_source_info,
-        deadline,
-        permit,
-    } = open;
-    // Kept until explicit finish/reap and completion publication below.
-    let _permit = permit;
+    // Keep admission held through child reaping and completion publication.
+    let _permit = open.permit;
+    let deadline = open.deadline;
     let mut initial_reply = Some(reply);
     let mut session = None;
     let mut pending: Option<Pending> = None;
     let mut cancel_waiter: Option<oneshot::Sender<Outcome>> = None;
-    let mut delayed_open: Option<(oneshot::Sender<Outcome>, Outcome)> = None;
+    let mut deferred_reply: Option<DeferredReply> = None;
     let false_cancel = AtomicBool::new(false);
     let mut sequence = 1_u64;
     let mut closing: Option<Instant> = None;
     let outcome: Outcome = async {
-        if close.is_cancelled() || hub.shutdown.is_cancelled() { return Err("MCP_REQUEST_CANCELLED"); }
-        let ranked = matches!(query, WindowQuery::Search(_));
+        if close.is_cancelled() || hub.shutdown.is_cancelled() {
+            return Err("MCP_REQUEST_CANCELLED");
+        }
+        let ranked = matches!(open.query, WindowQuery::Search(_));
         let args = config.arguments(true, ranked)?;
-        session = Some(OwnedQuerySession::open(&config.daemon, &args, deadline, &false_cancel, false)
-            .await.map_err(ClientError::code)?);
+        session = Some(
+            OwnedQuerySession::open(&config.daemon, &args, deadline, &false_cancel, false)
+                .await
+                .map_err(ClientError::code)?,
+        );
         let session = session.as_mut().ok_or("MCP_WINDOW_OWNER_STOPPED")?;
-        session.submit(SessionClientFrame::Open {
-            request_id: 1, remaining_ms: remaining(deadline)?, query,
-            page_size, ttl_ms, include_summary: true, include_source_info,
-        }, deadline).map_err(ClientError::code)?;
-        let idle_end = Instant::now() + Duration::from_millis(ttl_ms) + Duration::from_secs(2);
-        pending = Some(Pending { id: 1, open: true, deadline, reply: initial_reply.take().ok_or("MCP_WINDOW_OWNER_STOPPED")? });
+        session
+            .submit(
+                SessionClientFrame::Open {
+                    request_id: 1,
+                    remaining_ms: remaining(deadline)?,
+                    query: open.query,
+                    page_size: open.page_size,
+                    ttl_ms: open.ttl_ms,
+                    include_summary: true,
+                    include_source_info: open.include_source_info,
+                },
+                deadline,
+            )
+            .map_err(ClientError::code)?;
+        let idle_end = Instant::now() + Duration::from_millis(open.ttl_ms) + Duration::from_secs(2);
+        pending = Some(Pending {
+            id: 1,
+            open: true,
+            deadline,
+            reply: initial_reply.take().ok_or("MCP_WINDOW_OWNER_STOPPED")?,
+        });
         loop {
-            let receive_end = closing.unwrap_or_else(|| pending.as_ref().map_or(idle_end, |p| p.deadline.min(idle_end)));
+            let receive_end = closing.unwrap_or_else(|| {
+                pending
+                    .as_ref()
+                    .map_or(idle_end, |p| p.deadline.min(idle_end))
+            });
             tokio::select! {
                 biased;
                 () = hub.shutdown.cancelled(), if closing.is_none() => {
-                    let end = cleanup_deadline();
-                    session.submit(SessionClientFrame::Close { request_id: next_id(&mut sequence)? }, end).map_err(ClientError::code)?;
-                    closing = Some(end);
+                    closing = Some(submit_close(session, &mut sequence)?);
                 }
                 () = close.cancelled(), if closing.is_none() => {
-                    let end = cleanup_deadline();
-                    session.submit(SessionClientFrame::Close { request_id: next_id(&mut sequence)? }, end).map_err(ClientError::code)?;
-                    closing = Some(end);
+                    closing = Some(submit_close(session, &mut sequence)?);
                 }
                 Some(cancel) = controls.recv(), if closing.is_none() => {
-                    if cancel.handle != handle {
-                        let _ = cancel.reply.send(Err("WINDOW_NOT_OPEN"));
-                    } else if let Some(active) = &pending {
-                        match session.submit(SessionClientFrame::Cancel { request_id: active.id }, cancel.deadline) {
-                            Ok(()) => { cancel_waiter = Some(cancel.reply); }
-                            Err(ClientError::CommandRejected { code, .. }) => { let _ = cancel.reply.send(Err(code)); }
-                            Err(error) => { let _ = cancel.reply.send(Err(error.code())); return Err(error.code()); }
-                        }
-                    } else {
-                        let _ = cancel.reply.send(text_reply(&json!({
-                            "window_handle":handle,"cancel_requested":false,"reason":"no_active_request"
-                        }), false, Some(&handle)));
-                    }
+                    submit_cancel(session, &handle, cancel, pending.as_ref(), &mut cancel_waiter)?;
                 }
                 Some(command) = requests.recv(), if closing.is_none() => {
-                    match command {
-                        Command::Open(command) => { let _ = command.reply.send(Err("MCP_ROOT_BUSY")); }
-                        Command::Data { handle: requested, data, deadline, reply } => {
-                            if requested != handle {
-                                let _ = reply.send(Err("WINDOW_NOT_OPEN"));
-                                continue;
-                            }
-                            if pending.is_some() {
-                                let _ = reply.send(Err("SESSION_REQUEST_IN_FLIGHT"));
-                                continue;
-                            }
-                            let id = next_id(&mut sequence)?;
-                            let remaining_ms = match remaining(deadline) {
-                                Ok(left) => left,
-                                Err(code) => { let _ = reply.send(Err(code)); continue; }
-                            };
-                            let frame = match data {
-                                Data::Continue { page_size } => SessionClientFrame::Continue { request_id:id,remaining_ms,window_id:SESSION_WINDOW_ID,page_size },
-                                Data::Expand { item_index,before_bytes,after_bytes } => SessionClientFrame::Expand { request_id:id,remaining_ms,window_id:SESSION_WINDOW_ID,item_index,before_bytes,after_bytes },
-                            };
-                            match session.submit(frame,deadline) {
-                                Ok(()) => pending=Some(Pending {id,open:false,deadline,reply}),
-                                Err(ClientError::CommandRejected {code,..}) => {let _=reply.send(Err(code));}
-                                Err(error) => {let _=reply.send(Err(error.code()));return Err(error.code());}
-                            }
-                        }
-                    }
+                    submit_data(session, &handle, command, &mut pending, &mut sequence)?;
                 }
-                received = session.next_reply(receive_end,&false_cancel) => {
-                    let reply=received.map_err(ClientError::code)?;
-                    if let Some(waiter)=cancel_waiter.take() {
-                        let _=waiter.send(text_reply(&json!({
-                            "window_handle":handle,"cancel_requested":true,
-                            "request_id":reply.request_id,"observed_outcome":observed_kind(&reply.outcome)
-                        }), false, Some(&handle)));
-                    }
-                    if matches!(reply.outcome,SessionOutcome::Closed {}|SessionOutcome::Expired {}) {
-                        if let Some(active)=pending.take() {
-                            let value=if active.open {reply_result(None,reply.clone())}else{Err("WINDOW_CLOSED")};
-                            delayed_open=Some((active.reply,value));
-                        }
-                        return reply_result(Some(&handle),reply);
-                    }
-                    let active=pending.take().ok_or("MCP_WINDOW_REPLY_WITHOUT_REQUEST")?;
-                    if active.open && !matches!(reply.outcome,SessionOutcome::Page {..}) {
-                        delayed_open=Some((active.reply,reply_result(None,reply)));
-                        close.cancel();
-                    } else {
-                        if active.reply.is_closed() {close.cancel();}
-                        let _=active.reply.send(reply_result(Some(&handle),reply));
+                received = session.next_reply(receive_end, &false_cancel) => {
+                    if let Some(outcome) = settle_reply(
+                        received.map_err(ClientError::code)?,
+                        &handle,
+                        &close,
+                        &mut pending,
+                        &mut cancel_waiter,
+                        &mut deferred_reply,
+                    ) {
+                        return outcome;
                     }
                 }
             }
         }
-    }.await;
+    }
+    .await;
 
-    let cleaned = if let Some(session) = &mut session {
-        if session.is_finished() {
-            Ok(())
-        } else {
-            session
-                .finish(cleanup_deadline())
-                .await
-                .map_err(ClientError::code)
-                .and_then(|completion| {
-                    if completion.status.success() {
-                        Ok(())
-                    } else {
-                        Err("QUERY_CHILD_EXIT_FAILED")
-                    }
-                })
-        }
-    } else {
-        Ok(())
-    };
-    let outcome = match cleaned {
-        Ok(()) => outcome,
-        Err(code) => Err(code),
-    };
-    if let Some(reply) = initial_reply {
-        let _ = reply.send(outcome.clone());
-    }
-    if let Some(active) = pending {
-        let _ = active.reply.send(Err(outcome
-            .as_ref()
-            .err()
-            .copied()
-            .unwrap_or("WINDOW_CLOSED")));
-    }
-    if let Some(reply) = cancel_waiter {
-        let _ = reply.send(Err(outcome
-            .as_ref()
-            .err()
-            .copied()
-            .unwrap_or("WINDOW_CLOSED")));
-    }
-    if let Some((reply, held)) = delayed_open {
-        let settled = if let Err(code) = &outcome {
-            Err(*code)
-        } else {
-            held
-        };
-        let _ = reply.send(settled);
-    }
-    {
-        let mut slot = hub.slot.lock().map_err(|_| "MCP_OWNER_STATE_CORRUPT")?;
-        if slot.as_ref().is_some_and(|slot| slot.handle == handle) {
-            *slot = None;
-        }
-    }
-    // No live slot or capability is advertised after this settled cleanup.
-    let _ = done.send_replace(Some(outcome));
+    let cleaned = finish_session(session.as_mut()).await;
+    let outcome = cleaned.and(outcome);
+    settle_waiters(
+        &outcome,
+        initial_reply,
+        pending,
+        cancel_waiter,
+        deferred_reply,
+    );
+    publish_completion(hub, &handle, &done, outcome)?;
     cleaned
 }
