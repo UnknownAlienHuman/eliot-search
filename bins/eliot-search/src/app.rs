@@ -1,5 +1,7 @@
 //! Root operations over one bounded, owned daemon child.
 
+#[cfg(all(test, windows))]
+mod pipe_deadline_tests;
 mod watch;
 
 use search_provider_protocol::{
@@ -969,9 +971,23 @@ fn capture_child(
     deadline: Instant,
 ) -> Result<ChildOutput, ChildFailure> {
     let mut process = Command::new(daemon);
+    process.arg(command.daemon_flag()).args(settings);
+    let stdout_limit = if matches!(command, RootCommand::PrepareSource) {
+        MAX_PREPARATION_RESPONSE_BYTES
+    } else if matches!(command, RootCommand::PublishPrepared) {
+        MAX_PUBLICATION_RESPONSE_BYTES
+    } else {
+        MAX_CAPTURE_BYTES
+    };
+    capture_command(&mut process, stdout_limit, deadline)
+}
+
+fn capture_command(
+    process: &mut Command,
+    stdout_limit: usize,
+    deadline: Instant,
+) -> Result<ChildOutput, ChildFailure> {
     process
-        .arg(command.daemon_flag())
-        .args(settings)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
@@ -987,13 +1003,6 @@ fn capture_child(
     let Some(stdout) = child.stdout.take() else {
         stop_and_reap(&mut child);
         return Err(ChildFailure::StdoutUnavailable);
-    };
-    let stdout_limit = if matches!(command, RootCommand::PrepareSource) {
-        MAX_PREPARATION_RESPONSE_BYTES
-    } else if matches!(command, RootCommand::PublishPrepared) {
-        MAX_PUBLICATION_RESPONSE_BYTES
-    } else {
-        MAX_CAPTURE_BYTES
     };
     let Ok(stdout_reader) = spawn_reader(stdout, "eliot-searchd-stdout", deadline, stdout_limit)
     else {

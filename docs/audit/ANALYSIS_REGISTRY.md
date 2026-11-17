@@ -27,7 +27,8 @@ Historical V1/core evidence, current package/configuration and actual client wor
 <a id="resume-after-interruption"></a>
 ## Next task
 
-**C-8 is READY.** Exercise the native descendant-pipe deadline with a shorter injected test budget.
+**D-1 is READY.** Simplify the MCP window command loop and verify the live lifecycle.
+The [native deadline check](#native-pipe-deadline-2026-11-17) closes C-8.
 The [Exact scope check](#exact-scoped-inventory-2026-11-17) closes B-11 in its measured scope.
 The [Exact line check](#exact-line-context-2026-11-17) closes B-3 in its measured scope.
 The [source diversity check](#ranked-source-diversity-2026-11-17) closes B-2 within its measured scope.
@@ -118,7 +119,8 @@ DONE below is the named delivered scope, not completion of the product.
 | B-2 / DONE, recorded Windows Release scope | B-9/B-1 | [Bridge](../../crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md#query-scoring-profile) and daemon | At most two ranked units per source. Native CLI and MCP window verify the cap on the real Research corpus. |
 | B-3 / DONE, recorded Windows Release scope | U1/X1 | [Exact](../../crates/search-query/search-exact/FUNCTIONS.md) and protocol | Native Raw and UTF-8 line locations, exact excerpts and raw ASCII columns checked against actual source bytes. |
 | B-11 / DONE, recorded Windows Release scope | B-3 | [Exact](../../crates/search-query/search-exact/FUNCTIONS.md), CLI and MCP | Scoped by captured path/class. Native CLI and MCP verified matching, complete-negative and empty intersection behavior. |
-| C-8 / READY | Root CLI | [CLI](../../bins/eliot-search/FUNCTIONS.md) | Keep the production deadline and test actual descendant pipes with a short budget. |
+| C-8 / DONE, recorded Windows test scope | Root CLI | [CLI](../../bins/eliot-search/FUNCTIONS.md) | Same production pipe owner with a three-second native regression. |
+| D-1 / READY | AD1/X1 | [MCP window](../../bins/eliot-search-mcp/src/window.rs) | Split request, reply and cleanup responsibilities without changing the window lifecycle. |
 
 [Implementation](../implementation/README.md#delivery-sequence) owns delivery order. Stage 3B is conditional
 on measured Stage 3A budgets failing; there is no separate global rewrite programme.
@@ -294,6 +296,16 @@ across 20 primary sources under the daemon path (215,515 verified bytes) and fiv
 MCP intersected two real source IDs with that captured path and primary class, yielding one source
 and one match in Raw, Decoded UTF-8 and a live Raw window. An empty intersection returned
 `EXACT_EMPTY_SELECTION`.
+
+<a id="native-pipe-deadline-2026-11-17"></a>
+### Native pipe deadline, 2026-11-17
+
+The CLI's live capture path calls the same capture function as the Windows descendant-pipe regression.
+The regression exercises real inherited Windows stdout/stderr and injects the original three-second
+deadline at that owner. The wrapper finished and the descendant still held the pipes when the owner
+returned DAEMON_TIMEOUT (mapped exit 124). A private stop signal releases the test descendant.
+The workspace test reported 3.03 seconds for that case, versus 180.94 seconds on the prior source.
+The Release CLI and daemon separately returned a current root from the actual `inspect-data-root`.
 
 <a id="agent-delivery"></a>
 ### AD1 agent delivery — DONE in recorded native scopes

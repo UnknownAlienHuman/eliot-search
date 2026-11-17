@@ -118,6 +118,10 @@ The first argument parse preserves source ID and ordinal for response validation
 
 The preparation stdout allowance is 397312 bytes: six-byte worst-case JSON escaping for a full 64 KiB unit plus 4096 bytes of metadata/framing. It does not shrink unit settings or truncate text. Root/retention stdout and child stderr keep their 64 KiB bounds; owned-child deadline, kill and reap behavior remains.
 
+The [native Windows pipe test](src/app/pipe_deadline_tests.rs) uses the same process capture owner with a
+three-second deadline and a real descendant holding both pipes. The production CLI supplies its original
+120-second command deadline.
+
 This is stored text readback, not a query, Qdrant index or citation. See the [daemon recipe](../eliot-searchd/FUNCTIONS.md), [Source recipe](../../crates/search-source/README.md) and [registry](../../docs/audit/ANALYSIS_REGISTRY.md#evidence-status) for owner boundaries and exact binary/library evidence.
 
 ## Publication result

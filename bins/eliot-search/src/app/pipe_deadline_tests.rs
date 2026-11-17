@@ -1,18 +1,17 @@
 //! A real Windows descendant retains both daemon pipes after its wrapper exits.
 
-#![cfg(windows)]
-
 use std::fs;
-use std::io::Read;
 use std::os::windows::process::CommandExt;
 use std::path::PathBuf;
-use std::process::{Child, Command, ExitStatus, Stdio};
+use std::process::Command;
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
+use super::{ChildFailure, MAX_CAPTURE_BYTES, capture_command};
+
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-const CLI_DEADLINE: Duration = Duration::from_secs(120);
-const SCHEDULING_ALLOWANCE: Duration = Duration::from_secs(5);
+const TEST_DEADLINE: Duration = Duration::from_secs(3);
+const SCHEDULING_ALLOWANCE: Duration = Duration::from_secs(3);
 
 struct Sandbox {
     base: PathBuf,
@@ -37,50 +36,16 @@ impl Sandbox {
 
 impl Drop for Sandbox {
     fn drop(&mut self) {
-        if let Ok(text) = fs::read_to_string(self.base.join("holder.pid"))
-            && let Ok(pid) = text.parse::<u32>()
-        {
-            let _ = Command::new("taskkill.exe")
-                .args(["/PID", &pid.to_string(), "/F"])
-                .stdin(Stdio::null())
-                .stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .creation_flags(CREATE_NO_WINDOW)
-                .status();
+        let _ = fs::write(self.base.join("holder.stop"), b"stop");
+        if self.base.join("holder.ready").is_file() {
+            let done = self.base.join("holder.done");
+            let deadline = Instant::now() + Duration::from_secs(2);
+            while !done.is_file() && Instant::now() < deadline {
+                thread::sleep(Duration::from_millis(20));
+            }
         }
         let _ = fs::remove_dir_all(&self.base);
     }
-}
-
-fn wait_for_exit(child: &mut Child, deadline: Instant) -> Option<ExitStatus> {
-    loop {
-        match child.try_wait() {
-            Ok(Some(status)) => return Some(status),
-            Ok(None) => {}
-            Err(error) => {
-                let _ = child.kill();
-                let _ = child.wait();
-                panic!("observe CLI process: {error}");
-            }
-        }
-        if Instant::now() >= deadline {
-            return None;
-        }
-        thread::sleep(Duration::from_millis(20));
-    }
-}
-
-fn read_capture(reader: impl Read) -> Vec<u8> {
-    let mut bytes = Vec::new();
-    reader
-        .take(16 * 1024 + 1)
-        .read_to_end(&mut bytes)
-        .expect("read completed CLI capture");
-    assert!(
-        bytes.len() <= 16 * 1024,
-        "CLI capture exceeded its test bound"
-    );
-    bytes
 }
 
 #[test]
@@ -114,7 +79,6 @@ $start.CreateNoWindow = $true
 $start.RedirectStandardInput = $true
 $start.Arguments = '-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' + $env:ELIOT_PIPE_TEST_HOLDER + '"'
 $holder = [Diagnostics.Process]::Start($start)
-[IO.File]::WriteAllText($env:ELIOT_PIPE_TEST_PID, [string]$holder.Id)
 $holder.StandardInput.Close()
 $readyDeadline = [DateTime]::UtcNow.AddSeconds(10)
 while (-not [IO.File]::Exists($env:ELIOT_PIPE_TEST_READY)) {
@@ -135,54 +99,41 @@ $heldOut.Flush()
 $heldErr.Write($bytes, 0, $bytes.Length)
 $heldErr.Flush()
 [IO.File]::WriteAllText($env:ELIOT_PIPE_TEST_READY, 'ready')
-[Threading.Thread]::Sleep(180000)
+$holdDeadline = [DateTime]::UtcNow.AddSeconds(15)
+while (-not [IO.File]::Exists($env:ELIOT_PIPE_TEST_STOP) -and [DateTime]::UtcNow -lt $holdDeadline) {
+    [Threading.Thread]::Sleep(20)
+}
+$heldOut.Dispose()
+$heldErr.Dispose()
+[IO.File]::WriteAllText($env:ELIOT_PIPE_TEST_DONE, 'done')
 ",
     )
     .expect("write descendant process");
     let shell = PathBuf::from(std::env::var_os("SystemRoot").expect("Windows system root"))
         .join("System32/WindowsPowerShell/v1.0/powershell.exe");
-    let started = Instant::now();
-    let mut cli = Command::new(env!("CARGO_BIN_EXE_eliot-search"))
-        .arg("inspect-data-root")
-        .arg(sandbox.base.join("unused-root"))
-        .arg("--daemon")
-        .arg(&wrapper)
+    let mut command = Command::new(&wrapper);
+    command
         .env("ELIOT_PIPE_TEST_SHELL", shell)
         .env("ELIOT_PIPE_TEST_WRAPPER", wrapper_script)
         .env("ELIOT_PIPE_TEST_HOLDER", holder_script)
-        .env("ELIOT_PIPE_TEST_PID", sandbox.base.join("holder.pid"))
+        .env("ELIOT_PIPE_TEST_STOP", sandbox.base.join("holder.stop"))
+        .env("ELIOT_PIPE_TEST_DONE", sandbox.base.join("holder.done"))
         .env("ELIOT_PIPE_TEST_READY", &holder_ready)
         .env("ELIOT_PIPE_TEST_EXITED", &wrapper_exited)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .creation_flags(CREATE_NO_WINDOW)
-        .spawn()
-        .expect("start actual CLI with native wrapper");
-    let status = wait_for_exit(&mut cli, started + CLI_DEADLINE + SCHEDULING_ALLOWANCE);
+        .creation_flags(CREATE_NO_WINDOW);
+    let started = Instant::now();
+    let output = capture_command(&mut command, MAX_CAPTURE_BYTES, started + TEST_DEADLINE);
     let elapsed = started.elapsed();
-    if status.is_none() {
-        let _ = cli.kill();
-        cli.wait().expect("reap CLI that exceeded its deadline");
-    }
-    let stdout = read_capture(cli.stdout.take().expect("CLI stdout"));
-    let stderr = read_capture(cli.stderr.take().expect("CLI stderr"));
 
     assert!(holder_ready.is_file(), "descendant pipes unavailable");
     assert!(wrapper_exited.is_file(), "wrapper did not finish its work");
-    let status = status.expect("CLI waited past its original deadline for descendant pipes");
-    assert_eq!(
-        status.code(),
-        Some(124),
-        "unexpected CLI result: {stderr:?}"
-    );
-    assert!(stdout.is_empty(), "incomplete stdout escaped the CLI");
-    assert_eq!(stderr, b"{\"error\":\"DAEMON_TIMEOUT\"}\n");
     assert!(
-        elapsed
-            >= CLI_DEADLINE
-                .checked_sub(Duration::from_secs(1))
-                .expect("deadline exceeds scheduling tolerance")
+        !sandbox.base.join("holder.done").is_file(),
+        "descendant released its pipes too early"
     );
-    assert!(elapsed <= CLI_DEADLINE + SCHEDULING_ALLOWANCE);
+    assert!(matches!(output, Err(ChildFailure::Timeout)));
+    assert_eq!(ChildFailure::Timeout.code(), "DAEMON_TIMEOUT");
+    assert_eq!(ChildFailure::Timeout.exit_code(), 124);
+    assert!(elapsed >= TEST_DEADLINE);
+    assert!(elapsed <= TEST_DEADLINE + SCHEDULING_ALLOWANCE);
 }
