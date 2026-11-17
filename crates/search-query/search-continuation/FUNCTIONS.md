@@ -57,7 +57,8 @@ Only completely flushed pages commit cursor/emitted indexes. One-shot results ha
 ## Expansion
 
 Expand requires explicit before_bytes and after_bytes and an already emitted (window_id, item_index) in this
-same child. The returned neighborhood includes the original span; its TOTAL is at most 65536 bytes.
+same child. The returned `before` and `after` ranges end at the anchor's start and begin at its end,
+respectively. The requested neighborhood, including the already delivered anchor, is at most 65536 bytes.
 Underflow/out-of-range or UTF-8 scalar-splitting endpoints are refused, not silently clipped/normalized.
 Search/DecodedUtf8 context uses the actual saved UTF-8 representation and verified Source with the supported
 identity map; Raw uses verified Source bytes and returns hex. Original refs/ranges/text must still match.

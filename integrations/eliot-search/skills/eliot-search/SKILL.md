@@ -15,6 +15,7 @@ For question answering, stay read-only: do not implicitly index, publish, prepar
 - Start with `eliot_search` to find useful entry points, implementations, configuration, tests and documentation.
   Prefer `limit: 3` initially; request more only when needed. Rank is candidate navigation: an empty top-k result is not absence proof,
   and a high score does not establish identity, correctness or completeness.
+  Cite the returned `excerpt` byte range for the quoted text and keep the enclosing retained-unit citation.
 - For a literal predicate, use `eliot_exact`: `raw` over saved undecoded Source bytes or `decoded_utf8` over the
   actual saved Prepared UTF-8 representation. Follow its input schema and supported encodings. Honor the declared published inventory
   and each capability's selection support; never widen an unknown or empty selection. New unpublished heads
@@ -25,7 +26,8 @@ For question answering, stay read-only: do not implicitly index, publish, prepar
 - Open with `eliot_window_open` using its actual advertised WindowQuery input schema; do not guess JSON syntax
   or copy a private wire frame. Use `eliot_window_continue` and `eliot_window_expand` only in the SAME live
   window/view and original ordered prefix. Expand only emitted locators with explicit bounded context and the
-  original representation. Do not rerun against the latest view and present it as continuation. TTL includes
+  original representation. Combine the returned before/after ranges with the already emitted anchor when
+  reading the complete neighborhood. Do not rerun against the latest view and present it as continuation. TTL includes
   Open work; Continue/Expand do not renew it, and an expired window cannot be resumed.
   Call `eliot_window_close` promptly when finished; use `eliot_window_cancel` for abandoned active work, then close
   or finish the session. Do not leave a root-held window idle while planning unrelated work.

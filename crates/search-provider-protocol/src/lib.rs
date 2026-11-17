@@ -9,11 +9,11 @@ mod frame;
 
 pub use dto::{
     ClientFrame, ControlObservation, DecodedUtf8Gap, DecodedUtf8Item, DecodedUtf8Match,
-    DecodedUtf8Request, DecodedUtf8Result, EvidenceMetadata, ExpansionContent, FailureCode,
-    ObjectKindDto, ObjectRefDto, QueryOutcome, QuerySummary, RawExactGap, RawExactItem,
-    RawExactMatch, RawExactRequest, RawExactResult, RawSourceRef, SearchExcerpt, SearchGap,
-    SearchHit, SearchItem, SearchRequest, SessionClientFrame, SessionOutcome, SessionReply,
-    SourceInfo, SourceInfoUnavailableReason, SourceLiveStatus, StopReason,
+    DecodedUtf8Request, DecodedUtf8Result, EvidenceMetadata, ExpansionContent, ExpansionRange,
+    FailureCode, ObjectKindDto, ObjectRefDto, QueryOutcome, QuerySummary, RawExactGap,
+    RawExactItem, RawExactMatch, RawExactRequest, RawExactResult, RawSourceRef, SearchExcerpt,
+    SearchGap, SearchHit, SearchItem, SearchRequest, SessionClientFrame, SessionOutcome,
+    SessionReply, SourceInfo, SourceInfoUnavailableReason, SourceLiveStatus, StopReason,
     SummaryUnavailableReason, Terminal, WindowEntry, WindowExpansion, WindowItem, WindowPage,
     WindowQuery, WindowSummary,
 };

@@ -18,7 +18,8 @@ a validated 1..=64 byte uppercase/digit/underscore FailureCode. Unknown and dupl
 `SearchItem` is tagged `kind = hit|gap`. Both carry original contiguous one-based rank, finite f32 score
 (any sign) after any source-class weighting and EvidenceMetadata. Hit adds `excerpt` with `start`, `end`
 and exact UTF-8 `text` of at most 512 bytes. The excerpt range is contained in the cited unit's absolute
-source byte range. Window Expand validates the returned neighborhood against the emitted excerpt.
+source byte range. Expand returns the separately verified `before` and `after` ranges. The daemon
+rechecks the original anchor, and the client checks that each returned side exactly adjoins the anchor.
 Gap adds only SOURCE_OBJECT_MISSING or PREPARED_OBJECT_MISSING. Corruption/routing/range failures
 are Failed outcomes, never missing-object gaps or fabricated empty results.
 

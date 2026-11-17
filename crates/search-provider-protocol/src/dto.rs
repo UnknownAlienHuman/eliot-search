@@ -1724,12 +1724,44 @@ pub enum ExpansionContent {
     },
     /// Exact retained UTF-8 context, preserving BOM and line endings.
     Utf8 {
-        /// Exact whole UTF-8 text in the bounded neighborhood.
+        /// Exact UTF-8 text in the returned range.
         text: String,
     },
 }
 
-/// Bounded context from an already emitted item's original representation.
+/// A verified half-open range adjacent to the original item.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ExpansionRange {
+    /// Inclusive byte start. Supported representations use source byte coordinates.
+    pub start: u64,
+    /// Exclusive byte end. Equal to start for a side of length zero.
+    pub end: u64,
+    /// Exact retained content in this range.
+    pub content: ExpansionContent,
+}
+
+impl ExpansionRange {
+    fn validate(&self, utf8: bool) -> Result<(), ProtocolError> {
+        let size = self
+            .end
+            .checked_sub(self.start)
+            .filter(|size| *size <= crate::MAX_EXPANSION_BYTES)
+            .and_then(|size| usize::try_from(size).ok())
+            .ok_or(ProtocolError::InvalidMessage)?;
+        let valid = match (&self.content, utf8) {
+            (ExpansionContent::Raw { bytes_hex }, false) => lower_hex(bytes_hex, size * 2),
+            (ExpansionContent::Utf8 { text }, true) => text.len() == size,
+            _ => false,
+        };
+        if !valid {
+            return Err(ProtocolError::InvalidMessage);
+        }
+        Ok(())
+    }
+}
+
+/// New context on the two sides of an emitted original item.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct WindowExpansion {
@@ -1741,16 +1773,10 @@ pub struct WindowExpansion {
     pub source: RawSourceRef,
     /// Actual saved artifact for UTF-8; None for raw bytes.
     pub prepared: Option<ObjectRefDto>,
-    /// Inclusive context start in the original representation.
-    pub representation_start: u64,
-    /// Exclusive context end in the original representation.
-    pub representation_end: u64,
-    /// Inclusive mapped source start; current supported mappings are identity.
-    pub source_start: u64,
-    /// Exclusive mapped source end.
-    pub source_end: u64,
-    /// Exact verified context, not a latest-source substitution.
-    pub content: ExpansionContent,
+    /// New context ending at the original item's start.
+    pub before: ExpansionRange,
+    /// New context starting at the original item's end.
+    pub after: ExpansionRange,
     /// The original emitted item's cached saved-source annotation.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source_info: Option<SourceInfo>,
@@ -1764,36 +1790,23 @@ impl WindowExpansion {
         }
         validate_window_id(self.window_id)?;
         self.source.validate()?;
-        let length = self
-            .representation_end
-            .checked_sub(self.representation_start)
-            .filter(|n| *n != 0 && *n <= crate::MAX_EXPANSION_BYTES)
-            .ok_or(ProtocolError::InvalidMessage)?;
         if usize::from(self.item_index) >= MAX_ITEMS
-            || self.source_start != self.representation_start
-            || self.source_end != self.representation_end
-            || self.source_end > self.source.input.bytes
+            || self.before.end >= self.after.start
+            || self.after.end > self.source.input.bytes
+            || self
+                .after
+                .end
+                .checked_sub(self.before.start)
+                .is_none_or(|length| length > crate::MAX_EXPANSION_BYTES)
         {
             return Err(ProtocolError::InvalidMessage);
         }
-        match (&self.content, &self.prepared) {
-            (ExpansionContent::Raw { bytes_hex }, None) => {
-                if !lower_hex(
-                    bytes_hex,
-                    usize::try_from(length * 2).map_err(|_| ProtocolError::InvalidMessage)?,
-                ) {
-                    return Err(ProtocolError::InvalidMessage);
-                }
-            }
-            (ExpansionContent::Utf8 { text }, Some(prepared)) => {
-                prepared.validate(ObjectKindDto::Prepared)?;
-                if u64::try_from(text.len()).ok() != Some(length) {
-                    return Err(ProtocolError::InvalidMessage);
-                }
-            }
-            _ => return Err(ProtocolError::InvalidMessage),
+        if let Some(prepared) = &self.prepared {
+            prepared.validate(ObjectKindDto::Prepared)?;
         }
-        Ok(())
+        let utf8 = self.prepared.is_some();
+        self.before.validate(utf8)?;
+        self.after.validate(utf8)
     }
 }
 
@@ -2015,7 +2028,7 @@ impl WindowExpansion {
         else {
             return Err(ProtocolError::InvalidMessage);
         };
-        let (namespace, id, input, prepared, start, end, text, hex, source) = match original {
+        let (namespace, id, input, prepared, start, end, source) = match original {
             WindowItem::Search(SearchItem::Hit(hit)) => {
                 let e = &hit.evidence;
                 (
@@ -2025,8 +2038,6 @@ impl WindowExpansion {
                     Some(&e.prepared),
                     hit.excerpt.start,
                     hit.excerpt.end,
-                    Some(hit.excerpt.text.as_str()),
-                    None,
                     None,
                 )
             }
@@ -2037,8 +2048,6 @@ impl WindowExpansion {
                 None,
                 hit.start,
                 hit.end,
-                None,
-                Some(hit.bytes_hex.as_str()),
                 Some(&hit.source),
             ),
             WindowItem::DecodedUtf8(DecodedUtf8Item::Match(hit)) => (
@@ -2048,17 +2057,17 @@ impl WindowExpansion {
                 Some(&hit.prepared),
                 hit.representation_start,
                 hit.representation_end,
-                Some(hit.text.as_str()),
-                None,
                 Some(&hit.source),
             ),
             _ => return Err(ProtocolError::InvalidMessage),
         };
-        let wanted_start = start.saturating_sub(*before_bytes);
+        let wanted_start = start
+            .checked_sub(*before_bytes)
+            .ok_or(ProtocolError::InvalidMessage)?;
         let wanted_end = end
             .checked_add(*after_bytes)
-            .ok_or(ProtocolError::InvalidMessage)?
-            .min(input.bytes);
+            .filter(|end| *end <= input.bytes)
+            .ok_or(ProtocolError::InvalidMessage)?;
         if *window_id != self.window_id
             || *item_index != self.item_index
             || &self.source.source_namespace_id != namespace
@@ -2066,27 +2075,14 @@ impl WindowExpansion {
             || &self.source.input != input
             || self.prepared.as_ref() != prepared
             || source.is_some_and(|s| s != &self.source)
-            || self.representation_start != wanted_start
-            || self.representation_end != wanted_end
+            || self.before.start != wanted_start
+            || self.before.end != start
+            || self.after.start != end
+            || self.after.end != wanted_end
         {
             return Err(ProtocolError::InvalidMessage);
         }
-        let from =
-            usize::try_from(start - wanted_start).map_err(|_| ProtocolError::InvalidMessage)?;
-        let to = usize::try_from(end - wanted_start).map_err(|_| ProtocolError::InvalidMessage)?;
-        match (&self.content, text, hex) {
-            (ExpansionContent::Utf8 { text: expanded }, Some(original), None)
-                if expanded.get(from..to) == Some(original) =>
-            {
-                Ok(())
-            }
-            (ExpansionContent::Raw { bytes_hex }, None, Some(original))
-                if bytes_hex.get(from * 2..to * 2) == Some(original) =>
-            {
-                Ok(())
-            }
-            _ => Err(ProtocolError::InvalidMessage),
-        }
+        Ok(())
     }
 }
 

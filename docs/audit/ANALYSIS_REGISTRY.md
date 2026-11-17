@@ -27,7 +27,8 @@ Historical V1/core evidence, current package/configuration and actual client wor
 <a id="resume-after-interruption"></a>
 ## Next task
 
-**B-10 is READY.** Return the new verified before/after ranges from Expand. The
+**B-2 is READY.** Cap ranked units per source while preserving useful results from other files.
+The [Expand check](#expand-adjacent-ranges-2026-11-17) closes B-10. The
 [interrupted publication check](#publication-interruption-2026-11-17) and native source CAS test cover
 the selected durable slice of A-3. Broader failure coverage remains open.
 The [excerpt check](#ranked-excerpts-2026-11-17) closes B-1 within its measured scope.
@@ -110,7 +111,8 @@ DONE below is the named delivered scope, not completion of the product.
 | B-9 / DONE, recorded Windows Release scope | Q1/U1/AD1 | [Bridge](../../crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md#query-scoring-profile) and [daemon](../../bins/eliot-searchd/FUNCTIONS.md#read-only-search-path) | Store source classes on a fresh generation and rank within a pinned view. Verified on 366 actual Search sources and exercised on 3,215 Research sources. |
 | B-1 / DONE, recorded Windows Release scope | U1/X1/AD1 | [Daemon](../../bins/eliot-searchd/FUNCTIONS.md#read-only-search-path), [protocol](../../crates/search-provider-protocol/FUNCTIONS.md) and CLI/MCP/window consumers | Bounded verified excerpts and live Expand, with measured response sizes and exact byte readback. |
 | A-3 / PARTIAL | Q1/R1 | [CONTROL publication](../../crates/search-control-redb/FUNCTIONS.md#publication-state-and-snapshot) and [daemon](../../bins/eliot-searchd/FUNCTIONS.md) | Observed native backend loss, guarded retry, kept current evidence and source CAS. Other durable and child failure cases remain open. |
-| B-10 / READY | B-1/X1 | [Window](../../crates/search-query/search-continuation/FUNCTIONS.md#expansion) and [protocol](../../crates/search-provider-protocol/FUNCTIONS.md) | Expand returns only separately cited new before/after ranges with the original anchor verified. |
+| B-10 / DONE, recorded Windows Release scope | B-1/X1 | [Window](../../crates/search-query/search-continuation/FUNCTIONS.md#expansion) and [protocol](../../crates/search-provider-protocol/FUNCTIONS.md) | Expand returns separately cited new before/after ranges, with the original anchor verified. |
+| B-2 / READY | B-9/B-1 | [Bridge](../../crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md#query-scoring-profile) and daemon | Limit occupancy per retained source and measure implementation-file discovery on the real Research corpus. |
 
 [Implementation](../implementation/README.md#delivery-sequence) owns delivery order. Stage 3B is conditional
 on measured Stage 3A budgets failing; there is no separate global rewrite programme.
@@ -237,6 +239,20 @@ remain unverified in this run.
 The CONTROL integration test acquires actual repository files through native handles, derives their
 BLAKE3 references and commits to a real redb file. It rejects a stale empty-corpus publication capture
 and a stale source update, then checks the newer row after closing and reopening CONTROL.
+
+<a id="expand-adjacent-ranges-2026-11-17"></a>
+### Expand adjacent ranges, 2026-11-17
+
+The Windows Release MCP opened actual Search, Raw Exact and Decoded UTF-8 windows over the same retained
+source with local Qdrant 1.20.2. For each mode, Expand returned 32 bytes before and 48 bytes after the
+original anchor, with both half-open ranges checked against actual file bytes. The ranked case delivered
+80 new text bytes, down from the previous 592 total bytes. Zero requested bytes returned empty sides.
+An out-of-range request returned `WINDOW_RANGE_INVALID`, and the window could still be closed.
+
+A Luna reader explained why ignore rules work outside Git using just two retained excerpts (1,024
+bytes of text). On the 3,217-source Research corpus, another Luna reader located `distill.ts` fifth
+and could cite the format declaration. Its excerpt did not establish the enforcement branch. Three
+earlier hits came from the same test file, leaving B-2 open.
 
 <a id="agent-delivery"></a>
 ### AD1 agent delivery — DONE in recorded native scopes

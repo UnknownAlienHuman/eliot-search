@@ -7,8 +7,8 @@ use std::time::Instant;
 use search_contracts::SourceId;
 use search_control_redb::publication::PublishedView;
 use search_provider_protocol::{
-    DecodedUtf8Item, ExpansionContent, MAX_EXPANSION_BYTES, ObjectRefDto, RawExactItem,
-    RawSourceRef, SESSION_WINDOW_ID, SearchItem, WindowExpansion, WindowItem,
+    DecodedUtf8Item, ExpansionContent, ExpansionRange, MAX_EXPANSION_BYTES, ObjectRefDto,
+    RawExactItem, RawSourceRef, SESSION_WINDOW_ID, SearchItem, WindowExpansion, WindowItem,
 };
 use search_revision_store::{ObjectStoreError, read_object};
 use search_runtime_owner::PlainRootGuard;
@@ -94,6 +94,36 @@ const fn object_failure(error: ObjectStoreError) -> QueryFailure {
     }
 }
 
+fn utf8_range(text: &str, range: &Range<usize>) -> Result<ExpansionContent> {
+    let slice = text
+        .get(range.clone())
+        .ok_or(QueryFailure::Code("WINDOW_UTF8_BOUNDARY"))?;
+    let mut owned = String::new();
+    owned
+        .try_reserve_exact(slice.len())
+        .map_err(|_| QueryFailure::Code("QUERY_ALLOCATION_FAILED"))?;
+    owned.push_str(slice);
+    Ok(ExpansionContent::Utf8 { text: owned })
+}
+
+fn raw_range(bytes: &[u8], range: &Range<usize>) -> Result<ExpansionContent> {
+    let slice = bytes
+        .get(range.clone())
+        .ok_or(QueryFailure::Code("WINDOW_RANGE_INVALID"))?;
+    Ok(ExpansionContent::Raw {
+        bytes_hex: hex(slice)?,
+    })
+}
+
+fn returned_range(range: Range<usize>, content: ExpansionContent) -> Result<ExpansionRange> {
+    Ok(ExpansionRange {
+        start: u64::try_from(range.start)
+            .map_err(|_| QueryFailure::Code("WINDOW_RANGE_INVALID"))?,
+        end: u64::try_from(range.end).map_err(|_| QueryFailure::Code("WINDOW_RANGE_INVALID"))?,
+        content,
+    })
+}
+
 pub fn execute(
     root: &PlainRootGuard,
     view: &PublishedView,
@@ -110,6 +140,8 @@ pub fn execute(
         .map_err(|_| QueryFailure::Code("WINDOW_RANGE_INVALID"))?
         ..usize::try_from(anchor.range.end)
             .map_err(|_| QueryFailure::Code("WINDOW_RANGE_INVALID"))?;
+    let before = range.start..original.start;
+    let after = original.end..range.end;
     let id =
         SourceId::parse(anchor.id).map_err(|_| QueryFailure::Code("EVIDENCE_BINDING_INVALID"))?;
     let captured = view
@@ -122,47 +154,24 @@ pub fn execute(
     {
         return Err(QueryFailure::Code("EVIDENCE_BINDING_INVALID"));
     }
-    let mut expansion = WindowExpansion {
-        window_id: SESSION_WINDOW_ID,
-        item_index,
-        source,
-        prepared: None,
-        representation_start: u64::try_from(range.start)
-            .map_err(|_| QueryFailure::Code("WINDOW_RANGE_INVALID"))?,
-        representation_end: u64::try_from(range.end)
-            .map_err(|_| QueryFailure::Code("WINDOW_RANGE_INVALID"))?,
-        source_start: 0,
-        source_end: 0,
-        content: ExpansionContent::Raw {
-            bytes_hex: String::new(),
-        },
-        source_info: item.source_info().cloned(),
-    };
-    expansion.source_start = expansion.representation_start;
-    expansion.source_end = expansion.representation_end;
-    if let Some(expected) = anchor.prepared {
+    let (prepared, before_content, after_content) = if let Some(expected) = anchor.prepared {
+        let mut verified = None;
         let gap = visit_representation(root, &captured, deadline, cancel, |artifact, utf8| {
             let prepared = object_ref(artifact)?;
             if prepared != *expected || utf8.text().get(original.clone()) != Some(anchor.original) {
                 return Err(QueryFailure::Code("EVIDENCE_TEXT_MISMATCH"));
             }
-            // Exact byte counts are honored: a scalar-splitting request is refused.
-            let text = utf8
-                .text()
-                .get(range.clone())
-                .ok_or(QueryFailure::Code("WINDOW_UTF8_BOUNDARY"))?;
-            let mut owned = String::new();
-            owned
-                .try_reserve_exact(text.len())
-                .map_err(|_| QueryFailure::Code("QUERY_ALLOCATION_FAILED"))?;
-            owned.push_str(text);
-            expansion.prepared = Some(prepared);
-            expansion.content = ExpansionContent::Utf8 { text: owned };
+            verified = Some((
+                Some(prepared),
+                utf8_range(utf8.text(), &before)?,
+                utf8_range(utf8.text(), &after)?,
+            ));
             Ok(())
         })?;
         if let Some(gap) = gap {
             return Err(QueryFailure::Code(gap.code));
         }
+        verified.ok_or(QueryFailure::Code("QUERY_INTERNAL_ERROR"))?
     } else {
         let bytes = read_object(
             root,
@@ -178,13 +187,21 @@ pub fn execute(
         if hex(original)? != anchor.original {
             return Err(QueryFailure::Code("EVIDENCE_TEXT_MISMATCH"));
         }
-        let bytes = bytes
-            .get(range)
-            .ok_or(QueryFailure::Code("WINDOW_RANGE_INVALID"))?;
-        expansion.content = ExpansionContent::Raw {
-            bytes_hex: hex(bytes)?,
-        };
-    }
+        (
+            None,
+            raw_range(&bytes, &before)?,
+            raw_range(&bytes, &after)?,
+        )
+    };
+    let expansion = WindowExpansion {
+        window_id: SESSION_WINDOW_ID,
+        item_index,
+        source,
+        prepared,
+        before: returned_range(before, before_content)?,
+        after: returned_range(after, after_content)?,
+        source_info: item.source_info().cloned(),
+    };
     check(deadline, cancel)?;
     expansion
         .validate()

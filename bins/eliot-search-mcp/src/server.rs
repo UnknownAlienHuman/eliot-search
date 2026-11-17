@@ -766,7 +766,7 @@ impl McpServer {
 
     #[tool(
         name = "eliot_window_expand",
-        description = "Verified retained context for an already emitted item. Explicit before/after; total including original span <=65536 bytes. No live-file reads.",
+        description = "Verified retained context before and after an emitted item. Returns the two new ranges. The neighborhood including the original span is limited to 65536 bytes.",
         annotations(read_only_hint = true, destructive_hint = false)
     )]
     async fn window_expand(

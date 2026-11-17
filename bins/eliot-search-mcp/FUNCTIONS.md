@@ -31,8 +31,8 @@ listener, negotiation layer or host configuration writer is installed.
   include_source_info.
 - eliot_window_continue: window_handle, page_size and timeout_ms.
 - eliot_window_expand: window_handle, item_index, explicit before_bytes and
-  after_bytes, timeout_ms. SDK validation enforces emitted membership, the
-  original range/representation, UTF-8 boundaries and total context <=65536.
+  after_bytes, timeout_ms. Returns the two new verified ranges beside the original
+  item. The total span including the anchor is at most 65536 bytes.
 - eliot_window_cancel: window_handle and timeout_ms. Cancels correlated active
   work without closing a healthy emitted prefix. If no request is active, it
   reports cancel_requested=false; a race reports the actual observed outcome.
