@@ -27,8 +27,10 @@ Historical V1/core evidence, current package/configuration and actual client wor
 <a id="resume-after-interruption"></a>
 ## Next task
 
+The [root and child recovery check](#root-child-recovery-2026-11-17) completes the selected
+native A-3 checks. Stronger process-loss and power-loss cases remain open. The audit's remaining
+optional work is selected when a measured workflow or operational need justifies it.
 The [MCP window owner check](#mcp-window-owner-2026-11-17) closes D-1 in the recorded scope.
-The next ready work is the remaining A-3 root recovery and child cleanup evidence.
 The [native deadline check](#native-pipe-deadline-2026-11-17) closes C-8.
 The [Exact scope check](#exact-scoped-inventory-2026-11-17) closes B-11 in its measured scope.
 The [Exact line check](#exact-line-context-2026-11-17) closes B-3 in its measured scope.
@@ -115,7 +117,7 @@ DONE below is the named delivered scope, not completion of the product.
 | AD1 / DONE, recorded five-client native scopes | V1/core SDK | [MCP owner](../../bins/eliot-search-mcp/FUNCTIONS.md), [package/Skill](../../integrations/eliot-search/README.md), native-client delivery owners | Actual Skill/tool/context/grounded-answer/Close scopes accepted in four coding clients plus Desktop normal Chat, initially via local mcpServers and subsequently via the installed v4 MCPB. Current targets, original four v3 flow provenance, corrected native answers and source/package/SDK limits are recorded below. |
 | B-9 / DONE, recorded Windows Release scope | Q1/U1/AD1 | [Bridge](../../crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md#query-scoring-profile) and [daemon](../../bins/eliot-searchd/FUNCTIONS.md#read-only-search-path) | Store source classes on a fresh generation and rank within a pinned view. Verified on 366 actual Search sources and exercised on 3,215 Research sources. |
 | B-1 / DONE, recorded Windows Release scope | U1/X1/AD1 | [Daemon](../../bins/eliot-searchd/FUNCTIONS.md#read-only-search-path), [protocol](../../crates/search-provider-protocol/FUNCTIONS.md) and CLI/MCP/window consumers | Bounded verified excerpts and live Expand, with measured response sizes and exact byte readback. |
-| A-3 / PARTIAL | Q1/R1 | [CONTROL publication](../../crates/search-control-redb/FUNCTIONS.md#publication-state-and-snapshot) and [daemon](../../bins/eliot-searchd/FUNCTIONS.md) | Observed native backend loss, guarded retry, kept current evidence and source CAS. Other durable and child failure cases remain open. |
+| A-3 / DONE, selected Windows Release failure checks | Q1/R1 | [CONTROL publication](../../crates/search-control-redb/FUNCTIONS.md#publication-state-and-snapshot), [root recovery](../../crates/search-runtime/search-runtime-owner/FUNCTIONS.md#guarded-writable-open), [MCP](../../bins/eliot-search-mcp/FUNCTIONS.md) | Native backend interruption and retry, source CAS, guarded dirty-root repair, one-shot child deadline and correlated window cancellation. Broader process-loss and power-loss coverage remains open. |
 | B-10 / DONE, recorded Windows Release scope | B-1/X1 | [Window](../../crates/search-query/search-continuation/FUNCTIONS.md#expansion) and [protocol](../../crates/search-provider-protocol/FUNCTIONS.md) | Expand returns separately cited new before/after ranges, with the original anchor verified. |
 | B-2 / DONE, recorded Windows Release scope | B-9/B-1 | [Bridge](../../crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md#query-scoring-profile) and daemon | At most two ranked units per source. Native CLI and MCP window verify the cap on the real Research corpus. |
 | B-3 / DONE, recorded Windows Release scope | U1/X1 | [Exact](../../crates/search-query/search-exact/FUNCTIONS.md) and protocol | Native Raw and UTF-8 line locations, exact excerpts and raw ASCII columns checked against actual source bytes. |
@@ -249,6 +251,28 @@ The CONTROL integration test acquires actual repository files through native han
 BLAKE3 references and commits to a real redb file. It rejects a stale empty-corpus publication capture
 and a stale source update, then checks the newer row after closing and reopening CONTROL.
 
+<a id="root-child-recovery-2026-11-17"></a>
+### Root and child recovery, 2026-11-17
+
+The Windows Release CLI indexed 19 actual `bins/eliot-searchd/src` files into a fresh isolated root
+with Qdrant 1.20.2. A separate probe opened that root's actual CONTROL through the linked redb engine,
+committed persistent savepoint 1 and exited without closing the writable database. Native inspect
+reported `needs_repair` and Search returned `ROOT_NEEDS_REPAIR`. Both preserved the dirty file's SHA-256.
+Index on the same source directory recovered that root. Inspect reported `current`, the savepoint
+was still visible through read-only redb, and all five Search hits were byte-identical at generation 1.
+Raw Exact verified all 19 sources and found `require_git(false)` in the retained corpus.
+
+On the 3,217-source Eliot Research root, a one-shot native MCP Raw Exact for `compact-k3-v1` with
+an 80 ms budget returned `QUERY_DEADLINE_EXPIRED` in 88 ms. Windows reported no daemon child of that
+MCP process after the response. The same MCP retried with a 15-second budget and completed in 594 ms,
+scanning all 3,217 retained sources with 56 matches. These are individual observations.
+
+In a native Raw window on Research's tracked 1.45 MB `docs/contracts/schema-corpus.v1.json`, an
+in-flight 60,000-byte Expand was cancelled by its correlated child request 2. Cancel and Expand both
+reported `cancelled`. Windows showed one owned daemon before Expand and no daemon child after Close.
+The deliberately dirty scratch writer exercises the real storage recovery path. Abrupt product-daemon
+termination and power loss are unverified at this source.
+
 <a id="expand-adjacent-ranges-2026-11-17"></a>
 ### Expand adjacent ranges, 2026-11-17
 
@@ -316,7 +340,8 @@ Raw and DecodedUtf8 windows returned adjacent ranges of 32 and 48 bytes, verifie
 original file. Continue returned two additional ranked hits. Idle Cancel correctly reported no
 active request, a second Open returned `MCP_ROOT_BUSY`, and the old handle was refused after Close.
 A 550 ms TTL expired, and a fresh window opened on the same root. Sending stdin EOF with that
-window open produced MCP exit 0. Active Cancel and child process exit were not separately observed.
+window open produced MCP exit 0. The separate [Research run](#root-child-recovery-2026-11-17)
+observed active Cancel and the Windows child count after explicit Close.
 Locked workspace check, strict Clippy on all targets, a Release MCP build, all 60 workspace tests
 and `cargo deny --locked check` passed.
 
