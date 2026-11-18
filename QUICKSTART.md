@@ -109,6 +109,15 @@ in the scopes recorded in the [registry](docs/audit/ANALYSIS_REGISTRY.md#resume)
 binary scope. Later query/window and maintenance scopes are recorded in the registry; they are not pending
 merely because the older evidence above used another source revision.
 
+### Storage capacity
+
+Budget both the application data root and Qdrant's storage directory. The data root keeps immutable
+source bytes, prepared text and CONTROL metadata. Qdrant stores searchable text payloads and the
+BM25 index. These are plaintext. Replacement and unresolved generations can coexist on disk.
+Measure total storage for both directories during a real refresh before scheduling a larger corpus.
+See the [Research measurements](docs/audit/ANALYSIS_REGISTRY.md#storage-capacity-2026-11-17)
+and [replacement qualification](docs/implementation/TEST_CUTOVER.md).
+
 ## Watch admitted selections
 
 After initializing the root and admitting at least one file/tree with index PATH, run:

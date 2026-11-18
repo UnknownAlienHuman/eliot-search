@@ -30,6 +30,8 @@ Historical V1/core evidence, current package/configuration and actual client wor
 The [root and child recovery check](#root-child-recovery-2026-11-17) completes the selected
 native A-3 checks. Stronger process-loss and power-loss cases remain open. The audit's remaining
 optional work is selected when a measured workflow or operational need justifies it.
+Use the [Research agent workflow](#research-agent-workflow-2026-11-17) and
+[storage sample](#storage-capacity-2026-11-17) as the current observations for that scope.
 The [MCP window owner check](#mcp-window-owner-2026-11-17) closes D-1 in the recorded scope.
 The [native deadline check](#native-pipe-deadline-2026-11-17) closes C-8.
 The [Exact scope check](#exact-scoped-inventory-2026-11-17) closes B-11 in its measured scope.
@@ -124,6 +126,7 @@ DONE below is the named delivered scope, not completion of the product.
 | B-11 / DONE, recorded Windows Release scope | B-3 | [Exact](../../crates/search-query/search-exact/FUNCTIONS.md), CLI and MCP | Scoped by captured path/class. Native CLI and MCP verified matching, complete-negative and empty intersection behavior. |
 | C-8 / DONE, recorded Windows test scope | Root CLI | [CLI](../../bins/eliot-search/FUNCTIONS.md) | Same production pipe owner with a three-second native regression. |
 | D-1 / DONE, recorded Windows Release scope | AD1/X1 | [MCP window](../../bins/eliot-search-mcp/FUNCTIONS.md) | Separate request submission, reply handling and cleanup. Native stdio verified paging, Close, TTL and EOF. |
+| B-7 / DONE, storage guidance | Q1/R1 | [Quickstart](../../QUICKSTART.md#storage-capacity) | Describe data-root and Qdrant storage separately and record real Research path sizes. |
 
 [Implementation](../implementation/README.md#delivery-sequence) owns delivery order. Stage 3B is conditional
 on measured Stage 3A budgets failing; there is no separate global rewrite programme.
@@ -344,6 +347,31 @@ window open produced MCP exit 0. The separate [Research run](#root-child-recover
 observed active Cancel and the Windows child count after explicit Close.
 Locked workspace check, strict Clippy on all targets, a Release MCP build, all 60 workspace tests
 and `cargo deny --locked check` passed.
+
+<a id="storage-capacity-2026-11-17"></a>
+### Storage capacity, 2026-11-17
+
+The tracked Research export was 38,482,739 bytes before the two additional admitted file revisions.
+In the 3,217-source root, actual logical file lengths totalled 76,786,026 bytes across 6,403 immutable
+object files and 17,092,608 bytes for CONTROL. Qdrant 1.20.2's served generation 4 collection used
+764,325,349 logical file bytes when sampled. This is one Windows sample of file lengths. Allocated
+space, transient peaks and a general multiplier are unverified. Earlier and unresolved generations
+also consume storage, so size the entire Qdrant directory when measuring a refresh.
+
+<a id="research-agent-workflow-2026-11-17"></a>
+### Research agent workflow, 2026-11-17
+
+On Research generation 4 (3,217 published sources, 18 preparation gaps), a Luna reader used the
+Windows Release MCP to determine which option selects the compact distillation format and what
+happens to older requests. Ranked returned five excerpts totalling 2,560 source bytes. Its first
+result was an evaluator. The reader then used Exact on the current `src/workflows/distill.ts`,
+with each scan verifying one retained source of 148,795 bytes and zero gaps.
+
+The reader identified `producerFormat`, the legacy fallback in `intentProducerFormat` at lines
+1466–1474, earlier validation at 1405–1411, and the new-request compact default at line 1715.
+It used nine tool calls: one Ranked, six scoped Exact, one Window Open attempt with a preparation
+gap and one follow-up Close refused as `WINDOW_NOT_OPEN`. The agent opened no source files directly.
+Its conclusions cover the observed branches. Full parser behavior was outside the verified spans.
 
 <a id="agent-delivery"></a>
 ### AD1 agent delivery — DONE in recorded native scopes
